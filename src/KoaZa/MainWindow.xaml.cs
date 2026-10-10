@@ -416,8 +416,12 @@ namespace KoaZa
             {
                 Label = LocalizationService.Market(m.Market, m.Outcome),
                 Percent = Math.Round(m.Probability * 100, 1),
-                PercentLabel = hasSufficientData ? (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%" :
-                    (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% • " + LocalizationService.T("low confidence", "اطمینان پایین"),
+                PercentLabel = m.Market == "Both teams to score" && m.Outcome == "Yes"
+                    ? (LocalizationService.IsPersian
+                        ? "بله: " + (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% • خیر: " + ((1 - m.Probability) * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%"
+                        : "Yes: " + (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% • No: " + ((1 - m.Probability) * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%")
+                    : hasSufficientData ? (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%" :
+                        (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% • " + LocalizationService.T("low confidence", "اطمینان پایین"),
                 HasData = hasSufficientData,
                 BarBrush = m.Market == "Match result" && m.Outcome == "Draw"
                     ? System.Windows.Media.Brushes.DarkOrange : System.Windows.Media.Brushes.SeaGreen,
@@ -471,7 +475,7 @@ namespace KoaZa
                 LocalizationService.Market("VAR review", "Yes")
             };
             SetMarketChartState(false, reason);
-            return labels.Select(label => new MarketRow { Label = label, Percent = 0, PercentLabel = "—", HasData = false, Reason = reason }).ToList();
+            return labels.Select(label => new MarketRow { Label = label, Percent = 0, PercentLabel = "—", HasData = false, BarBrush = System.Windows.Media.Brushes.Gray, Reason = reason }).ToList();
         }
 
         private static double Average(List<FixtureRecord> matches, string team, bool scored, bool? homeVenue)
