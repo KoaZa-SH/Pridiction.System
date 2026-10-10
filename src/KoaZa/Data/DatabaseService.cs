@@ -436,10 +436,11 @@ namespace KoaZa.Data
             string home = NormalizeTeamKey(fixture.HomeTeam);
             string away = NormalizeTeamKey(fixture.AwayTeam);
             DateTime kickoff;
-            string timeKey = DateTime.TryParse(fixture.KickoffUtc, CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out kickoff)
-                ? kickoff.ToString("yyyy-MM-dd-HH", CultureInfo.InvariantCulture)
-                : (fixture.KickoffUtc ?? "").Trim().ToLowerInvariant();
+            bool hasKickoff = DateTime.TryParse(fixture.KickoffUtc, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out kickoff);
+            if (home.Length == 0 || away.Length == 0 || home == "home" || away == "away" || string.IsNullOrWhiteSpace(fixture.KickoffUtc))
+                return home + "|" + away + "|" + (fixture.League ?? "").Trim().ToLowerInvariant() + "|" + fixture.Provider + "|" + fixture.ExternalId;
+            string timeKey = hasKickoff ? kickoff.ToString("yyyy-MM-dd-HH", CultureInfo.InvariantCulture) : fixture.KickoffUtc.Trim().ToLowerInvariant();
             return home + "|" + away + "|" + timeKey;
         }
 
