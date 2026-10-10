@@ -1962,6 +1962,7 @@ namespace KoaZa.Services
         {
             if (fixtures == null) return 0;
             var candidates = fixtures.Where(f => f.HomeGoals.HasValue && f.AwayGoals.HasValue &&
+                new[] { "FT", "AET", "PEN", "FINISHED", "MATCH FINISHED", "FULL TIME", "AFTER EXTRA TIME", "AFTER PENALTIES" }.Contains((f.Status ?? "").Trim().ToUpperInvariant()) &&
                 (f.Provider == "API-Football" || f.Provider == "ApiFootball" || f.Provider == "ApiSports" ||
                  f.Provider == "FiveDollarFootballAPI"))
                 .OrderByDescending(f => f.KickoffUtc).Take(10).ToList();
