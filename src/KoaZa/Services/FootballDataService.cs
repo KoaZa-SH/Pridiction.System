@@ -494,8 +494,8 @@ namespace KoaZa.Services
                 if (result.Count >= 6) break;
             }
 
-            FetchSiteNews(result, "site:football360.ir football OR فوتبال", "Football360.ir / فوتبال ۳۶۰");
-            FetchSiteNews(result, "site:fbtv3.ir football OR فوتبال", "FBTV3.ir / فوتبال برتر");
+            FetchSiteNews(result, "site:football360.ir football OR site:football360.ir فوتبال", "Football360.ir / فوتبال ۳۶۰");
+            FetchSiteNews(result, "site:fbtv3.ir football OR site:fbtv3.ir فوتبال", "FBTV3.ir / فوتبال برتر");
             FetchSiteNews(result, LocalizationService.IsPersian ? "اخبار فوتبال ایران و جهان" : "football news today", "Google News");
             return result.OrderByDescending(n => ParseNewsDate(n.Published)).Take(18).ToList();
         }
@@ -1296,7 +1296,7 @@ namespace KoaZa.Services
         {
             if (_competitionChecks == null) return;
             foreach (var check in _competitionChecks.Children.OfType<CheckBox>())
-                if (check.Visibility == Visibility.Visible) check.IsChecked = isChecked;
+                check.IsChecked = isChecked;
         }
 
         private void SaveCompetitionSelection_Click(object sender, RoutedEventArgs e)
