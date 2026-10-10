@@ -333,7 +333,6 @@ namespace KoaZa
                 // The goal model is shown normally when team and competition history is sufficient;
                 // unsupported corner/card rows remain individually orange and explicitly unavailable.
                 SetMarketRows(probabilities, hasReliableHistory, dataWarning);
-                UpdateMultiMarketPredictions(fixture);
 
                 _database.SavePrediction(fixture.HomeTeam, fixture.AwayTeam, homeRate, awayRate, probabilities);
                 bool usedFallback = homeLeagueMatches.Count < 3 || awayLeagueMatches.Count < 3;
@@ -348,6 +347,7 @@ namespace KoaZa
                       "Baseline Poisson estimates; not guarantees.";
                 if (!string.IsNullOrEmpty(dataWarning))
                     ModelStatusText.Text += " " + dataWarning;
+                UpdateMultiMarketPredictions(fixture);
             }
             catch (Exception ex)
             {
