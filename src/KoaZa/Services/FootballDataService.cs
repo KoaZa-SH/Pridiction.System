@@ -130,7 +130,10 @@ namespace KoaZa.Services
             {
                 try
                 {
-                    for (int day = 0; day < 7; day++)
+                    // Import a rolling window of recent completed matches as well as upcoming fixtures.
+                    // The prediction model needs historical scores in the local database; fetching only future dates
+                    // leaves the market-probability panel empty for most teams.
+                    for (int day = -14; day < 7; day++)
                     {
                         string date = DateTime.UtcNow.Date.AddDays(day).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                         string json = Request("https://v3.football.api-sports.io/fixtures?date=" + date + "&timezone=UTC", "x-apisports-key", config.Key);
@@ -177,7 +180,7 @@ namespace KoaZa.Services
             if (combined.Count == 0)
                 throw new InvalidOperationException("No fixtures could be received from enabled providers. For global competitions, configure an API-SPORTS key or a working SportsAPI360/custom feed. " + string.Join(" | ", errors));
 
-            DateTime from = DateTime.UtcNow.Date.AddDays(-1);
+            DateTime from = DateTime.UtcNow.Date.AddDays(-14);
             DateTime to = DateTime.UtcNow.Date.AddDays(8);
             return combined.Where(f => {
                     DateTime kickoff;
@@ -343,7 +346,9 @@ namespace KoaZa.Services
         {
             string query = "\"" + (homeTeam ?? "").Trim() + "\" OR \"" + (awayTeam ?? "").Trim() + "\" football";
             if (!string.IsNullOrWhiteSpace(league)) query += " \"" + league.Trim() + "\"";
-            string url = "https://news.google.com/rss/search?q=" + Uri.EscapeDataString(query) + "&hl=en-US&gl=US&ceid=US:en";
+            // Ask Google News for Persian-language results when Persian is selected.
+            string locale = LocalizationService.IsPersian ? "&hl=fa&gl=IR&ceid=IR:fa" : "&hl=en-US&gl=US&ceid=US:en";
+            string url = "https://news.google.com/rss/search?q=" + Uri.EscapeDataString(query) + locale;
             var doc = new System.Xml.XmlDocument();
             doc.LoadXml(Request(url, null, null));
             var result = new List<NewsItem>();
