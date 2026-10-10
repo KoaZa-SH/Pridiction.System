@@ -384,6 +384,21 @@ namespace KoaZa.Services
                     var root = Parse(json);
                     if (HasErrors(root)) throw new InvalidOperationException("API-SPORTS returned a quota/API error.");
 
+                    // Detailed statistics and events are separate endpoints. They are best-effort so a plan
+                    // that lacks one resource can still return the base fixture and injuries.
+                    try
+                    {
+                        var statsPayload = Parse(Request("https://v3.football.api-sports.io/fixtures/statistics?fixture=" + fixtureId, "x-apisports-key", config.Key));
+                        if (!HasErrors(statsPayload)) root["statisticsPayload"] = statsPayload;
+                    }
+                    catch { }
+                    try
+                    {
+                        var eventsPayload = Parse(Request("https://v3.football.api-sports.io/fixtures/events?fixture=" + fixtureId, "x-apisports-key", config.Key));
+                        if (!HasErrors(eventsPayload)) root["eventsPayload"] = eventsPayload;
+                    }
+                    catch { }
+
                     // Injuries are a separate API resource; attach them when available without failing the fixture details request.
                     string status = (fixture.Status ?? "").Trim().ToUpperInvariant();
                     bool live = status == "LIVE" || status == "1H" || status == "HT" || status == "2H" || status == "ET" || status == "P" || status == "BT" || status == "INT";
@@ -401,6 +416,49 @@ namespace KoaZa.Services
                 catch (Exception ex) { last = ex; }
             }
             throw new InvalidOperationException("Could not retrieve fixture statistics/events/lineups. Check API key, quota and competition coverage.", last);
+        }
+
+        public static FixtureRecord ExtractFixtureStatistics(string json, FixtureRecord fixture)
+        {
+            if (fixture == null) return null;
+            var result = new FixtureRecord { Provider = fixture.Provider, ExternalId = fixture.ExternalId };
+            try
+            {
+                var root = Parse(json);
+                var fixtureRows = GetList(root, "response");
+                var match = fixtureRows.FirstOrDefault();
+                var fixtureInfo = GetMap(match, "fixture");
+                result.Referee = GetString(fixtureInfo, "referee", fixture.Referee ?? "");
+                var statsPayload = GetMap(root, "statisticsPayload");
+                var teamsStats = GetList(statsPayload, "response");
+                foreach (var teamStats in teamsStats)
+                {
+                    string team = GetString(GetMap(teamStats, "team"), "name", "");
+                    bool isHome = string.Equals(team, fixture.HomeTeam, StringComparison.OrdinalIgnoreCase);
+                    bool isAway = string.Equals(team, fixture.AwayTeam, StringComparison.OrdinalIgnoreCase);
+                    if (!isHome && !isAway) continue;
+                    foreach (var stat in GetList(teamStats, "statistics"))
+                    {
+                        string type = GetString(stat, "type", "").Trim().ToLowerInvariant();
+                        int? value = GetNullableInt(stat, "value");
+                        if (!value.HasValue) continue;
+                        if (type.Contains("corner")) { if (isHome) result.HomeCorners = value; else result.AwayCorners = value; }
+                        else if (type == "shots on goal" || type == "shots on target" || type == "shots on target") { if (isHome) result.HomeShotsOnTarget = value; else result.AwayShotsOnTarget = value; }
+                        else if (type.Contains("yellow card")) { if (isHome) result.HomeYellowCards = value; else result.AwayYellowCards = value; }
+                    }
+                }
+                var eventsPayload = GetMap(root, "eventsPayload");
+                var events = GetList(eventsPayload, "response");
+                if (eventsPayload.Count > 0)
+                    result.VarReviews = events.Count(ev =>
+                    {
+                        string type = GetString(ev, "type", "").ToLowerInvariant();
+                        string detail = GetString(ev, "detail", "").ToLowerInvariant();
+                        return type.Contains("var") || detail.Contains("var");
+                    });
+            }
+            catch { return result; }
+            return result;
         }
 
         public static string SummarizeFixtureDetails(string json)
