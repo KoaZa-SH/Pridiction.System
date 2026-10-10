@@ -21,6 +21,13 @@ namespace KoaZa
             window.ShowDialog();
         }
 
+        private void OpenFixtures_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new FixturesWindow();
+            window.Owner = this;
+            window.ShowDialog();
+        }
+
         private void AnalyzeButton_Click(object sender, RoutedEventArgs e)
         {
             double homeRate, awayRate;
