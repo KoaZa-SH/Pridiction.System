@@ -146,6 +146,7 @@ namespace KoaZa
                 SetMarketChartState(false, LocalizationService.T("No fixture matches the current filters.", "با فیلترهای فعلی مسابقه‌ای پیدا نشد."));
                 MatchTitleText.Text = LocalizationService.T("Select a match from the list", "یک مسابقه انتخاب کن");
                 ModelStatusText.Text = LocalizationService.T("No fixture matches the current filters.", "با فیلترهای فعلی مسابقه‌ای پیدا نشد.");
+                LoadLatestNews(null);
             }
         }
 
@@ -388,7 +389,9 @@ namespace KoaZa
             string value = (status ?? "").Trim().ToUpperInvariant();
             return value == "LIVE" || value == "1H" || value == "HT" || value == "2H" ||
                    value == "ET" || value == "P" || value == "BT" || value == "INT" ||
-                   value == "INPLAY" || value == "IN PROGRESS" || value == "INPROGRESS";
+                   value == "INPLAY" || value == "IN_PLAY" || value == "IN PROGRESS" || value == "INPROGRESS" ||
+                   value == "PAUSED" || value == "HALFTIME" || value == "FIRST_HALF" || value == "SECOND_HALF" ||
+                   value == "EXTRA_TIME" || value == "PENALTY_SHOOTOUT";
         }
 
         private bool IsCurrentFixture(string externalId)
