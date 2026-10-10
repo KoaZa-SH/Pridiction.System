@@ -172,7 +172,7 @@ namespace KoaZa
 
         private void AnalyzeFixture(FixtureRecord fixture)
         {
-            MatchTitleText.Text = LocalizationService.Team(fixture.HomeTeam) + " vs " + LocalizationService.Team(fixture.AwayTeam);
+            MatchTitleText.Text = LocalizationService.Team(fixture.HomeTeam) + LocalizationService.T(" vs ", " در برابر ") + LocalizationService.Team(fixture.AwayTeam);
             HomeChartTeamText.Text = LocalizationService.T("HOME: ", "میزبان: ") + LocalizationService.Team(fixture.HomeTeam);
             AwayChartTeamText.Text = LocalizationService.T("AWAY: ", "میهمان: ") + LocalizationService.Team(fixture.AwayTeam);
             MarketsList.ItemsSource = null;
