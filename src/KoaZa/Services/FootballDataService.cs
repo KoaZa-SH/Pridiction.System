@@ -448,7 +448,7 @@ namespace KoaZa.Services
                         int? value = GetNullableInt(stat, "value");
                         if (!value.HasValue) continue;
                         if (type.Contains("corner")) { if (isHome) result.HomeCorners = value; else result.AwayCorners = value; }
-                        else if (type == "shots on goal" || type == "shots on target" || type == "shots on target") { if (isHome) result.HomeShotsOnTarget = value; else result.AwayShotsOnTarget = value; }
+                        else if (type.Contains("shots on goal") || type.Contains("shots on target")) { if (isHome) result.HomeShotsOnTarget = value; else result.AwayShotsOnTarget = value; }
                         else if (type.Contains("yellow card")) { if (isHome) result.HomeYellowCards = value; else result.AwayYellowCards = value; }
                     }
                 }
