@@ -456,9 +456,15 @@ namespace KoaZa
             catch (Exception ex)
             {
                 if (!IsCurrentFixture(fixtureId)) return;
-                StatsText.Text = LocalizationService.IsPersian
-                    ? "آمار تفصیلی این مسابقه در دسترس نیست؛ ممکن است سرویس داده، رقابت یا سطح اشتراک از آن پشتیبانی نکند."
-                    : "Detailed stats are unavailable for this provider/match, or the API plan does not cover them: " + ex.Message;
+                bool hasStoredStats = fixture.HomeCorners.HasValue || fixture.AwayCorners.HasValue ||
+                    fixture.HomeShotsOnTarget.HasValue || fixture.AwayShotsOnTarget.HasValue ||
+                    fixture.HomeYellowCards.HasValue || fixture.AwayYellowCards.HasValue ||
+                    fixture.VarReviews.HasValue || !string.IsNullOrWhiteSpace(fixture.Referee);
+                StatsText.Text = hasStoredStats
+                    ? SummarizeStoredFixtureStatistics(fixture) + Environment.NewLine + LocalizationService.T("Live detail refresh failed; showing saved statistics.", "نوسازی آمار ناموفق بود؛ آمار ذخیره‌شده نمایش داده می‌شود.")
+                    : (LocalizationService.IsPersian
+                        ? "آمار تفصیلی این مسابقه در دسترس نیست؛ ممکن است سرویس داده، رقابت یا سطح اشتراک از آن پشتیبانی نکند."
+                        : "Detailed stats are unavailable for this provider/match, or the API plan does not cover them: " + ex.Message);
             }
 
         }
