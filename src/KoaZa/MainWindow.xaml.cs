@@ -142,10 +142,18 @@ namespace KoaZa
             if (_settingLanguage || LanguageBox.SelectedItem == null) return;
             var item = LanguageBox.SelectedItem as ComboBoxItem;
             if (item == null) return;
+            var selected = FixturesGrid.SelectedItem as FixtureRow;
+            string selectedId = selected == null ? null : selected.Fixture.ExternalId;
             LocalizationService.SetLanguage(Convert.ToString(item.Tag));
             LocalizationService.Apply(this);
             ConfigureDateFilters();
             LoadFixtureList();
+            if (!string.IsNullOrWhiteSpace(selectedId))
+            {
+                var rows = FixturesGrid.ItemsSource as IEnumerable<FixtureRow>;
+                var restored = rows == null ? null : rows.FirstOrDefault(r => r.Fixture.ExternalId == selectedId);
+                if (restored != null) FixturesGrid.SelectedItem = restored;
+            }
         }
 
         private void OpenFixtures_Click(object sender, RoutedEventArgs e)
@@ -174,9 +182,9 @@ namespace KoaZa
                 var awayMatches = _database.GetCompletedMatches(fixture.League, fixture.AwayTeam, 12);
                 if (homeMatches.Count < 3 || awayMatches.Count < 3)
                 {
-                    ModelStatusText.Text = "Not enough historical matches for a responsible estimate. Found " +
-                        homeMatches.Count + " for the home team and " + awayMatches.Count +
-                        " for the away team in this competition. Import completed historical results first. / داده تاریخی کافی نیست.";
+                    ModelStatusText.Text = LocalizationService.IsPersian
+                        ? "داده تاریخی کافی نیست. تعداد بازی‌های میزبان: " + homeMatches.Count + "؛ میهمان: " + awayMatches.Count + ". ابتدا نتایج کامل‌شده را دریافت کن."
+                        : "Not enough historical matches. Found " + homeMatches.Count + " for the home team and " + awayMatches.Count + " for the away team. Import completed results first.";
                     return;
                 }
 
@@ -199,21 +207,21 @@ namespace KoaZa
                 var probabilities = PoissonModel.Analyze(homeRate, awayRate);
                 MarketsList.ItemsSource = probabilities.Markets.Select(m => new MarketRow
                 {
-                    Label = m.Market + " — " + m.Outcome,
+                    Label = LocalizationService.Market(m.Market, m.Outcome),
                     Percent = Math.Round(m.Probability * 100, 1),
                     PercentLabel = (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%"
                 }).ToList();
 
                 _database.SavePrediction(fixture.HomeTeam, fixture.AwayTeam, homeRate, awayRate, probabilities);
-                ModelStatusText.Text = "Estimated goals (derived automatically): home " +
-                    homeRate.ToString("0.00", CultureInfo.InvariantCulture) + ", away " +
-                    awayRate.ToString("0.00", CultureInfo.InvariantCulture) + ". Based on up to 12 recent completed matches per team (" +
-                    homeMatches.Count + " home-team matches; " + awayMatches.Count + " away-team matches). Model: baseline Poisson. " +
-                    "These are estimates, not calibrated betting guarantees.";
+                ModelStatusText.Text = LocalizationService.IsPersian
+                    ? "گل مورد انتظار (محاسبه خودکار): میزبان " + homeRate.ToString("0.00", CultureInfo.InvariantCulture) + "، میهمان " + awayRate.ToString("0.00", CultureInfo.InvariantCulture) +
+                      ". بر پایه حداکثر ۱۲ بازی اخیر هر تیم (" + homeMatches.Count + " بازی میزبان، " + awayMatches.Count + " بازی میهمان). مدل پواسون پایه؛ احتمال‌ها تضمین‌شده یا کالیبره‌شده نیستند."
+                    : "Expected goals (automatic): home " + homeRate.ToString("0.00", CultureInfo.InvariantCulture) + ", away " + awayRate.ToString("0.00", CultureInfo.InvariantCulture) +
+                      ". Based on up to 12 recent completed matches per team (" + homeMatches.Count + " home-team matches; " + awayMatches.Count + " away-team matches). Baseline Poisson; not calibrated betting guarantees.";
             }
             catch (Exception ex)
             {
-                ModelStatusText.Text = "Analysis failed / خطا در تحلیل: " + ex.Message;
+                ModelStatusText.Text = LocalizationService.T("Analysis failed: ", "خطا در تحلیل: ") + ex.Message;
             }
         }
 
