@@ -146,6 +146,20 @@ namespace KoaZa.Services
                 catch (Exception ex) { errors.Add("API-SPORTS: " + ex.Message); }
             }
 
+            // football-data.org bulk endpoint supports multiple competition codes in one request (coverage is plan-dependent).
+            if (providers.Any(p => p.Enabled && p.Provider == "FootballData" && !string.IsNullOrWhiteSpace(p.Key)))
+            {
+                try { combined.AddRange(FetchFootballDataBulk(season)); }
+                catch (Exception ex) { errors.Add("football-data.org: " + ex.Message); }
+            }
+
+            // OpenLigaDB is a no-key fallback for the German Bundesliga when it is enabled.
+            if (providers.Any(p => p.Enabled && p.Provider == "OpenLigaDB"))
+            {
+                try { combined.AddRange(FetchOpenLiga("bl1", season)); }
+                catch (Exception ex) { errors.Add("OpenLigaDB: " + ex.Message); }
+            }
+
             // Merge any other enabled global schedule feed when configured; competition IDs are provider-specific.
             foreach (var config in providers.Where(p => p.Provider == "SportsAPI360" && !string.IsNullOrWhiteSpace(p.Key)))
             {
@@ -546,6 +560,49 @@ namespace KoaZa.Services
                 }
             }
             throw new InvalidOperationException("All enabled API-Football keys failed or returned no fixtures. Check key validity, league ID and quota.", last);
+        }
+
+        private static List<FixtureRecord> FetchFootballDataBulk(int season)
+        {
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "FootballData" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+            if (configs.Count == 0) return new List<FixtureRecord>();
+            string from = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            string to = DateTime.UtcNow.Date.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            string competitions = "PL,PD,BL1,SA,FL1,CL,EL,WC,EC";
+            Exception last = null;
+            foreach (var config in configs)
+            {
+                try
+                {
+                    string url = "https://api.football-data.org/v4/matches?competitions=" + Uri.EscapeDataString(competitions) +
+                        "&dateFrom=" + from + "&dateTo=" + to;
+                    var root = Parse(Request(url, "X-Auth-Token", config.Key));
+                    if (HasErrors(root)) throw new InvalidOperationException("The account may not have access to all requested competitions.");
+                    var output = new List<FixtureRecord>();
+                    foreach (var item in GetList(root, "matches"))
+                    {
+                        var home = GetMap(item, "homeTeam");
+                        var away = GetMap(item, "awayTeam");
+                        var competition = GetMap(item, "competition");
+                        var score = GetMap(item, "score");
+                        var fullTime = GetMap(score, "fullTime");
+                        output.Add(new FixtureRecord {
+                            Provider = "football-data.org",
+                            League = GetString(competition, "name", GetString(competition, "code", "Competition")),
+                            KickoffUtc = GetString(item, "utcDate", ""),
+                            HomeTeam = GetString(home, "name", "Home"),
+                            AwayTeam = GetString(away, "name", "Away"),
+                            HomeGoals = GetNullableInt(fullTime, "home"),
+                            AwayGoals = GetNullableInt(fullTime, "away"),
+                            Status = GetString(item, "status", ""),
+                            ExternalId = GetString(item, "id", "")
+                        });
+                    }
+                    return output;
+                }
+                catch (Exception ex) { last = ex; }
+            }
+            throw new InvalidOperationException("Could not retrieve the configured major competitions.", last);
         }
 
         private static List<FixtureRecord> FetchFootballData(string league, int season)
