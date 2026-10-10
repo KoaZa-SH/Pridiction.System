@@ -52,31 +52,30 @@ namespace KoaZa.Services
         public static MatchProbabilities Analyze(double homeRate, double awayRate)
         {
             if (homeRate < 0 || awayRate < 0 || homeRate > 8 || awayRate > 8) throw new ArgumentOutOfRangeException("Rates must be between 0 and 8.");
-            const int maxGoals = 15;
+            const int maxGoals = 30;
             var hp = Enumerable.Range(0, maxGoals + 1).Select(i => PoissonPmf(i, homeRate)).ToArray();
             var ap = Enumerable.Range(0, maxGoals + 1).Select(i => PoissonPmf(i, awayRate)).ToArray();
+            double normalizer = hp.Sum() * ap.Sum();
             double hw = 0, draw = 0, aw = 0, over05 = 0, over15 = 0, over25 = 0, over35 = 0, btts = 0;
-            var exactTotalGoals = new double[5];
             var scores = new List<ScoreProbability>();
             for (int h = 0; h <= maxGoals; h++)
             for (int a = 0; a <= maxGoals; a++)
             {
-                double p = hp[h] * ap[a];
+                double p = hp[h] * ap[a] / normalizer;
                 if (h > a) hw += p; else if (h == a) draw += p; else aw += p;
                 if (h + a >= 1) over05 += p;
                 if (h + a >= 2) over15 += p;
-                if (h + a < 4) exactTotalGoals[h + a] += p; else exactTotalGoals[4] += p;
                 if (h + a >= 3) over25 += p;
                 if (h + a >= 4) over35 += p;
                 if (h > 0 && a > 0) btts += p;
                 scores.Add(new ScoreProbability { Score = h + " - " + a, Value = p, Probability = (p * 100).ToString("0.00") + "%" });
             }
-            double resultSum = hw + draw + aw;
-            hw /= resultSum; draw /= resultSum; aw /= resultSum;
-            double homeOver05 = 1 - hp[0];
-            double homeOver15 = 1 - hp[0] - hp[1];
-            double awayOver05 = 1 - ap[0];
-            double awayOver15 = 1 - ap[0] - ap[1];
+            double homeSum = hp.Sum();
+            double awaySum = ap.Sum();
+            double homeOver05 = (homeSum - hp[0]) / homeSum;
+            double homeOver15 = (homeSum - hp[0] - hp[1]) / homeSum;
+            double awayOver05 = (awaySum - ap[0]) / awaySum;
+            double awayOver15 = (awaySum - ap[0] - ap[1]) / awaySum;
             var markets = new List<MarketProbability>
             {
                 M("Match result", "Home win", hw), M("Match result", "Draw", draw), M("Match result", "Away win", aw),
