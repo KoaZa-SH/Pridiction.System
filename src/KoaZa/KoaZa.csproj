@@ -22,7 +22,7 @@
     <DebugType>pdbonly</DebugType><Optimize>true</Optimize><OutputPath>bin\Release\</OutputPath><DefineConstants>TRACE</DefineConstants><ErrorReport>prompt</ErrorReport><WarningLevel>4</WarningLevel><PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="System" /><Reference Include="System.Core" /><Reference Include="System.Data" /><Reference Include="System.Xml" /><Reference Include="System.Xaml" />
+    <Reference Include="System" /><Reference Include="System.Core" /><Reference Include="System.Data" /><Reference Include="System.Xml" /><Reference Include="System.Xaml" /><Reference Include="System.Security" />
     <Reference Include="PresentationCore" /><Reference Include="PresentationFramework" /><Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
@@ -33,7 +33,7 @@
     <Compile Include="App.xaml.cs"><DependentUpon>App.xaml</DependentUpon></Compile>
     <Page Include="MainWindow.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
     <Compile Include="MainWindow.xaml.cs"><DependentUpon>MainWindow.xaml</DependentUpon></Compile>
-    <Compile Include="Services\PoissonModel.cs" /><Compile Include="Data\DatabaseService.cs" />
+    <Compile Include="Services\PoissonModel.cs" /><Compile Include="Services\ApiKeyManager.cs" /><Compile Include="Data\DatabaseService.cs" />
     <None Include="Data\schema.sql" /><None Include="packages.config" />
   </ItemGroup>
   <ItemGroup><None Include="App.config" /></ItemGroup>
