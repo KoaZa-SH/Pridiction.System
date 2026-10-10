@@ -463,7 +463,8 @@ namespace KoaZa
                     legacyStats.HomeYellowCards = normalized.HomeYellowCards; legacyStats.AwayYellowCards = normalized.AwayYellowCards;
                     legacyStats.Referee = normalized.Referee;
                     _database.SaveMatchStatistics(normalized);
-                    _database.ReplaceMatchEvents(fixture.Provider, fixture.ExternalId, MatchStatisticsParser.ParseEvents(json, fixture));
+                    if (MatchStatisticsParser.HasEventPayload(json, fixture))
+                        _database.ReplaceMatchEvents(fixture.Provider, fixture.ExternalId, MatchStatisticsParser.ParseEvents(json, fixture));
                 }
                 _database.SaveNormalizedFixtureStatistics(legacyStats);
                 if (!IsCurrentFixture(fixtureId)) return;
