@@ -1764,5 +1764,42 @@ namespace KoaZa.Services
         {
             new KoaZa.Data.DatabaseService().SaveFixtures(fixtures);
         }
+
+        // Import a bounded number of completed matches so the app starts building a usable
+        // historical event dataset instead of only storing upcoming fixtures.
+        public static int ImportHistoricalStatistics(List<FixtureRecord> fixtures)
+        {
+            if (fixtures == null) return 0;
+            var candidates = fixtures.Where(f => f.HomeGoals.HasValue && f.AwayGoals.HasValue &&
+                (f.Provider == "API-Football" || f.Provider == "ApiFootball" || f.Provider == "ApiSports" ||
+                 f.Provider == "FiveDollarFootball" || f.Provider == "5DollarFootballAPI"))
+                .OrderByDescending(f => f.KickoffUtc).Take(10).ToList();
+            var db = new KoaZa.Data.DatabaseService();
+            int imported = 0;
+            foreach (var fixture in candidates)
+            {
+                try
+                {
+                    string json = FootballDataService.FetchFixtureDetails(fixture);
+                    if (string.IsNullOrWhiteSpace(json)) continue;
+                    db.SaveFixtureDetails(fixture.Provider, fixture.ExternalId, json);
+                    var stats = fixture.Provider == "FiveDollarFootball" || fixture.Provider == "5DollarFootballAPI"
+                        ? MatchStatisticsParser.ParseFiveDollarOrGeneric(json, fixture)
+                        : MatchStatisticsParser.ParseApiFootball(json, fixture);
+                    if (stats == null) continue;
+                    bool hasEventsStats = stats.HomeShots.HasValue || stats.AwayShots.HasValue ||
+                        stats.HomeShotsOnTarget.HasValue || stats.AwayShotsOnTarget.HasValue ||
+                        stats.HomeCorners.HasValue || stats.AwayCorners.HasValue ||
+                        stats.HomeYellowCards.HasValue || stats.AwayYellowCards.HasValue ||
+                        stats.HomeRedCards.HasValue || stats.AwayRedCards.HasValue;
+                    if (!hasEventsStats) continue;
+                    db.SaveMatchStatistics(stats);
+                    db.SaveMatchEvents(MatchStatisticsParser.ParseEvents(json, fixture));
+                    imported++;
+                }
+                catch { /* One unavailable match must not cancel the rest of the import. */ }
+            }
+            return imported;
+        }
     }
 }
