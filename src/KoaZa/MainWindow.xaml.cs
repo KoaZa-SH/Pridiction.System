@@ -14,6 +14,13 @@ namespace KoaZa
             try { _database = new DatabaseService(); }
             catch (Exception ex) { MessageBox.Show("Could not initialize the local database.\n" + ex.Message, "Database error", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
+        private void OpenApiSettings_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new ApiSettingsWindow();
+            window.Owner = this;
+            window.ShowDialog();
+        }
+
         private void AnalyzeButton_Click(object sender, RoutedEventArgs e)
         {
             double homeRate, awayRate;
