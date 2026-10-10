@@ -53,18 +53,37 @@
             <TextBlock x:Name="MarketHeadingText" Text="Market probabilities / احتمال بازارها" FontSize="15" FontWeight="Bold"/>
           </StackPanel>
           <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-            <ItemsControl x:Name="MarketsList">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Grid Margin="0,3,0,7">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="2.2*"/><ColumnDefinition Width="3*"/><ColumnDefinition Width="62"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding Label}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,8,0" FontSize="12"/>
-                    <ProgressBar Grid.Column="1" Value="{Binding Percent}" Maximum="100" Height="13" VerticalAlignment="Center" Foreground="#16865B" Background="#E5ECE7" BorderThickness="0"/>
-                    <TextBlock Grid.Column="2" Text="{Binding PercentLabel}" VerticalAlignment="Center" HorizontalAlignment="Right" FontWeight="SemiBold" FontSize="12"/>
-                  </Grid>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
+            <StackPanel>
+              <TextBlock Text="Market probabilities / احتمال بازارها" FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
+              <ItemsControl x:Name="MarketsList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid Margin="0,3,0,7">
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="2.2*"/><ColumnDefinition Width="3*"/><ColumnDefinition Width="62"/></Grid.ColumnDefinitions>
+                      <TextBlock Text="{Binding Label}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,8,0" FontSize="12"/>
+                      <ProgressBar Grid.Column="1" Value="{Binding Percent}" Maximum="100" Height="13" VerticalAlignment="Center" Foreground="#16865B" Background="#E5ECE7" BorderThickness="0"/>
+                      <TextBlock Grid.Column="2" Text="{Binding PercentLabel}" VerticalAlignment="Center" HorizontalAlignment="Right" FontWeight="SemiBold" FontSize="12"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Separator Margin="0,8"/>
+              <TextBlock Text="Match statistics &amp; events / آمار و رویدادهای مسابقه" FontSize="14" FontWeight="Bold" Margin="0,4,0,6"/>
+              <TextBlock x:Name="StatsText" Text="Select a match to load statistics, cards, fouls, corners and events." TextWrapping="Wrap" Foreground="#405449" FontSize="12"/>
+              <Separator Margin="0,8"/>
+              <TextBlock Text="Relevant match news / اخبار مرتبط با مسابقه" FontSize="14" FontWeight="Bold" Margin="0,4,0,6"/>
+              <TextBlock x:Name="NewsStatusText" Text="News will be searched when a match is selected." TextWrapping="Wrap" Foreground="#7A8980" FontSize="11" Margin="0,0,0,4"/>
+              <ItemsControl x:Name="NewsList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel Margin="0,4,0,8">
+                      <Button Content="{Binding Title}" Tag="{Binding Url}" Click="NewsItem_Click" HorizontalContentAlignment="Left" Padding="0" BorderThickness="0" Background="Transparent" Foreground="#16734D" FontWeight="SemiBold" TextBlock.TextWrapping="Wrap"/>
+                      <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Foreground="#6A766E" FontSize="11" Margin="0,2,0,0"/>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
           </ScrollViewer>
           <TextBlock Grid.Row="3" x:Name="DisclaimerText" Text="Probabilities are estimates, not guarantees. / احتمال‌ها تخمینی هستند، نه تضمین نتیجه." TextWrapping="Wrap" Foreground="#7A8980" Margin="0,10,0,0"/>
         </Grid>
