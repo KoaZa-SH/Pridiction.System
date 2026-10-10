@@ -36,6 +36,7 @@ namespace KoaZa
                 LoadFixtureList();
                 LocalizationService.Apply(this);
                 ThemeService.Apply(this);
+                LoadLatestNews();
             }
             catch (Exception ex)
             {
@@ -157,6 +158,25 @@ namespace KoaZa
 
         private void Refresh_Click(object sender, RoutedEventArgs e) { LoadFixtureList(); }
         private void Filters_Changed(object sender, SelectionChangedEventArgs e) { ApplyFilters(); }
+
+        private void RefreshNews_Click(object sender, RoutedEventArgs e) { LoadLatestNews(); }
+
+        private async void LoadLatestNews()
+        {
+            NewsStatusText.Text = LocalizationService.T("Loading latest football headlines...", "در حال دریافت آخرین اخبار فوتبال...");
+            try
+            {
+                var news = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchLatestNews());
+                NewsList.ItemsSource = news;
+                NewsStatusText.Text = news.Count == 0
+                    ? LocalizationService.T("No headlines could be loaded. Check your internet connection or try again later.", "خبری دریافت نشد؛ اتصال اینترنت را بررسی کن یا بعداً دوباره تلاش کن.")
+                    : LocalizationService.T("Latest headlines from Varzesh3, Football360, FBTV3 and Google News. Select a headline to open the article.", "آخرین تیترها از ورزش سه، فوتبال ۳۶۰، فوتبال برتر و Google News؛ برای باز کردن خبر روی تیتر کلیک کن.") + " (" + news.Count + ")";
+            }
+            catch (Exception ex)
+            {
+                NewsStatusText.Text = LocalizationService.T("News feed unavailable: ", "خبرخوان در دسترس نیست: ") + ex.Message;
+            }
+        }
 
         private void OpenApiSettings_Click(object sender, RoutedEventArgs e)
         {
@@ -316,9 +336,6 @@ namespace KoaZa
         {
             string fixtureId = fixture.ExternalId;
             StatsText.Text = LocalizationService.T("Loading match statistics...", "در حال دریافت آمار مسابقه...");
-            NewsStatusText.Text = LocalizationService.T("Searching current news...", "در حال جست‌وجوی اخبار مرتبط...");
-            NewsList.ItemsSource = null;
-
             try
             {
                 bool live = IsLiveFixture(fixture.Status);
@@ -339,20 +356,6 @@ namespace KoaZa
                     : "Detailed stats are unavailable for this provider/match, or the API plan does not cover them: " + ex.Message;
             }
 
-            try
-            {
-                var news = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchMatchNews(fixture.HomeTeam, fixture.AwayTeam, fixture.League));
-                if (!IsCurrentFixture(fixtureId)) return;
-                NewsList.ItemsSource = news;
-                NewsStatusText.Text = news.Count == 0
-                    ? LocalizationService.T("No matching headlines found in the current news feed.", "در خبرخوان فعلی خبر مرتبطی پیدا نشد.")
-                    : LocalizationService.T("Headlines from Varzesh3 and Google News RSS. Open a headline to read the source article.", "تیترها از خبرخوان ورزش سه و Google News هستند؛ برای خواندن منبع، روی تیتر کلیک کن.");
-            }
-            catch (Exception ex)
-            {
-                if (!IsCurrentFixture(fixtureId)) return;
-                NewsStatusText.Text = LocalizationService.IsPersian ? "خبرخوان در دسترس نیست. اتصال اینترنت و دسترسی به Google News را بررسی کن." : "News feed unavailable: " + ex.Message;
-            }
         }
 
         private static bool IsLiveFixture(string status)
