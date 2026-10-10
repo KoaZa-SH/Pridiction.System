@@ -323,7 +323,35 @@ namespace KoaZa
                         ? Clamp(Average(awayMatches, fixture.AwayTeam, true, null))
                         : Clamp(MeanAwayGoals(baselineMatches));
                 }
+                // Head-to-head is a capped supporting signal, not a replacement for recent form.
+                var headToHead = _database.GetRecentCompletedMatches(fixture.League, 100)
+                    .Where(m => (string.Equals(m.HomeTeam, fixture.HomeTeam, StringComparison.OrdinalIgnoreCase) && string.Equals(m.AwayTeam, fixture.AwayTeam, StringComparison.OrdinalIgnoreCase)) ||
+                                (string.Equals(m.HomeTeam, fixture.AwayTeam, StringComparison.OrdinalIgnoreCase) && string.Equals(m.AwayTeam, fixture.HomeTeam, StringComparison.OrdinalIgnoreCase)))
+                    .Take(8).ToList();
+                if (headToHead.Count >= 3)
+                {
+                    double h2hHome = headToHead.Average(m => string.Equals(m.HomeTeam, fixture.HomeTeam, StringComparison.OrdinalIgnoreCase) ? m.HomeGoals.Value : m.AwayGoals.Value);
+                    double h2hAway = headToHead.Average(m => string.Equals(m.HomeTeam, fixture.AwayTeam, StringComparison.OrdinalIgnoreCase) ? m.HomeGoals.Value : m.AwayGoals.Value);
+                    homeRate = Clamp(homeRate * 0.80 + h2hHome * 0.20);
+                    awayRate = Clamp(awayRate * 0.80 + h2hAway * 0.20);
+                }
+                // Shot-on-target history can refine expected goals when actual samples are available.
+                double leagueShots = AverageTotalShotsOnTarget(baselineMatches);
+                double homeShots = AverageTeamShotsOnTarget(homeMatches, fixture.HomeTeam);
+                double awayShots = AverageTeamShotsOnTarget(awayMatches, fixture.AwayTeam);
+                if (leagueShots > 0 && homeShots > 0)
+                {
+                    double factor = Math.Max(0.65, Math.Min(1.35, homeShots / (leagueShots / 2.0)));
+                    homeRate = Clamp(homeRate * (0.90 + 0.10 * factor));
+                }
+                if (leagueShots > 0 && awayShots > 0)
+                {
+                    double factor = Math.Max(0.65, Math.Min(1.35, awayShots / (leagueShots / 2.0)));
+                    awayRate = Clamp(awayRate * (0.90 + 0.10 * factor));
+                }
+
                 var probabilities = PoissonModel.Analyze(homeRate, awayRate);
+                AddHistoricalStatMarkets(probabilities, baselineMatches, homeMatches, awayMatches, fixture);
                 if (!hasReliableHistory)
                     dataWarning = LocalizationService.T(
                         "Limited historical data. Orange chart: estimates use available team results and/or competition averages; confidence is low.",
@@ -440,6 +468,7 @@ namespace KoaZa
             foreach (string item in unavailableMarkets)
             {
                 string[] parts = item.Split('|');
+                if (probabilities.Markets.Any(m => string.Equals(m.Market, parts[0], StringComparison.OrdinalIgnoreCase) && string.Equals(m.Outcome, parts[1], StringComparison.OrdinalIgnoreCase))) continue;
                 rows.Add(new MarketRow { Label = LocalizationService.Market(parts[0], parts[1]), Percent = 0,
                     PercentLabel = LocalizationService.T("Stats unavailable", "آمار موجود نیست"), HasData = false,
                     BarBrush = System.Windows.Media.Brushes.Gray, Reason = unavailable });
@@ -479,6 +508,71 @@ namespace KoaZa
             };
             SetMarketChartState(false, reason);
             return labels.Select(label => new MarketRow { Label = label, Percent = 0, PercentLabel = "—", HasData = false, BarBrush = System.Windows.Media.Brushes.Gray, Reason = reason }).ToList();
+        }
+
+        private static void AddHistoricalStatMarkets(MatchProbabilities probabilities, List<FixtureRecord> baseline, List<FixtureRecord> homeMatches, List<FixtureRecord> awayMatches, FixtureRecord fixture)
+        {
+            var all = (baseline ?? new List<FixtureRecord>()).Where(m => m.HomeGoals.HasValue && m.AwayGoals.HasValue).ToList();
+            var corners = all.Where(m => m.HomeCorners.HasValue && m.AwayCorners.HasValue).Select(m => (double)(m.HomeCorners.Value + m.AwayCorners.Value)).ToList();
+            var homeCorners = TeamCornerSamples(homeMatches, fixture.HomeTeam);
+            var awayCorners = TeamCornerSamples(awayMatches, fixture.AwayTeam);
+            var cards = all.Where(m => m.HomeYellowCards.HasValue && m.AwayYellowCards.HasValue).ToList();
+            if (!string.IsNullOrWhiteSpace(fixture.Referee))
+            {
+                var refereeMatches = cards.Where(m => string.Equals(m.Referee, fixture.Referee, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (refereeMatches.Count >= 5) cards = refereeMatches;
+            }
+            var yellow = cards.Select(m => (double)(m.HomeYellowCards.Value + m.AwayYellowCards.Value)).ToList();
+            var shots = all.Where(m => m.HomeShotsOnTarget.HasValue && m.AwayShotsOnTarget.HasValue)
+                .Select(m => (double)(m.HomeShotsOnTarget.Value + m.AwayShotsOnTarget.Value)).ToList();
+            var varSamples = all.Where(m => m.VarReviews.HasValue).Select(m => (double)m.VarReviews.Value).ToList();
+            AddThresholdMarkets(probabilities, "Corners", "Total over 8.5", "Total under 8.5", corners, 8.5);
+            AddThresholdMarkets(probabilities, "Home team corners", "Over 4.5", "Under 4.5", homeCorners, 4.5);
+            AddThresholdMarkets(probabilities, "Away team corners", "Over 4.5", "Under 4.5", awayCorners, 4.5);
+            AddThresholdMarkets(probabilities, "Yellow cards", "Total over 3.5", "Total under 3.5", yellow, 3.5);
+            AddThresholdMarkets(probabilities, "Shots on target", "Total over 8.5", "Total under 8.5", shots, 8.5);
+            if (varSamples.Count >= 5)
+                probabilities.Markets.Add(new MarketProbability { Market = "VAR review", Outcome = "Yes", Probability = varSamples.Count(v => v > 0) / (double)varSamples.Count });
+        }
+
+        private static void AddThresholdMarkets(MatchProbabilities probabilities, string market, string overOutcome, string underOutcome, List<double> samples, double threshold)
+        {
+            // Require real historical samples; missing values are never treated as zero.
+            if (samples == null || samples.Count < 5) return;
+            double over = samples.Count(v => v > threshold) / (double)samples.Count;
+            probabilities.Markets.Add(new MarketProbability { Market = market, Outcome = overOutcome, Probability = over });
+            probabilities.Markets.Add(new MarketProbability { Market = market, Outcome = underOutcome, Probability = 1.0 - over });
+        }
+
+        private static List<double> TeamCornerSamples(List<FixtureRecord> matches, string team)
+        {
+            var result = new List<double>();
+            foreach (var m in matches ?? new List<FixtureRecord>())
+            {
+                bool home = string.Equals(m.HomeTeam, team, StringComparison.OrdinalIgnoreCase);
+                int? value = home ? m.HomeCorners : m.AwayCorners;
+                if (value.HasValue) result.Add(value.Value);
+            }
+            return result;
+        }
+
+        private static double AverageTotalShotsOnTarget(List<FixtureRecord> matches)
+        {
+            var values = (matches ?? new List<FixtureRecord>()).Where(m => m.HomeShotsOnTarget.HasValue && m.AwayShotsOnTarget.HasValue)
+                .Select(m => (double)(m.HomeShotsOnTarget.Value + m.AwayShotsOnTarget.Value)).ToList();
+            return values.Count == 0 ? 0 : values.Average();
+        }
+
+        private static double AverageTeamShotsOnTarget(List<FixtureRecord> matches, string team)
+        {
+            var values = new List<int>();
+            foreach (var m in matches ?? new List<FixtureRecord>())
+            {
+                bool home = string.Equals(m.HomeTeam, team, StringComparison.OrdinalIgnoreCase);
+                int? value = home ? m.HomeShotsOnTarget : m.AwayShotsOnTarget;
+                if (value.HasValue) values.Add(value.Value);
+            }
+            return values.Count == 0 ? 0 : values.Average();
         }
 
         private static double Average(List<FixtureRecord> matches, string team, bool scored, bool? homeVenue)
