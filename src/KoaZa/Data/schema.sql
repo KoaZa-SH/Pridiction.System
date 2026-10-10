@@ -15,3 +15,50 @@ CREATE TABLE IF NOT EXISTS Predictions (
   ModelVersion TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS IX_Predictions_CreatedUtc ON Predictions(CreatedUtc);
+
+-- Structured historical event statistics. NULL means the provider did not report a value.
+CREATE TABLE IF NOT EXISTS MatchStatistics (
+  Id INTEGER PRIMARY KEY AUTOINCREMENT,
+  Provider TEXT NOT NULL,
+  ExternalId TEXT NOT NULL,
+  League TEXT,
+  KickoffUtc TEXT,
+  HomeTeam TEXT NOT NULL,
+  AwayTeam TEXT NOT NULL,
+  HomeGoals INTEGER,
+  AwayGoals INTEGER,
+  Referee TEXT,
+  HomeShots INTEGER,
+  AwayShots INTEGER,
+  HomeShotsOnTarget INTEGER,
+  AwayShotsOnTarget INTEGER,
+  HomeCorners INTEGER,
+  AwayCorners INTEGER,
+  HomeYellowCards INTEGER,
+  AwayYellowCards INTEGER,
+  HomeRedCards INTEGER,
+  AwayRedCards INTEGER,
+  HomeFouls INTEGER,
+  AwayFouls INTEGER,
+  HomePossession REAL,
+  AwayPossession REAL,
+  DataSource TEXT,
+  UpdatedUtc TEXT NOT NULL,
+  UNIQUE(Provider, ExternalId)
+);
+CREATE INDEX IF NOT EXISTS IX_MatchStatistics_TeamsKickoff ON MatchStatistics(HomeTeam, AwayTeam, KickoffUtc);
+CREATE INDEX IF NOT EXISTS IX_MatchStatistics_RefereeKickoff ON MatchStatistics(Referee, KickoffUtc);
+
+CREATE TABLE IF NOT EXISTS MatchEvents (
+  Id INTEGER PRIMARY KEY AUTOINCREMENT,
+  Provider TEXT NOT NULL,
+  ExternalId TEXT NOT NULL,
+  EventIndex INTEGER NOT NULL,
+  Minute INTEGER,
+  Team TEXT,
+  Player TEXT,
+  Assist TEXT,
+  Type TEXT,
+  Detail TEXT,
+  UNIQUE(Provider, ExternalId, EventIndex)
+);
