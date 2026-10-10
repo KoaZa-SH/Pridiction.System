@@ -380,6 +380,7 @@ namespace KoaZa
                 if (normalized != null)
                 {
                     _database.SaveMatchStatistics(normalized);
+                    _database.SaveMatchEvents(MatchStatisticsParser.ParseEvents(json, fixture));
                     UpdateMultiMarketPredictions(fixture);
                 }
             }
