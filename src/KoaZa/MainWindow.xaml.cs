@@ -18,6 +18,7 @@ namespace KoaZa
         private List<FixtureRecord> _fixtures = new List<FixtureRecord>();
         private bool _loadingFilters;
         private bool _settingLanguage;
+        private bool _suppressFixtureSelection;
 
         public MainWindow()
         {
@@ -119,12 +120,30 @@ namespace KoaZa
                 filtered = filtered.Where(f => GetLocalKickoff(f).Date == dateOption.Date.Value.Date);
             if (leagueOption != null && !leagueOption.IsAll && !string.IsNullOrWhiteSpace(leagueOption.Key))
                 filtered = filtered.Where(f => string.Equals((f.League ?? "").Trim(), leagueOption.Key, StringComparison.OrdinalIgnoreCase));
+            var previous = FixturesGrid.SelectedItem as FixtureRow;
+            string previousId = previous == null ? null : previous.Fixture.ExternalId;
             var rows = filtered.OrderBy(GetLocalKickoff).Select(f => new FixtureRow(f)).ToList();
+            var selectedRow = !string.IsNullOrWhiteSpace(previousId)
+                ? rows.FirstOrDefault(r => string.Equals(r.Fixture.ExternalId, previousId, StringComparison.OrdinalIgnoreCase))
+                : null;
+            if (selectedRow == null && rows.Count > 0) selectedRow = rows[0];
+
+            _suppressFixtureSelection = true;
             FixturesGrid.ItemsSource = rows;
+            FixturesGrid.SelectedItem = selectedRow;
+            _suppressFixtureSelection = false;
             FixtureCountText.Text = LocalizationService.IsPersian ? rows.Count + " مسابقه" : rows.Count + " matches";
-            MarketsList.ItemsSource = null;
-            MatchTitleText.Text = LocalizationService.T("Select a match from the list", "یک مسابقه را انتخاب کن");
-            ModelStatusText.Text = LocalizationService.T("Predictions use saved completed matches. No manual xG entry is required.", "پیش‌بینی از نتایج تاریخی ذخیره‌شده محاسبه می‌شود؛ ورود دستی xG لازم نیست.");
+            if (selectedRow != null)
+            {
+                AnalyzeFixture(selectedRow.Fixture);
+            }
+            else
+            {
+                MarketsList.ItemsSource = BuildUnavailableMarketRows(LocalizationService.T("No fixture matches the current filters.", "با فیلترهای فعلی مسابقه‌ای پیدا نشد."));
+                SetMarketChartState(false, LocalizationService.T("No fixture matches the current filters.", "با فیلترهای فعلی مسابقه‌ای پیدا نشد."));
+                MatchTitleText.Text = LocalizationService.T("Select a match from the list", "یک مسابقه انتخاب کن");
+                ModelStatusText.Text = LocalizationService.T("No fixture matches the current filters.", "با فیلترهای فعلی مسابقه‌ای پیدا نشد.");
+            }
         }
 
         private static DateTime GetLocalKickoff(FixtureRecord fixture)
@@ -175,6 +194,7 @@ namespace KoaZa
 
         private void FixturesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (_suppressFixtureSelection) return;
             var row = FixturesGrid.SelectedItem as FixtureRow;
             if (row == null || _database == null) return;
             AnalyzeFixture(row.Fixture);
