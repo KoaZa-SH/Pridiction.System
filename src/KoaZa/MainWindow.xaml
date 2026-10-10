@@ -124,7 +124,7 @@
                   </ItemsControl>
                 </StackPanel>
               </Border>
-              <TextBlock Text="Additional markets use real historical corners, shots, cards, referee and VAR data when enough samples are available; missing values are never assumed to be zero. / بازارهای آماری از داده واقعی کرنر، شوت، کارت، داور و VAR استفاده می‌کنند؛ داده ناموجود صفر فرض نمی‌شود." TextWrapping="Wrap" Foreground="#7A8980" FontSize="11" Margin="0,2,0,6"/>
+              <TextBlock Text="Additional markets use real historical corners, shots, cards, referee and VAR data when enough samples are available; missing values are never assumed to be zero." TextWrapping="Wrap" Foreground="#7A8980" FontSize="11" Margin="0,2,0,6"/>
               <Separator Margin="0,8"/>
               <TextBlock Text="Match statistics &amp; events / آمار و رویدادهای مسابقه" FontSize="14" FontWeight="Bold" Margin="0,4,0,6"/>
               <TextBlock x:Name="StatsText" Text="Select a match to load statistics, cards, fouls, corners and events." TextWrapping="Wrap" Foreground="#405449" FontSize="12"/>
