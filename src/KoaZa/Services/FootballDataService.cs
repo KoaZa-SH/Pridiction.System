@@ -93,6 +93,38 @@ namespace KoaZa.Services
         private static string Decode(string value) { return Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
     }
 
+
+    public static class CompetitionSelectionStore
+    {
+        private static readonly string Folder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KoaZa");
+        private static readonly string FilePath = Path.Combine(Folder, "hidden-competitions.txt");
+
+        public static HashSet<string> LoadHidden()
+        {
+            try
+            {
+                if (!File.Exists(FilePath)) return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                return new HashSet<string>(File.ReadAllLines(FilePath).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()),
+                    StringComparer.OrdinalIgnoreCase);
+            }
+            catch { return new HashSet<string>(StringComparer.OrdinalIgnoreCase); }
+        }
+
+        public static bool IsVisible(string competition)
+        {
+            return !LoadHidden().Contains((competition ?? "").Trim());
+        }
+
+        public static void SaveHidden(IEnumerable<string> hidden)
+        {
+            Directory.CreateDirectory(Folder);
+            var values = (hidden ?? Enumerable.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToArray();
+            File.WriteAllLines(FilePath, values, Encoding.UTF8);
+        }
+    }
+
     public sealed class NewsItem
     {
         public string Title { get; set; }
@@ -831,12 +863,14 @@ namespace KoaZa.Services
         private readonly TextBox _headerBox;
         private readonly ListBox _providersList;
         private readonly TextBlock _status;
+        private StackPanel _competitionChecks;
+        private TextBlock _competitionStatus;
         private List<ApiProviderConfig> _providers;
 
         public ApiSettingsWindow()
         {
             Title = LocalizationService.T("KoaZa — API Provider Settings", "KoaZa — تنظیمات سرویس‌های API");
-            Width = 1040; Height = 570; MinWidth = 850; MinHeight = 460;
+            Width = 1040; Height = 650; MinWidth = 850; MinHeight = 500;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Background = new SolidColorBrush(Color.FromRgb(244, 247, 245));
             _providers = ApiProviderStore.Load();
@@ -904,10 +938,100 @@ namespace KoaZa.Services
             save.Click += Save_Click;
             buttons.Children.Add(toggle); buttons.Children.Add(remove); buttons.Children.Add(save);
             root.Children.Add(buttons); Grid.SetRow(buttons, 4);
-            Content = root;
+            var tabs = new TabControl();
+            tabs.Items.Add(new TabItem { Header = LocalizationService.T("API providers", "سرویس‌های API"), Content = root });
+            tabs.Items.Add(new TabItem { Header = LocalizationService.T("Competitions to display", "رقابت‌های قابل نمایش"), Content = BuildCompetitionTab() });
+            Content = tabs;
             ProviderBox_SelectionChanged(null, null);
             RefreshList();
             LocalizationService.Apply(this);
+        }
+
+        private UIElement BuildCompetitionTab()
+        {
+            var panel = new Grid { Margin = new Thickness(18) };
+            panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var instruction = new TextBlock
+            {
+                Text = LocalizationService.T(
+                    "Check every competition you want to show on the main page. Newly discovered competitions are shown by default. Import fixtures first if this list is empty.",
+                    "رقابت‌هایی را که می‌خواهی در صفحه اصلی نمایش داده شوند تیک بزن. رقابت‌های تازه‌شناسایی‌شده به‌صورت پیش‌فرض نمایش داده می‌شوند. اگر فهرست خالی است، ابتدا مسابقات را دریافت کن."),
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12), Foreground = new SolidColorBrush(Color.FromRgb(65, 84, 73))
+            };
+            panel.Children.Add(instruction); Grid.SetRow(instruction, 0);
+            var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+            _competitionChecks = new StackPanel { Margin = new Thickness(4) };
+            scroll.Content = _competitionChecks;
+            panel.Children.Add(scroll); Grid.SetRow(scroll, 1);
+            var bottom = new DockPanel { Margin = new Thickness(0, 12, 0, 0), LastChildFill = true };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
+            var all = new Button { Content = LocalizationService.T("Select all", "انتخاب همه"), Padding = new Thickness(12, 7, 12, 7), Margin = new Thickness(0, 0, 8, 0) };
+            all.Click += (s, e) => SetCompetitionChecks(true);
+            var none = new Button { Content = LocalizationService.T("Clear all", "پاک کردن انتخاب‌ها"), Padding = new Thickness(12, 7, 12, 7), Margin = new Thickness(0, 0, 8, 0) };
+            none.Click += (s, e) => SetCompetitionChecks(false);
+            var save = new Button { Content = LocalizationService.T("Save selection", "ذخیره انتخاب‌ها"), Padding = new Thickness(14, 7, 14, 7), Background = new SolidColorBrush(Color.FromRgb(22, 134, 91)), Foreground = Brushes.White, BorderThickness = new Thickness(0) };
+            save.Click += SaveCompetitionSelection_Click;
+            buttons.Children.Add(all); buttons.Children.Add(none); buttons.Children.Add(save);
+            DockPanel.SetDock(buttons, Dock.Left); bottom.Children.Add(buttons);
+            _competitionStatus = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(14, 4, 0, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Color.FromRgb(65, 84, 73)) };
+            bottom.Children.Add(_competitionStatus);
+            panel.Children.Add(bottom); Grid.SetRow(bottom, 2);
+            LoadCompetitionChecks();
+            return panel;
+        }
+
+        private void LoadCompetitionChecks()
+        {
+            if (_competitionChecks == null) return;
+            _competitionChecks.Children.Clear();
+            try
+            {
+                var known = new KoaZa.Data.DatabaseService().GetKnownLeagues();
+                var hidden = CompetitionSelectionStore.LoadHidden();
+                foreach (string league in known)
+                {
+                    var check = new CheckBox
+                    {
+                        Content = LocalizationService.League(league),
+                        Tag = league,
+                        IsChecked = !hidden.Contains(league),
+                        Margin = new Thickness(4, 5, 4, 5),
+                        Padding = new Thickness(3),
+                        ToolTip = league
+                    };
+                    _competitionChecks.Children.Add(check);
+                }
+                _competitionStatus.Text = known.Count == 0
+                    ? LocalizationService.T("No competitions found yet. Import fixtures first.", "هنوز رقابتی شناسایی نشده است؛ ابتدا مسابقات را دریافت کن.")
+                    : LocalizationService.T("Detected competitions: ", "رقابت‌های شناسایی‌شده: ") + known.Count;
+            }
+            catch (Exception ex)
+            {
+                _competitionStatus.Text = LocalizationService.T("Could not load competitions: ", "بارگذاری رقابت‌ها ناموفق بود: ") + ex.Message;
+            }
+        }
+
+        private void SetCompetitionChecks(bool isChecked)
+        {
+            if (_competitionChecks == null) return;
+            foreach (var check in _competitionChecks.Children.OfType<CheckBox>()) check.IsChecked = isChecked;
+        }
+
+        private void SaveCompetitionSelection_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var hidden = _competitionChecks.Children.OfType<CheckBox>()
+                    .Where(c => c.IsChecked != true).Select(c => Convert.ToString(c.Tag)).ToList();
+                CompetitionSelectionStore.SaveHidden(hidden);
+                _competitionStatus.Text = LocalizationService.T("Saved. Refresh the main page to apply the selection.", "ذخیره شد. برای اعمال انتخاب‌ها، فهرست صفحه اصلی را نوسازی کن.");
+            }
+            catch (Exception ex)
+            {
+                _competitionStatus.Text = LocalizationService.T("Save failed: ", "ذخیره ناموفق بود: ") + ex.Message;
+            }
         }
 
         private void ProviderBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
