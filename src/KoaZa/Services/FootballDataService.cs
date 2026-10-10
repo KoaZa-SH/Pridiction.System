@@ -911,7 +911,7 @@ namespace KoaZa.Services
 
         public ApiSettingsWindow()
         {
-            Title = LocalizationService.T("KoaZa — API Provider Settings", "KoaZa — تنظیمات سرویس‌های API");
+            Title = LocalizationService.T("KoaZa — Settings", "KoaZa — تنظیمات");
             Width = 1040; Height = 650; MinWidth = 850; MinHeight = 500;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Background = new SolidColorBrush(Color.FromRgb(244, 247, 245));
@@ -983,10 +983,54 @@ namespace KoaZa.Services
             var tabs = new TabControl();
             tabs.Items.Add(new TabItem { Header = LocalizationService.T("API providers", "سرویس‌های API"), Content = root });
             tabs.Items.Add(new TabItem { Header = LocalizationService.T("Competitions to display", "رقابت‌های قابل نمایش"), Content = BuildCompetitionTab() });
+            tabs.Items.Add(new TabItem { Header = LocalizationService.T("General settings", "تنظیمات عمومی"), Content = BuildGeneralTab() });
             Content = tabs;
             ProviderBox_SelectionChanged(null, null);
             RefreshList();
             LocalizationService.Apply(this);
+            ThemeService.Apply(this);
+        }
+
+        private UIElement BuildGeneralTab()
+        {
+            var panel = new StackPanel { Margin = new Thickness(24), Orientation = Orientation.Vertical };
+            panel.Children.Add(new TextBlock { Text = LocalizationService.T("Appearance", "ظاهر برنامه"), FontSize = 20, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 8) });
+            panel.Children.Add(new TextBlock { Text = LocalizationService.T("Choose how the application should look.", "حالت نمایش برنامه را انتخاب کن."), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
+            var themeBox = new ComboBox { Width = 240, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(8), Margin = new Thickness(0, 0, 0, 20) };
+            themeBox.Items.Add(new ComboBoxItem { Content = LocalizationService.T("Follow Windows", "مطابق ویندوز"), Tag = "System" });
+            themeBox.Items.Add(new ComboBoxItem { Content = LocalizationService.T("Light", "روشن"), Tag = "Light" });
+            themeBox.Items.Add(new ComboBoxItem { Content = LocalizationService.T("Dark", "تاریک"), Tag = "Dark" });
+            themeBox.SelectedIndex = ThemeService.Mode == "Light" ? 1 : ThemeService.Mode == "Dark" ? 2 : 0;
+            themeBox.SelectionChanged += (s, e) =>
+            {
+                var choice = themeBox.SelectedItem as ComboBoxItem;
+                if (choice == null) return;
+                ThemeService.SetMode(Convert.ToString(choice.Tag));
+                ThemeService.Apply(this);
+            };
+            panel.Children.Add(themeBox);
+            panel.Children.Add(new Separator { Margin = new Thickness(0, 4, 0, 14) });
+            panel.Children.Add(new TextBlock { Text = LocalizationService.T("Database safety", "امنیت پایگاه داده"), FontSize = 20, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 8) });
+            panel.Children.Add(new TextBlock
+            {
+                Text = LocalizationService.T("Automatic backups run daily and before importing refreshed fixtures. The 30 newest backups are retained. Completed results replaced by a provider update are archived in the database history table.", "پشتیبان‌گیری خودکار روزانه و پیش از دریافت مجدد مسابقات انجام می‌شود. ۳۰ نسخهٔ جدید نگه‌داری می‌شود. نتایج تمام‌شده‌ای که سرویس داده به‌روزرسانی کند، در جدول آرشیو ذخیره می‌شوند."),
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12)
+            });
+            panel.Children.Add(new TextBlock { Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KoaZa", "Backups"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) });
+            var backup = new Button { Content = LocalizationService.T("Create backup now", "تهیهٔ پشتیبان اکنون"), Padding = new Thickness(14, 8, 14, 8), HorizontalAlignment = HorizontalAlignment.Left, Background = new SolidColorBrush(Color.FromRgb(22, 134, 91)), Foreground = Brushes.White, BorderThickness = new Thickness(0) };
+            var backupStatus = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) };
+            backup.Click += (s, e) =>
+            {
+                try
+                {
+                    string path = new DatabaseService().CreateBackupNow();
+                    backupStatus.Text = LocalizationService.T("Backup created: ", "پشتیبان ساخته شد: ") + path;
+                }
+                catch (Exception ex) { backupStatus.Text = LocalizationService.T("Backup failed: ", "تهیه پشتیبان ناموفق بود: ") + ex.Message; }
+            };
+            panel.Children.Add(backup);
+            panel.Children.Add(backupStatus);
+            return new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         }
 
         private UIElement BuildCompetitionTab()
