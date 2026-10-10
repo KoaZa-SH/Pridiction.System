@@ -140,6 +140,21 @@ jobs:
             throw "MSBuild failed."
           }
 
+      - name: Build and run Poisson smoke tests
+        shell: pwsh
+        run: |
+          msbuild "tests/PoissonModel.SmokeTests/PoissonModel.SmokeTests.csproj" /p:Configuration=Release /verbosity:minimal
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Poisson smoke-test project build failed."
+          }
+
+          & "tests/PoissonModel.SmokeTests/bin/Release/PoissonModel.SmokeTests.exe"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Poisson model smoke tests failed."
+          }
+
       - name: Copy SQLite native DLLs
         shell: pwsh
         run: |
