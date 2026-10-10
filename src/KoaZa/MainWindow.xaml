@@ -1,5 +1,32 @@
 <Window x:Class="KoaZa.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="KoaZa Football Analytics" Height="780" Width="1250" MinHeight="650" MinWidth="980" WindowStartupLocation="CenterScreen" Background="#F4F7F5">
-  <Grid Margin="18">
+  <Window.Resources>
+    <Style TargetType="{x:Type Button}">
+      <Setter Property="Padding" Value="12,7"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style TargetType="{x:Type ComboBox}">
+      <Setter Property="MinHeight" Value="34"/>
+      <Setter Property="Padding" Value="7,5"/>
+    </Style>
+    <Style TargetType="{x:Type DataGrid}">
+      <Setter Property="RowHeight" Value="36"/>
+      <Setter Property="AlternationCount" Value="2"/>
+      <Setter Property="AlternatingRowBackground" Value="#F6F9F7"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CanUserResizeRows" Value="False"/>
+    </Style>
+    <Style TargetType="{x:Type DataGridColumnHeader}">
+      <Setter Property="Background" Value="#EAF1EC"/>
+      <Setter Property="Foreground" Value="#163B2B"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Padding" Value="8,10"/>
+      <Setter Property="BorderThickness" Value="0,0,0,1"/>
+      <Setter Property="BorderBrush" Value="#DDE7E0"/>
+    </Style>
+  </Window.Resources>
+  <Grid Margin="20">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <DockPanel Grid.Row="0" Margin="0,0,0,16">
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
@@ -14,7 +41,7 @@
         <TextBlock Text="Historical-data match analysis • تحلیل آماری بر اساس نتایج تاریخی" FontSize="13" Foreground="#5E6E65" Margin="0,4,0,0"/>
       </StackPanel>
     </DockPanel>
-    <Border Grid.Row="1" Background="White" CornerRadius="10" Padding="12" Margin="0,0,0,14">
+    <Border Grid.Row="1" Background="White" CornerRadius="14" Padding="12" Margin="0,0,0,14">
       <StackPanel Orientation="Horizontal">
         <TextBlock Text="Date / روز:" VerticalAlignment="Center" Margin="0,0,8,0"/>
         <ComboBox x:Name="DateFilterBox" Width="220" Padding="6" Margin="0,0,18,0" SelectionChanged="Filters_Changed"/>
