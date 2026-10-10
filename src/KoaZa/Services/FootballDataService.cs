@@ -153,8 +153,15 @@ namespace KoaZa.Services
 
         // Bulk refresh: API-SPORTS date queries return fixtures across all competitions covered by the account.
         // The provider's coverage and quota still determine which competitions/data are available.
-        public static List<FixtureRecord> FetchAllUpcoming(int season)
+        public static List<FixtureRecord> FetchAllUpcoming(int season, DateTime startDate)
         {
+            DateTime fromDate = startDate.Date;
+            DateTime today = DateTime.UtcNow.Date;
+            if (fromDate > today) throw new ArgumentOutOfRangeException("startDate", "Start date cannot be in the future.");
+            DateTime toDate = today.AddDays(7);
+            string from = fromDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            string to = toDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
             var combined = new List<FixtureRecord>();
             var errors = new List<string>();
             var providers = ApiProviderStore.Load().Where(p => p.Enabled).ToList();
@@ -164,47 +171,35 @@ namespace KoaZa.Services
             {
                 try
                 {
-                    // Import a rolling window of recent completed matches as well as upcoming fixtures.
-                    // The prediction model needs historical scores in the local database; fetching only future dates
-                    // leaves the market-probability panel empty for most teams.
-                    for (int day = -30; day < 7; day++)
-                    {
-                        string date = DateTime.UtcNow.Date.AddDays(day).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-                        string json = Request("https://v3.football.api-sports.io/fixtures?date=" + date + "&timezone=UTC", "x-apisports-key", config.Key);
-                        var root = Parse(json);
-                        if (HasErrors(root)) throw new InvalidOperationException("API-SPORTS returned an API or quota error for " + date + ".");
-                        combined.AddRange(ParseApiFootballFixtures(root));
-                    }
-                    string liveJson = Request("https://v3.football.api-sports.io/fixtures?live=all", "x-apisports-key", config.Key);
-                    var liveRoot = Parse(liveJson);
-                    if (!HasErrors(liveRoot)) combined.AddRange(ParseApiFootballFixtures(liveRoot));
+                    // One bounded date-range request replaces dozens of daily calls. API-Football
+                    // returns fixtures and completed scores across the competitions covered by this key.
+                    string json = Request("https://v3.football.api-sports.io/fixtures?from=" + from + "&to=" + to + "&timezone=UTC", "x-apisports-key", config.Key);
+                    var root = Parse(json);
+                    if (HasErrors(root)) throw new InvalidOperationException("API-SPORTS returned an API or quota error for " + from + " through " + to + ".");
+                    combined.AddRange(ParseApiFootballFixtures(root));
                     if (combined.Count > 0) break;
                 }
                 catch (Exception ex) { errors.Add("API-SPORTS: " + ex.Message); }
             }
 
-            // football-data.org bulk endpoint supports multiple competition codes in one request (coverage is plan-dependent).
             if (providers.Any(p => p.Enabled && p.Provider == "FootballData" && !string.IsNullOrWhiteSpace(p.Key)))
             {
-                try { combined.AddRange(FetchFootballDataBulk(season)); }
+                try { combined.AddRange(FetchFootballDataBulk(season, fromDate)); }
                 catch (Exception ex) { errors.Add("football-data.org: " + ex.Message); }
             }
 
-            // OpenLigaDB is a no-key fallback for the German Bundesliga when it is enabled.
             if (providers.Any(p => p.Enabled && p.Provider == "OpenLigaDB"))
             {
                 try { combined.AddRange(FetchOpenLiga("bl1", season)); }
                 catch (Exception ex) { errors.Add("OpenLigaDB: " + ex.Message); }
             }
 
-            // Merge any other enabled global schedule feed when configured; competition IDs are provider-specific.
             foreach (var config in providers.Where(p => p.Provider == "SportsAPI360" && !string.IsNullOrWhiteSpace(p.Key)))
             {
                 try { combined.AddRange(FetchSportsApi360("all")); }
                 catch (Exception ex) { errors.Add("SportsAPI360: " + ex.Message); }
             }
 
-            // Custom endpoints are treated as provider-defined normalized fixture feeds.
             foreach (var config in providers.Where(p => !string.IsNullOrWhiteSpace(p.BaseUrl)))
             {
                 try { combined.AddRange(FetchCustom(config)); }
@@ -212,19 +207,66 @@ namespace KoaZa.Services
             }
 
             if (combined.Count == 0)
-                throw new InvalidOperationException("No fixtures could be received from enabled providers. For global competitions, configure an API-SPORTS key or a working SportsAPI360/custom feed. " + string.Join(" | ", errors));
+                throw new InvalidOperationException("No fixtures could be received from enabled providers. " + string.Join(" | ", errors));
 
-            DateTime from = DateTime.UtcNow.Date.AddDays(-30);
-            DateTime to = DateTime.UtcNow.Date.AddDays(8);
-            return combined.Where(f => {
-                    DateTime kickoff;
-                    return !DateTime.TryParse(f.KickoffUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out kickoff)
-                        || (kickoff >= from && kickoff < to);
-                })
+            return FilterFixturesByDate(combined, fromDate, toDate)
                 .GroupBy(FixtureDeduplicationKey)
                 .Select(g => g.OrderByDescending(x => !string.IsNullOrWhiteSpace(x.League))
                     .ThenByDescending(x => !string.IsNullOrWhiteSpace(x.ExternalId)).First())
                 .ToList();
+        }
+
+        // Date-based import entry point used by the fixture-import window.
+        public static List<FixtureRecord> FetchFromDate(string provider, string league, int season, DateTime startDate)
+        {
+            DateTime fromDate = startDate.Date;
+            DateTime today = DateTime.UtcNow.Date;
+            if (fromDate > today) throw new ArgumentOutOfRangeException("startDate", "Start date cannot be in the future.");
+            if (provider == "Auto") return FetchAllUpcoming(season, fromDate);
+
+            List<FixtureRecord> rows;
+            if (provider == "ApiFootball" || provider == "ApiSports")
+                rows = FetchApiFootballRange(league, fromDate, today.AddDays(7));
+            else
+                rows = Fetch(provider, league, season);
+
+            return FilterFixturesByDate(rows, fromDate, today.AddDays(7))
+                .GroupBy(FixtureDeduplicationKey)
+                .Select(g => g.OrderByDescending(x => !string.IsNullOrWhiteSpace(x.ExternalId)).First())
+                .ToList();
+        }
+
+        private static List<FixtureRecord> FilterFixturesByDate(IEnumerable<FixtureRecord> fixtures, DateTime fromDate, DateTime toDateExclusive)
+        {
+            return (fixtures ?? Enumerable.Empty<FixtureRecord>()).Where(f =>
+            {
+                DateTime kickoff;
+                return DateTime.TryParse(f.KickoffUtc, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out kickoff)
+                    && kickoff >= fromDate && kickoff < toDateExclusive.AddDays(1);
+            }).ToList();
+        }
+
+        private static List<FixtureRecord> FetchApiFootballRange(string league, DateTime fromDate, DateTime toDate)
+        {
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled &&
+                (p.Provider == "ApiFootball" || p.Provider == "ApiSports") && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+            if (configs.Count == 0) throw new InvalidOperationException("No enabled API-Football key is saved. Open API Settings.");
+            string path = "/fixtures?league=" + Uri.EscapeDataString(league) +
+                "&from=" + fromDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) +
+                "&to=" + toDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "&timezone=UTC";
+            Exception last = null;
+            foreach (var config in configs)
+            {
+                try
+                {
+                    var root = Parse(Request("https://v3.football.api-sports.io" + path, "x-apisports-key", config.Key));
+                    if (HasErrors(root)) { last = new InvalidOperationException("API-Football returned an API or quota error."); continue; }
+                    return ParseApiFootballFixtures(root);
+                }
+                catch (Exception ex) { last = ex; }
+            }
+            throw new InvalidOperationException("All enabled API-Football keys failed for the requested date range. Check league ID, key and quota.", last);
         }
 
         private static string FixtureDeduplicationKey(FixtureRecord fixture)
@@ -700,11 +742,11 @@ namespace KoaZa.Services
             throw new InvalidOperationException("All enabled API-Football keys failed or returned no fixtures. Check key validity, league ID and quota.", last);
         }
 
-        private static List<FixtureRecord> FetchFootballDataBulk(int season)
+        private static List<FixtureRecord> FetchFootballDataBulk(int season, DateTime startDate)
         {
             var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "FootballData" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
             if (configs.Count == 0) return new List<FixtureRecord>();
-            string from = DateTime.UtcNow.Date.AddDays(-30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            string from = startDate.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             string to = DateTime.UtcNow.Date.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             string competitions = "PL,PD,BL1,SA,FL1,CL,EL,WC,EC";
             Exception last = null;
