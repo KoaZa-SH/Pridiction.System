@@ -12,8 +12,8 @@
 - Targets **.NET Framework 4.8**.
 - Local **SQLite** database for storing imported fixtures.
 - A persistent **Persian / English language setting** for the interface, fixture labels, market names, dates, and team names. Known club and national-team names use curated Persian names; unknown Latin-script names are transliterated as a fallback.
-- Provider settings include **OddsPapi**, **Floodlight**, **Sports Open Data**, **OpenLigaDB**, **API-SPORTS**, and **SportsAPI360**, plus a manual provider option.
-- Built-in fixture adapters: **API-SPORTS** (API key; bulk date queries can return all competitions covered by the account), **OpenLigaDB** (no key; supported competitions), **OddsPapi** (API key; enter its own tournament ID), and **SportsAPI360** (API key; schedule endpoint covers the next seven days).
+- Provider settings include **API-Football (API-SPORTS)**, **football-data.org**, **SportsAPI360**, **Sportmonks**, **The Odds API**, **TheRundown.io**, **Football-Charts**, **5DollarFootballAPI**, **OddsPapi**, **OpenLigaDB**, **Floodlight**, **Sports Open Data**, and a manual provider option.
+- Built-in fixture adapters include **API-Football (API-SPORTS)**, **football-data.org**, **OpenLigaDB**, **OddsPapi**, **SportsAPI360**, **5DollarFootballAPI**, and **Football-Charts**. **Sportmonks**, **The Odds API**, and **TheRundown.io** are now selectable in the provider catalog, but their vendor-native response adapters are not implemented yet; configure an HTTPS endpoint/proxy that returns the normalized fixture JSON format described below.
 - When a fixture is selected, the app can fetch and cache the provider's fixture details (statistics, events, lineups and player data when available) in SQLite. Live fixtures with scores are not filtered out just because goals are already recorded.
 - A match-specific news panel searches Google News RSS for both teams and the competition; it requires an internet connection but no separate API key. News headlines are context, not verified causal impact or a sentiment-based prediction.
 - **Floodlight**, **Sports Open Data**, and manually added providers use an HTTPS fixtures endpoint that returns a normalized JSON array/object (schema below). Their provider-specific authentication and JSON schemas may need adaptation to the vendor's documentation.
@@ -47,7 +47,7 @@ The GitHub Actions workflow is defined in `.github/workflows/build-windows.yml`.
 
 ## Data providers
 
-Change the global language from the selector at the top of the main window; the preference is saved for the current Windows user. Open **API Settings / تنظیمات API** to add, enable, disable, or remove providers. For **Floodlight**, **Sports Open Data**, or a manual provider, enter an HTTPS fixtures endpoint. Then open **Import Fixtures / دریافت مسابقات**. Choose **Auto fallback** to refresh the next seven days of fixtures across competitions covered by API-SPORTS and other compatible enabled feeds. Selecting an individual provider still uses that provider's own competition/tournament identifier.
+Change the global language from the selector at the top of the main window; the preference is saved for the current Windows user. Open **API Settings / تنظیمات API** to add, enable, disable, or remove providers. For **Floodlight**, **Sports Open Data**, **Sportmonks**, **The Odds API**, **TheRundown.io**, or a manual provider, enter an HTTPS fixtures endpoint. For Sportmonks, The Odds API, and TheRundown.io, this must be a normalized endpoint/proxy; the application does not yet call their native API schemas directly. Then open **Import Fixtures / دریافت مسابقات**. Choose **Auto fallback** to refresh the next seven days of fixtures across competitions covered by API-SPORTS and other compatible enabled feeds. Selecting an individual provider still uses that provider's own competition/tournament identifier.
 
 ### Provider and competition examples
 
@@ -111,8 +111,8 @@ Bug reports and focused pull requests are welcome. Please include the operating 
 - هدف‌گذاری برای **.NET Framework 4.8**.
 - ذخیره اطلاعات مسابقات در پایگاه داده محلی **SQLite**.
 - تنظیم زبان سراسری **فارسی / انگلیسی** که ذخیره می‌شود و روی رابط، تاریخ‌ها، نام بازارها و نام تیم‌ها اثر می‌گذارد. نام تیم‌های شناخته‌شده ترجمه شده و برای نام‌های ناشناخته، آوانویسی فارسی به‌عنوان جایگزین استفاده می‌شود.
-- تنظیمات منابع شامل **OddsPapi**، **Floodlight**، **Sports Open Data**، **OpenLigaDB**، **API-SPORTS** و **SportsAPI360** است؛ افزودن منبع دستی نیز وجود دارد.
-- اتصال آماده برای دریافت مسابقات: **API-SPORTS**، **OpenLigaDB**، **OddsPapi** و **SportsAPI360**. شناسه لیگ/رقابت و محدودیت طرح اشتراک هر سرویس را جداگانه بررسی کنید.
+- فهرست منابع شامل **API-Football (API-SPORTS)**، **Football-Data**، **SportsAPI360**، **Sportmonks**، **The Odds API**، **TheRundown.io**، **Football-Charts**، **5DollarFootballAPI**، **OddsPapi**، **OpenLigaDB**، **Floodlight** و **Sports Open Data** است؛ منبع دستی نیز قابل تعریف است.
+- اتصال آماده برای دریافت مسابقات در حال حاضر برای API-Football، Football-Data، OpenLigaDB، OddsPapi، SportsAPI360، 5DollarFootballAPI و Football-Charts وجود دارد. Sportmonks، The Odds API و TheRundown.io در فهرست تنظیمات هستند، اما برای استفاده باید endpoint/proxy سازگار با قالب JSON نرمال‌شده تنظیم شود؛ اتصال مستقیم به ساختار بومی این سه API هنوز پیاده‌سازی نشده است.
 - برای **Floodlight**، **Sports Open Data** و منابع دستی، نشانی HTTPS داده مسابقات لازم است و پاسخ باید با قالب JSON مشخص‌شده در بخش انگلیسی سازگار باشد.
 - حالت **Auto** مسابقات هفت روز آینده را برای تمام رقابت‌هایی که API-SPORTS پوشش می‌دهد دریافت می‌کند، مسابقات زنده را نیز می‌گیرد و در صورت فعال بودن، منابع سازگار SportsAPI360 و منبع دستی را ادغام و تکراری‌ها را حذف می‌کند. این روش فقط به لیگ برتر انگلیس محدود نیست؛ جام‌های داخلی، رقابت‌های باشگاهی قاره‌ای، تورنمنت‌های ملی و مسابقات المپیک نیز در صورت پوشش منبع قابل دریافت‌اند.
 - کلیدها با Windows DPAPI به‌صورت محلی محافظت می‌شوند.
