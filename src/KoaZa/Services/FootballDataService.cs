@@ -1031,6 +1031,7 @@ namespace KoaZa.Services
         private readonly ListBox _providersList;
         private readonly TextBlock _status;
         private StackPanel _competitionChecks;
+        private TextBox _competitionSearchBox;
         private TextBlock _competitionStatus;
         private List<ApiProviderConfig> _providers;
 
@@ -1169,33 +1170,59 @@ namespace KoaZa.Services
         {
             var panel = new Grid { Margin = new Thickness(18) };
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
             var instruction = new TextBlock
             {
                 Text = LocalizationService.T(
-                    "Check every competition you want to show on the main page. Newly discovered competitions are shown by default. Import fixtures first if this list is empty.",
-                    "رقابت‌هایی را که می‌خواهی در صفحه اصلی نمایش داده شوند تیک بزن. رقابت‌های تازه‌شناسایی‌شده به‌صورت پیش‌فرض نمایش داده می‌شوند. اگر فهرست خالی است، ابتدا مسابقات را دریافت کن."),
+                    "This catalog is built from competitions actually received and saved by your enabled API providers. Tick a competition to include it in the main-page filters; untick it to hide it. Use Refresh catalog after importing new fixtures.",
+                    "این فهرست از لیگ‌ها و جام‌هایی ساخته می‌شود که سرویس‌های API فعال واقعاً دریافت و در پایگاه داده ذخیره کرده‌اند. برای نمایش یک رقابت در فیلترهای صفحه اصلی تیک بزن و برای مخفی کردن آن تیک را بردار. پس از دریافت مسابقات جدید، فهرست را نوسازی کن."),
                 TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12), Foreground = new SolidColorBrush(Color.FromRgb(65, 84, 73))
             };
             panel.Children.Add(instruction); Grid.SetRow(instruction, 0);
+
+            var toolbar = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+            toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            _competitionSearchBox = new TextBox
+            {
+                Padding = new Thickness(9, 7, 9, 7), Margin = new Thickness(0, 0, 10, 0),
+                ToolTip = LocalizationService.T("Search league or cup name", "جست‌وجوی نام لیگ یا جام"),
+                Text = ""
+            };
+            _competitionSearchBox.TextChanged += (sender, args) => FilterCompetitionChecks();
+            Grid.SetColumn(_competitionSearchBox, 0); toolbar.Children.Add(_competitionSearchBox);
+            var refresh = new Button
+            {
+                Content = LocalizationService.T("Refresh catalog", "نوسازی فهرست"),
+                Padding = new Thickness(12, 7, 12, 7),
+                Background = new SolidColorBrush(Color.FromRgb(22, 134, 91)), Foreground = Brushes.White,
+                BorderThickness = new Thickness(0)
+            };
+            refresh.Click += (sender, args) => LoadCompetitionChecks();
+            Grid.SetColumn(refresh, 1); toolbar.Children.Add(refresh);
+            panel.Children.Add(toolbar); Grid.SetRow(toolbar, 1);
+
             var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-            _competitionChecks = new StackPanel { Margin = new Thickness(4) };
+            _competitionChecks = new StackPanel { Margin = new Thickness(2) };
             scroll.Content = _competitionChecks;
-            panel.Children.Add(scroll); Grid.SetRow(scroll, 1);
+            panel.Children.Add(scroll); Grid.SetRow(scroll, 2);
+
             var bottom = new DockPanel { Margin = new Thickness(0, 12, 0, 0), LastChildFill = true };
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
             var all = new Button { Content = LocalizationService.T("Select all", "انتخاب همه"), Padding = new Thickness(12, 7, 12, 7), Margin = new Thickness(0, 0, 8, 0) };
-            all.Click += (s, e) => SetCompetitionChecks(true);
+            all.Click += (sender, args) => SetCompetitionChecks(true);
             var none = new Button { Content = LocalizationService.T("Clear all", "پاک کردن انتخاب‌ها"), Padding = new Thickness(12, 7, 12, 7), Margin = new Thickness(0, 0, 8, 0) };
-            none.Click += (s, e) => SetCompetitionChecks(false);
+            none.Click += (sender, args) => SetCompetitionChecks(false);
             var save = new Button { Content = LocalizationService.T("Save selection", "ذخیره انتخاب‌ها"), Padding = new Thickness(14, 7, 14, 7), Background = new SolidColorBrush(Color.FromRgb(22, 134, 91)), Foreground = Brushes.White, BorderThickness = new Thickness(0) };
             save.Click += SaveCompetitionSelection_Click;
             buttons.Children.Add(all); buttons.Children.Add(none); buttons.Children.Add(save);
             DockPanel.SetDock(buttons, Dock.Left); bottom.Children.Add(buttons);
             _competitionStatus = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(14, 4, 0, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Color.FromRgb(65, 84, 73)) };
             bottom.Children.Add(_competitionStatus);
-            panel.Children.Add(bottom); Grid.SetRow(bottom, 2);
+            panel.Children.Add(bottom); Grid.SetRow(bottom, 3);
             LoadCompetitionChecks();
             return panel;
         }
@@ -1206,24 +1233,46 @@ namespace KoaZa.Services
             _competitionChecks.Children.Clear();
             try
             {
-                var known = new KoaZa.Data.DatabaseService().GetKnownLeagues();
+                var known = new KoaZa.Data.DatabaseService().GetKnownCompetitionCatalog();
                 var hidden = CompetitionSelectionStore.LoadHidden();
-                foreach (string league in known)
+                foreach (var entry in known)
                 {
+                    var rowContent = new Grid { Margin = new Thickness(4, 2, 4, 2) };
+                    rowContent.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    rowContent.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    rowContent.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    var name = new TextBlock
+                    {
+                        Text = LocalizationService.League(entry.League), VerticalAlignment = VerticalAlignment.Center,
+                        FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis
+                    };
+                    Grid.SetColumn(name, 0); rowContent.Children.Add(name);
+                    var provider = new TextBlock
+                    {
+                        Text = entry.Providers ?? "Unknown", VerticalAlignment = VerticalAlignment.Center,
+                        Foreground = new SolidColorBrush(Color.FromRgb(92, 111, 100)), FontSize = 11,
+                        Margin = new Thickness(12, 0, 12, 0), ToolTip = entry.Providers
+                    };
+                    Grid.SetColumn(provider, 1); rowContent.Children.Add(provider);
+                    var count = new TextBlock
+                    {
+                        Text = entry.FixtureCount.ToString(CultureInfo.InvariantCulture) + " " + LocalizationService.T("matches", "مسابقه"),
+                        VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Color.FromRgb(22, 134, 91)), FontSize = 11
+                    };
+                    Grid.SetColumn(count, 2); rowContent.Children.Add(count);
                     var check = new CheckBox
                     {
-                        Content = LocalizationService.League(league),
-                        Tag = league,
-                        IsChecked = !hidden.Contains(league),
-                        Margin = new Thickness(4, 5, 4, 5),
-                        Padding = new Thickness(3),
-                        ToolTip = league
+                        Content = rowContent, Tag = entry.League, IsChecked = !hidden.Contains(entry.League),
+                        Margin = new Thickness(2), Padding = new Thickness(8, 7, 8, 7),
+                        Background = Brushes.White, ToolTip = LocalizationService.T("API source(s): ", "منبع API: ") + (entry.Providers ?? "Unknown")
                     };
                     _competitionChecks.Children.Add(check);
                 }
+                FilterCompetitionChecks();
                 _competitionStatus.Text = known.Count == 0
-                    ? LocalizationService.T("No competitions found yet. Import fixtures first.", "هنوز رقابتی شناسایی نشده است؛ ابتدا مسابقات را دریافت کن.")
-                    : LocalizationService.T("Detected competitions: ", "رقابت‌های شناسایی‌شده: ") + known.Count;
+                    ? LocalizationService.T("No competitions have been saved yet. Import fixtures from an enabled API first.", "هنوز رقابتی ذخیره نشده است. ابتدا از یک API فعال مسابقات دریافت کن.")
+                    : LocalizationService.T("Competitions found: ", "تعداد رقابت‌های پیدا‌شده: ") + known.Count +
+                      LocalizationService.T(" • All entries come from saved API fixtures.", " • همه موارد از مسابقات ذخیره‌شده توسط APIها هستند.");
             }
             catch (Exception ex)
             {
@@ -1231,10 +1280,23 @@ namespace KoaZa.Services
             }
         }
 
+        private void FilterCompetitionChecks()
+        {
+            if (_competitionChecks == null) return;
+            string query = _competitionSearchBox == null ? "" : (_competitionSearchBox.Text ?? "").Trim();
+            foreach (var check in _competitionChecks.Children.OfType<CheckBox>())
+            {
+                string league = Convert.ToString(check.Tag) ?? "";
+                check.Visibility = query.Length == 0 || league.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0
+                    ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
         private void SetCompetitionChecks(bool isChecked)
         {
             if (_competitionChecks == null) return;
-            foreach (var check in _competitionChecks.Children.OfType<CheckBox>()) check.IsChecked = isChecked;
+            foreach (var check in _competitionChecks.Children.OfType<CheckBox>())
+                if (check.Visibility == Visibility.Visible) check.IsChecked = isChecked;
         }
 
         private void SaveCompetitionSelection_Click(object sender, RoutedEventArgs e)
