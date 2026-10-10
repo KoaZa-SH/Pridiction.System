@@ -147,6 +147,25 @@ namespace KoaZa.Data
             return rows;
         }
 
+        public List<MatchStatisticsRecord> GetRecentMatchStatistics(string league, int limit)
+        {
+            var rows = new List<MatchStatisticsRecord>();
+            using (var con = new SQLiteConnection(_connectionString))
+            {
+                con.Open();
+                string sql = "SELECT * FROM MatchStatistics WHERE KickoffUtc IS NOT NULL AND KickoffUtc<>'' ";
+                if (!string.IsNullOrWhiteSpace(league)) sql += "AND UPPER(League)=UPPER(@league) ";
+                sql += "ORDER BY KickoffUtc DESC LIMIT @limit;";
+                using (var cmd = new SQLiteCommand(sql, con))
+                {
+                    if (!string.IsNullOrWhiteSpace(league)) cmd.Parameters.AddWithValue("@league", league);
+                    cmd.Parameters.AddWithValue("@limit", Math.Max(1, limit));
+                    using (var rd = cmd.ExecuteReader()) while (rd.Read()) rows.Add(ReadStatistics(rd));
+                }
+            }
+            return rows;
+        }
+
         private static MatchStatisticsRecord ReadStatistics(SQLiteDataReader r)
         {
             return new MatchStatisticsRecord {
