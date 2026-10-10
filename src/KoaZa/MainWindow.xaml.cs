@@ -435,8 +435,8 @@ namespace KoaZa
                     Label = LocalizationService.Market(m.Market, m.Outcome),
                     Percent = Math.Round(m.Probability * 100, 1),
                     PercentLabel = m.HasSufficientData
-                        ? (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%"
-                        : LocalizationService.T("Stats unavailable", "آمار کافی نیست"),
+                        ? (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% • n=" + m.SampleSize
+                        : LocalizationService.T("Stats unavailable", "آمار کافی نیست") + " • n=" + m.SampleSize,
                     HasData = m.HasSufficientData,
                     BarBrush = m.HasSufficientData ? System.Windows.Media.Brushes.SeaGreen : System.Windows.Media.Brushes.Gray,
                     Reason = m.Explanation
