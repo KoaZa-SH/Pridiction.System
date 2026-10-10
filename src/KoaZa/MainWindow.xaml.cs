@@ -212,6 +212,8 @@ namespace KoaZa
                 if (baselineMatches.Count < 10) baselineMatches = _database.GetRecentCompletedMatches(null, 100);
                 bool hasReliableHistory = homeLeagueMatches.Count >= 3 && awayLeagueMatches.Count >= 3 && baselineMatches.Count >= 10;
                 string dataWarning = "";
+                double homeRate;
+                double awayRate;
                 if (homeMatches.Count == 0 && awayMatches.Count == 0 && baselineMatches.Count == 0)
                 {
                     // Keep the chart visible, but use neutral prior rates and clearly mark them as
@@ -227,8 +229,6 @@ namespace KoaZa
                     return;
                 }
 
-                double homeRate;
-                double awayRate;
                 if (homeMatches.Count > 0 && awayMatches.Count > 0)
                 {
                     double homeAttack = Average(homeMatches, fixture.HomeTeam, true, true);
