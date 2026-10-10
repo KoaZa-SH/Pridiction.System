@@ -227,8 +227,9 @@ namespace KoaZa
             }
         }
 
-        private void LoadFixtureInsights(FixtureRecord fixture)
+        private async void LoadFixtureInsights(FixtureRecord fixture)
         {
+            string fixtureId = fixture.ExternalId;
             StatsText.Text = LocalizationService.T("Loading match statistics...", "در حال دریافت آمار مسابقه...");
             NewsStatusText.Text = LocalizationService.T("Searching current news...", "در حال جست‌وجوی اخبار مرتبط...");
             NewsList.ItemsSource = null;
@@ -238,13 +239,15 @@ namespace KoaZa
                 string json = _database.GetFixtureDetails(fixture.Provider, fixture.ExternalId);
                 if (string.IsNullOrWhiteSpace(json))
                 {
-                    json = FootballDataService.FetchFixtureDetails(fixture);
+                    json = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchFixtureDetails(fixture));
                     _database.SaveFixtureDetails(fixture.Provider, fixture.ExternalId, json);
                 }
+                if (!IsCurrentFixture(fixtureId)) return;
                 StatsText.Text = FootballDataService.SummarizeFixtureDetails(json);
             }
             catch (Exception ex)
             {
+                if (!IsCurrentFixture(fixtureId)) return;
                 StatsText.Text = LocalizationService.T(
                     "Detailed stats are unavailable for this provider/match, or the API plan does not cover them: ",
                     "آمار تفصیلی برای این سرویس/مسابقه در دسترس نیست یا اشتراک آن را پوشش نمی‌دهد: ") + ex.Message;
@@ -252,7 +255,8 @@ namespace KoaZa
 
             try
             {
-                var news = FootballDataService.FetchMatchNews(fixture.HomeTeam, fixture.AwayTeam, fixture.League);
+                var news = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchMatchNews(fixture.HomeTeam, fixture.AwayTeam, fixture.League));
+                if (!IsCurrentFixture(fixtureId)) return;
                 NewsList.ItemsSource = news;
                 NewsStatusText.Text = news.Count == 0
                     ? LocalizationService.T("No matching headlines found in the current news feed.", "در خبرخوان فعلی خبر مرتبطی پیدا نشد.")
@@ -260,8 +264,15 @@ namespace KoaZa
             }
             catch (Exception ex)
             {
+                if (!IsCurrentFixture(fixtureId)) return;
                 NewsStatusText.Text = LocalizationService.T("News feed unavailable: ", "خبرخوان در دسترس نیست: ") + ex.Message;
             }
+        }
+
+        private bool IsCurrentFixture(string externalId)
+        {
+            var row = FixturesGrid.SelectedItem as FixtureRow;
+            return row != null && string.Equals(row.Fixture.ExternalId, externalId, StringComparison.OrdinalIgnoreCase);
         }
 
         private void NewsItem_Click(object sender, RoutedEventArgs e)
