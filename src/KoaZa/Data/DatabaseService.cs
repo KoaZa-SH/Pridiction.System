@@ -318,7 +318,7 @@ namespace KoaZa.Data
                     }
                 }
             }
-            return all;
+            return DeduplicateFixtures(all);
         }
 
         public List<FixtureRecord> GetCompletedMatches(string league, string team, int limit)
@@ -329,12 +329,12 @@ namespace KoaZa.Data
                 con.Open();
                 string sql = "SELECT Provider, League, KickoffUtc, HomeTeam, AwayTeam, HomeGoals, AwayGoals, Status, ExternalId, HomeCorners, AwayCorners, HomeShotsOnTarget, AwayShotsOnTarget, HomeYellowCards, AwayYellowCards, Referee, VarReviews FROM Fixtures WHERE HomeGoals IS NOT NULL AND AwayGoals IS NOT NULL AND (UPPER(Status) IN ('FT','AET','PEN','FINISHED','MATCH FINISHED','FULL TIME','AFTER EXTRA TIME','AFTER PENALTIES') OR Status IS NULL OR Status='') ";
                 if (!string.IsNullOrWhiteSpace(league)) sql += "AND UPPER(League)=UPPER(@league) ";
-                sql += "AND (UPPER(HomeTeam)=UPPER(@team) OR UPPER(AwayTeam)=UPPER(@team)) ORDER BY KickoffUtc DESC LIMIT @limit;";
+                sql += "AND (UPPER(HomeTeam)=UPPER(@team) OR UPPER(AwayTeam)=UPPER(@team)) ORDER BY KickoffUtc DESC LIMIT @fetchLimit;";
                 using (var cmd = new SQLiteCommand(sql, con))
                 {
                     if (!string.IsNullOrWhiteSpace(league)) cmd.Parameters.AddWithValue("@league", league);
                     cmd.Parameters.AddWithValue("@team", team ?? "");
-                    cmd.Parameters.AddWithValue("@limit", limit);
+                    cmd.Parameters.AddWithValue("@fetchLimit", Math.Max(limit * 5, limit));
                     using (var reader = cmd.ExecuteReader())
                     {
                         while (reader.Read())
@@ -359,7 +359,7 @@ namespace KoaZa.Data
                     }
                 }
             }
-            return matches;
+            return DeduplicateFixtures(matches).Take(limit).ToList();
         }
 
 
@@ -371,11 +371,11 @@ namespace KoaZa.Data
                 con.Open();
                 string sql = "SELECT Provider, League, KickoffUtc, HomeTeam, AwayTeam, HomeGoals, AwayGoals, Status, ExternalId, HomeCorners, AwayCorners, HomeShotsOnTarget, AwayShotsOnTarget, HomeYellowCards, AwayYellowCards, Referee, VarReviews FROM Fixtures WHERE HomeGoals IS NOT NULL AND AwayGoals IS NOT NULL AND (UPPER(Status) IN ('FT','AET','PEN','FINISHED','MATCH FINISHED','FULL TIME','AFTER EXTRA TIME','AFTER PENALTIES') OR Status IS NULL OR Status='') ";
                 if (!string.IsNullOrWhiteSpace(league)) sql += "AND UPPER(League)=UPPER(@league) ";
-                sql += "ORDER BY KickoffUtc DESC LIMIT @limit;";
+                sql += "ORDER BY KickoffUtc DESC LIMIT @fetchLimit;";
                 using (var cmd = new SQLiteCommand(sql, con))
                 {
                     if (!string.IsNullOrWhiteSpace(league)) cmd.Parameters.AddWithValue("@league", league);
-                    cmd.Parameters.AddWithValue("@limit", limit);
+                    cmd.Parameters.AddWithValue("@fetchLimit", Math.Max(limit * 5, limit));
                     using (var reader = cmd.ExecuteReader())
                     {
                         while (reader.Read())
@@ -400,7 +400,80 @@ namespace KoaZa.Data
                     }
                 }
             }
-            return matches;
+            return DeduplicateFixtures(matches).Take(limit).ToList();
+        }
+
+        private static List<FixtureRecord> DeduplicateFixtures(IEnumerable<FixtureRecord> fixtures)
+        {
+            return (fixtures ?? Enumerable.Empty<FixtureRecord>())
+                .Where(f => f != null)
+                .GroupBy(FixtureIdentity, StringComparer.OrdinalIgnoreCase)
+                .Select(group =>
+                {
+                    var ordered = group.OrderByDescending(FixtureCompleteness).ToList();
+                    var best = ordered[0];
+                    foreach (var other in ordered.Skip(1))
+                    {
+                        if (!best.HomeGoals.HasValue) best.HomeGoals = other.HomeGoals;
+                        if (!best.AwayGoals.HasValue) best.AwayGoals = other.AwayGoals;
+                        if (!best.HomeCorners.HasValue) best.HomeCorners = other.HomeCorners;
+                        if (!best.AwayCorners.HasValue) best.AwayCorners = other.AwayCorners;
+                        if (!best.HomeShotsOnTarget.HasValue) best.HomeShotsOnTarget = other.HomeShotsOnTarget;
+                        if (!best.AwayShotsOnTarget.HasValue) best.AwayShotsOnTarget = other.AwayShotsOnTarget;
+                        if (!best.HomeYellowCards.HasValue) best.HomeYellowCards = other.HomeYellowCards;
+                        if (!best.AwayYellowCards.HasValue) best.AwayYellowCards = other.AwayYellowCards;
+                        if (!best.VarReviews.HasValue) best.VarReviews = other.VarReviews;
+                        if (string.IsNullOrWhiteSpace(best.Referee)) best.Referee = other.Referee;
+                        if (string.IsNullOrWhiteSpace(best.Status)) best.Status = other.Status;
+                    }
+                    return best;
+                })
+                .OrderBy(f => f.KickoffUtc)
+                .ToList();
+        }
+
+        private static string FixtureIdentity(FixtureRecord fixture)
+        {
+            string home = NormalizeTeamKey(fixture.HomeTeam);
+            string away = NormalizeTeamKey(fixture.AwayTeam);
+            DateTime kickoff;
+            string timeKey = DateTime.TryParse(fixture.KickoffUtc, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out kickoff)
+                ? kickoff.ToString("yyyy-MM-dd-HH", CultureInfo.InvariantCulture)
+                : (fixture.KickoffUtc ?? "").Trim().ToLowerInvariant();
+            return home + "|" + away + "|" + timeKey;
+        }
+
+        private static string NormalizeTeamKey(string name)
+        {
+            string value = (name ?? "").ToLowerInvariant();
+            value = System.Text.RegularExpressions.Regex.Replace(value, "[^a-z0-9]+", " ");
+            var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "fc", "cf", "afc", "sc", "club", "football", "the" };
+            var parts = value.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Where(p => !ignored.Contains(p)).ToList();
+            value = string.Join(" ", parts);
+            if (value == "man utd" || value == "manchester utd") value = "manchester united";
+            if (value == "man city") value = "manchester city";
+            if (value == "wolves") value = "wolverhampton wanderers";
+            if (value == "inter") value = "inter milan";
+            if (value == "psg") value = "paris saint germain";
+            return value;
+        }
+
+        private static int FixtureCompleteness(FixtureRecord f)
+        {
+            int score = 0;
+            if (f.HomeGoals.HasValue) score += 10;
+            if (f.AwayGoals.HasValue) score += 10;
+            if (f.HomeCorners.HasValue) score += 2;
+            if (f.AwayCorners.HasValue) score += 2;
+            if (f.HomeShotsOnTarget.HasValue) score += 2;
+            if (f.AwayShotsOnTarget.HasValue) score += 2;
+            if (f.HomeYellowCards.HasValue) score += 2;
+            if (f.AwayYellowCards.HasValue) score += 2;
+            if (f.VarReviews.HasValue) score += 1;
+            if (!string.IsNullOrWhiteSpace(f.Referee)) score += 1;
+            if (!string.IsNullOrWhiteSpace(f.Status)) score += 1;
+            return score;
         }
 
         public List<string> GetKnownLeagues()
