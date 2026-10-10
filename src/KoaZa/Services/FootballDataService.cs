@@ -466,6 +466,71 @@ namespace KoaZa.Services
             return summary;
         }
 
+        public static List<NewsItem> FetchLatestNews()
+        {
+            var result = new List<NewsItem>();
+            // Use public RSS where available; for Football360 and FBTV3 use Google News RSS
+            // domain queries so the app does not scrape article pages or bypass access controls.
+            foreach (string feed in new[] { "https://www.varzesh3.com/rss/all", "https://www.varzesh3.com/rss/foreignFootball" })
+            {
+                try
+                {
+                    var doc = new System.Xml.XmlDocument();
+                    doc.LoadXml(Request(feed, null, null));
+                    var nodes = doc.SelectNodes("//item");
+                    if (nodes == null) continue;
+                    foreach (System.Xml.XmlNode node in nodes)
+                    {
+                        string title = node["title"] == null ? "" : System.Net.WebUtility.HtmlDecode(node["title"].InnerText);
+                        string link = node["link"] == null ? "" : node["link"].InnerText;
+                        string description = node["description"] == null ? "" : System.Net.WebUtility.HtmlDecode(node["description"].InnerText);
+                        string pubDate = node["pubDate"] == null ? "" : node["pubDate"].InnerText;
+                        if (title.Length == 0 || link.Length == 0 || result.Any(n => n.Url == link)) continue;
+                        result.Add(new NewsItem { Title = title, Url = link, Summary = (string.IsNullOrWhiteSpace(pubDate) ? "" : pubDate + " — ") + StripHtml(description), Published = pubDate, Source = "Varzesh3 / ورزش سه" });
+                        if (result.Count >= 6) break;
+                    }
+                }
+                catch { }
+                if (result.Count >= 6) break;
+            }
+
+            FetchSiteNews(result, "site:football360.ir football OR فوتبال", "Football360.ir / فوتبال ۳۶۰");
+            FetchSiteNews(result, "site:fbtv3.ir football OR فوتبال", "FBTV3.ir / فوتبال برتر");
+            FetchSiteNews(result, LocalizationService.IsPersian ? "اخبار فوتبال ایران و جهان" : "football news today", "Google News");
+            return result.OrderByDescending(n => ParseNewsDate(n.Published)).Take(18).ToList();
+        }
+
+        private static void FetchSiteNews(List<NewsItem> result, string query, string source)
+        {
+            if (result == null || result.Count >= 18) return;
+            string locale = LocalizationService.IsPersian ? "&hl=fa&gl=IR&ceid=IR:fa" : "&hl=en-US&gl=US&ceid=US:en";
+            string url = "https://news.google.com/rss/search?q=" + Uri.EscapeDataString(query) + locale;
+            try
+            {
+                var doc = new System.Xml.XmlDocument();
+                doc.LoadXml(Request(url, null, null));
+                var nodes = doc.SelectNodes("//item");
+                if (nodes == null) return;
+                foreach (System.Xml.XmlNode node in nodes)
+                {
+                    string title = node["title"] == null ? "" : System.Net.WebUtility.HtmlDecode(node["title"].InnerText);
+                    string link = node["link"] == null ? "" : node["link"].InnerText;
+                    string description = node["description"] == null ? "" : System.Net.WebUtility.HtmlDecode(node["description"].InnerText);
+                    string pubDate = node["pubDate"] == null ? "" : node["pubDate"].InnerText;
+                    if (title.Length == 0 || link.Length == 0 || result.Any(n => n.Url == link)) continue;
+                    result.Add(new NewsItem { Title = title, Url = link, Summary = (string.IsNullOrWhiteSpace(pubDate) ? "" : pubDate + " — ") + StripHtml(description), Published = pubDate, Source = source });
+                    if (result.Count >= 18) break;
+                }
+            }
+            catch { }
+        }
+
+        private static DateTime ParseNewsDate(string value)
+        {
+            DateTime date;
+            return DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out date) ? date : DateTime.MinValue;
+        }
+
         public static List<NewsItem> FetchMatchNews(string homeTeam, string awayTeam, string league)
         {
             var result = new List<NewsItem>();
