@@ -534,14 +534,14 @@ namespace KoaZa
             AddThresholdMarkets(probabilities, "Yellow cards", "Total over 3.5", "Total under 3.5", yellow, 3.5);
             AddThresholdMarkets(probabilities, "Shots on target", "Total over 8.5", "Total under 8.5", shots, 8.5);
             if (varSamples.Count >= 5)
-                probabilities.Markets.Add(new MarketProbability { Market = "VAR review", Outcome = "Yes", Probability = varSamples.Count(v => v > 0) / (double)varSamples.Count });
+                probabilities.Markets.Add(new MarketProbability { Market = "VAR review", Outcome = "Yes", Probability = (varSamples.Count(v => v > 0) + 1.0) / (varSamples.Count + 2.0) });
         }
 
         private static void AddThresholdMarkets(MatchProbabilities probabilities, string market, string overOutcome, string underOutcome, List<double> samples, double threshold)
         {
             // Require real historical samples; missing values are never treated as zero.
             if (samples == null || samples.Count < 5) return;
-            double over = samples.Count(v => v > threshold) / (double)samples.Count;
+            double over = (samples.Count(v => v > threshold) + 1.0) / (samples.Count + 2.0); // Light Laplace smoothing avoids false certainty from small samples.
             probabilities.Markets.Add(new MarketProbability { Market = market, Outcome = overOutcome, Probability = over });
             probabilities.Markets.Add(new MarketProbability { Market = market, Outcome = underOutcome, Probability = 1.0 - over });
         }
