@@ -1018,7 +1018,14 @@ namespace KoaZa.Services
             });
             panel.Children.Add(new TextBlock { Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KoaZa", "Backups"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) });
             var backup = new Button { Content = LocalizationService.T("Create backup now", "تهیهٔ پشتیبان اکنون"), Padding = new Thickness(14, 8, 14, 8), HorizontalAlignment = HorizontalAlignment.Left, Background = new SolidColorBrush(Color.FromRgb(22, 134, 91)), Foreground = Brushes.White, BorderThickness = new Thickness(0) };
-            var backupStatus = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) };
+            var backupStatus = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 10, 0, 0),
+                Text = string.IsNullOrWhiteSpace(DatabaseService.LastBackupError)
+                    ? LocalizationService.T("Automatic backup status: ready.", "وضعیت پشتیبان‌گیری خودکار: آماده.")
+                    : LocalizationService.T("Automatic backup warning: ", "هشدار پشتیبان‌گیری خودکار: ") + DatabaseService.LastBackupError
+            };
             backup.Click += (s, e) =>
             {
                 try
