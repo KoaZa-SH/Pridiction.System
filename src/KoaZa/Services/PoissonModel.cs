@@ -55,14 +55,17 @@ namespace KoaZa.Services
             const int maxGoals = 15;
             var hp = Enumerable.Range(0, maxGoals + 1).Select(i => PoissonPmf(i, homeRate)).ToArray();
             var ap = Enumerable.Range(0, maxGoals + 1).Select(i => PoissonPmf(i, awayRate)).ToArray();
-            double hw = 0, draw = 0, aw = 0, over15 = 0, over25 = 0, over35 = 0, btts = 0;
+            double hw = 0, draw = 0, aw = 0, over05 = 0, over15 = 0, over25 = 0, over35 = 0, btts = 0;
+            var exactTotalGoals = new double[5];
             var scores = new List<ScoreProbability>();
             for (int h = 0; h <= maxGoals; h++)
             for (int a = 0; a <= maxGoals; a++)
             {
                 double p = hp[h] * ap[a];
                 if (h > a) hw += p; else if (h == a) draw += p; else aw += p;
+                if (h + a >= 1) over05 += p;
                 if (h + a >= 2) over15 += p;
+                if (h + a < 4) exactTotalGoals[h + a] += p; else exactTotalGoals[4] += p;
                 if (h + a >= 3) over25 += p;
                 if (h + a >= 4) over35 += p;
                 if (h > 0 && a > 0) btts += p;
@@ -79,13 +82,18 @@ namespace KoaZa.Services
                 M("Match result", "Home win", hw), M("Match result", "Draw", draw), M("Match result", "Away win", aw),
                 M("Double chance", "1X", hw + draw), M("Double chance", "X2", draw + aw), M("Double chance", "12", hw + aw),
                 M("Both teams to score", "Yes", btts), M("Both teams to score", "No", 1 - btts),
+                M("Total goals", "Over 0.5", over05), M("Total goals", "Under 0.5", 1 - over05),
+                M("Total goals", "Exactly 0", exactTotalGoals[0]), M("Total goals", "Exactly 1", exactTotalGoals[1]),
+                M("Total goals", "Exactly 2", exactTotalGoals[2]), M("Total goals", "Exactly 3", exactTotalGoals[3]), M("Total goals", "4 or more", exactTotalGoals[4]),
                 M("Total goals", "Over 1.5", over15), M("Total goals", "Under 1.5", 1 - over15),
                 M("Total goals", "Over 2.5", over25), M("Total goals", "Under 2.5", 1 - over25),
                 M("Total goals", "Over 3.5", over35), M("Total goals", "Under 3.5", 1 - over35),
                 M("Home team goals", "Over 0.5", homeOver05), M("Home team goals", "Under 0.5", 1 - homeOver05),
                 M("Home team goals", "Over 1.5", homeOver15), M("Home team goals", "Under 1.5", 1 - homeOver15),
+                M("Home team goals", "Over 2.5", 1 - hp[0] - hp[1] - hp[2]), M("Home team goals", "Under 2.5", hp[0] + hp[1] + hp[2]),
                 M("Away team goals", "Over 0.5", awayOver05), M("Away team goals", "Under 0.5", 1 - awayOver05),
-                M("Away team goals", "Over 1.5", awayOver15), M("Away team goals", "Under 1.5", 1 - awayOver15)
+                M("Away team goals", "Over 1.5", awayOver15), M("Away team goals", "Under 1.5", 1 - awayOver15),
+                M("Away team goals", "Over 2.5", 1 - ap[0] - ap[1] - ap[2]), M("Away team goals", "Under 2.5", ap[0] + ap[1] + ap[2])
             };
             return new MatchProbabilities
             {
