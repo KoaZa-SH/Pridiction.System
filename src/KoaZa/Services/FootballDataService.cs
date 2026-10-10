@@ -409,7 +409,8 @@ namespace KoaZa.Services
                     // Injuries are a separate API resource; attach them when available without failing the fixture details request.
                     string status = (fixture.Status ?? "").Trim().ToUpperInvariant();
                     bool live = status == "LIVE" || status == "1H" || status == "HT" || status == "2H" || status == "ET" || status == "P" || status == "BT" || status == "INT";
-                    if (!live)
+                    bool completed = status == "FT" || status == "AET" || status == "PEN" || status == "FINISHED" || status == "MATCH FINISHED" || status == "FULL TIME" || status == "AFTER EXTRA TIME" || status == "AFTER PENALTIES";
+                    if (!live && !completed)
                     {
                         try
                         {
