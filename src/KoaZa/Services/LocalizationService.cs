@@ -68,7 +68,7 @@ namespace KoaZa.Services
             if (!IsPersian) return market + " — " + outcome;
             var markets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
                 {"Match result","نتیجه مسابقه"},{"Double chance","شانس دوگانه"},{"Both teams to score","گل‌زنی هر دو تیم"},
-                {"Total goals","مجموع گل‌ها"},{"Home team goals","گل‌های میزبان"},{"Away team goals","گل‌های میهمان"},
+                {"Total goals","مجموع گل‌ها"},{"Home team goals","گل‌های میزبان"},{"Away team goals","گل‌های میهمان"},{"Corners","کرنرها"},{"Yellow cards","کارت زرد"},{"Total over 8.5","مجموع بیشتر از ۸٫۵"},{"Total under 8.5","مجموع کمتر از ۸٫۵"},{"Total over 3.5","مجموع بیشتر از ۳٫۵"},{"Total under 3.5","مجموع کمتر از ۳٫۵"},
                 {"Home win","برد میزبان"},{"Draw","مساوی"},{"Away win","برد میهمان"},{"Yes","بله"},{"No","خیر"},
                 {"Over 0.5","بیشتر از ۰٫۵"},{"Under 0.5","کمتر از ۰٫۵"},{"Over 1.5","بیشتر از ۱٫۵"},{"Under 1.5","کمتر از ۱٫۵"},
                 {"Over 2.5","بیشتر از ۲٫۵"},{"Under 2.5","کمتر از ۲٫۵"},{"Over 3.5","بیشتر از ۳٫۵"},{"Under 3.5","کمتر از ۳٫۵"},
@@ -192,7 +192,7 @@ namespace KoaZa.Services
             if (Mode == "Light") return false;
             try
             {
-                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"))
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
                 {
                     object value = key == null ? null : key.GetValue("AppsUseLightTheme");
                     if (value != null) return Convert.ToInt32(value) == 0;
@@ -209,6 +209,10 @@ namespace KoaZa.Services
             Color background = dark ? Color.FromRgb(24, 30, 28) : Color.FromRgb(244, 247, 245);
             window.Background = new SolidColorBrush(background);
             ApplyTo(window, dark);
+            var chart = window.FindName("MarketChartFrame") as Border;
+            var reason = window.FindName("MarketChartReasonText") as TextBlock;
+            if (chart != null && (reason == null || reason.Visibility != Visibility.Visible))
+                chart.Background = new SolidColorBrush(dark ? Color.FromRgb(34, 42, 39) : Color.FromRgb(255, 255, 255));
         }
 
         private static void ApplyTo(DependencyObject parent, bool dark)
