@@ -205,7 +205,8 @@ namespace KoaZa.Services
         private static List<FixtureRecord> FetchOpenLiga(string league, int season)
         {
             string path = "/getmatchdata/" + Uri.EscapeDataString(league) + "/" + season;
-            var root = Parse(Request("https://api.openligadb.de" + path, null, null));
+            string json = Request("https://api.openligadb.de" + path, null, null);
+            object root = new JavaScriptSerializer().DeserializeObject(json);
             var rows = root as object[];
             if (rows == null) throw new InvalidOperationException("OpenLigaDB returned an unexpected response.");
             var output = new List<FixtureRecord>();
