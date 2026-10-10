@@ -26,71 +26,55 @@ jobs:
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
 
-      - name: Check project files
-        shell: pwsh
-        run: |
-          $required = @(
-            "src/KoaZa/KoaZa.sln",
-            "src/KoaZa/KoaZa.csproj",
-            "src/KoaZa/packages.config"
-          )
-
-          foreach ($file in $required) {
-            if (-not (Test-Path $file)) {
-              throw "Required file not found: $file"
-            }
-          }
-
       - name: Restore NuGet packages
         shell: pwsh
         run: |
-          nuget install "src/KoaZa/packages.config" `
-            -OutputDirectory "src/KoaZa/packages" `
+          nuget restore "src/KoaZa/KoaZa.sln" `
+            -PackagesDirectory "src/KoaZa/packages" `
             -NonInteractive `
             -Verbosity detailed
 
           if ($LASTEXITCODE -ne 0) {
-            throw "NuGet package installation failed."
+            throw "NuGet restore failed."
           }
 
-      - name: Verify SQLite DLL
+      - name: Extract SQLite package if needed
         shell: pwsh
         run: |
-          $packageRoot = "src/KoaZa/packages"
-          $expected = Join-Path $packageRoot `
-            "System.Data.SQLite.Core.1.0.119.0/lib/net46/System.Data.SQLite.dll"
+          $root = "src/KoaZa/packages"
+          $expected = Join-Path $root "System.Data.SQLite.Core.1.0.119.0/lib/net46/System.Data.SQLite.dll"
 
           if (-not (Test-Path $expected)) {
-            $found = Get-ChildItem $packageRoot `
-              -Recurse -Filter "System.Data.SQLite.dll" `
-              -ErrorAction SilentlyContinue
+            $nupkg = Get-ChildItem $root -Recurse -Filter "System.Data.SQLite.Core.1.0.119.0.nupkg" |
+              Select-Object -First 1
 
-            if ($found) {
-              Write-Host "SQLite DLL found at:"
-              $found | ForEach-Object {
-                Write-Host $_.FullName
-              }
+            if ($nupkg) {
+              $zip = Join-Path $env:RUNNER_TEMP "sqlite-package.zip"
+              $temp = Join-Path $env:RUNNER_TEMP "sqlite-package"
 
-              $sourceDll = $found |
+              Copy-Item $nupkg.FullName $zip -Force
+              Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue
+              Expand-Archive -LiteralPath $zip -DestinationPath $temp -Force
+
+              $dll = Get-ChildItem $temp -Recurse -Filter "System.Data.SQLite.dll" |
                 Select-Object -First 1
 
-              New-Item -ItemType Directory `
-                -Force -Path (Split-Path $expected) | Out-Null
-
-              Copy-Item $sourceDll.FullName $expected -Force
+              if ($dll) {
+                New-Item -ItemType Directory -Force -Path (Split-Path $expected) | Out-Null
+                Copy-Item $dll.FullName $expected -Force
+              }
             }
           }
 
           if (-not (Test-Path $expected)) {
-            Write-Host "Package contents:"
-            Get-ChildItem $packageRoot -Recurse `
-              -ErrorAction SilentlyContinue |
+            Write-Host "SQLite package files:"
+            Get-ChildItem $root -Recurse -ErrorAction SilentlyContinue |
               Select-Object -ExpandProperty FullName
 
-            throw "System.Data.SQLite.dll was not found."
+            throw "System.Data.SQLite.dll is still missing. Check the NuGet package contents and restore log."
           }
 
-          Write-Host "SQLite DLL verified: $expected"
+          Write-Host "SQLite DLL found: $expected"
 
       - name: Build Release
         shell: pwsh
@@ -115,16 +99,12 @@ jobs:
             throw "KoaZa.exe was not produced."
           }
 
-          New-Item -ItemType Directory `
-            -Force -Path $target | Out-Null
-
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
           Copy-Item "$source/*" $target -Recurse -Force
 
           if (Test-Path "README_FA.md") {
             Copy-Item "README_FA.md" $target -Force
           }
-
-          Get-ChildItem $target -Recurse
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
