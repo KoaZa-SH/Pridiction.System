@@ -58,7 +58,7 @@ Change the global language from the selector at the top of the main window; the 
 | French Ligue 1 | `LIGUE1` | Coverage depends on provider |
 | Iranian Pro League | `IRAN` | Currently mapped to API-Football; availability depends on its coverage and your plan |
 
-For manual endpoints, the response should be a JSON array or an object containing a `response`, `matches`, `fixtures`, or `data` array. Each row should include `homeTeam` and `awayTeam` (strings or objects with a `name`), plus a date field such as `date`, `kickoff`, or `utcDate`; optional fields are `league`, `homeGoals`, `awayGoals`, `status`, and `id`. The app sends the configured key in the `x-api-key` header by default for these endpoints.
+For manual endpoints, the response should be a JSON array or an object containing a `response`, `matches`, `fixtures`, or `data` array. Each row should include `homeTeam` and `awayTeam` (strings or objects with a `name`), plus a date field such as `date`, `kickoff`, or `utcDate`; optional fields are `league`, `homeGoals`, `awayGoals`, `status`, and `id`. The app sends the configured key in the authentication header (default `x-api-key`); the header name can be changed in API Settings.
 
 Provider coverage, API limits, competition identifiers, and historical availability can change. Check the provider's own documentation and account dashboard. Auto mode returns the first successful non-empty result; it does **not** combine or deduplicate data from every provider.
 
