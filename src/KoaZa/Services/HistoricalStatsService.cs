@@ -178,15 +178,24 @@ namespace KoaZa.Services
                     else if (name == "fouls") { if (isHome) row.HomeFouls = parsed; else row.AwayFouls = parsed; }
                 }
             }
-            var stats = Map(Get(item, "stats"));
+            var stats = Map(Get(item, "statistics"));
+            if (stats.Count == 0) stats = Map(Get(item, "stats"));
             var shots = Map(Get(stats, "shots"));
             int? hs = Int(Get(shots, "home", null)); int? ass = Int(Get(shots, "away", null));
-            if (hs.HasValue) row.HomeShots = hs; if (ass.HasValue) row.AwayShots = ass;
             var onTarget = Map(Get(stats, "shots_on_target"));
             if (onTarget.Count == 0) onTarget = Map(Get(item, "shots_on_target"));
             int? hot = Int(Get(onTarget, "home", null)); int? aot = Int(Get(onTarget, "away", null));
+            var offTarget = Map(Get(stats, "shots_off_target"));
+            if (!hs.HasValue)
+            {
+                int? homeOff = Int(Get(offTarget, "home", null)); int? awayOff = Int(Get(offTarget, "away", null));
+                if (hot.HasValue && homeOff.HasValue) hs = hot.Value + homeOff.Value;
+                if (aot.HasValue && awayOff.HasValue) ass = aot.Value + awayOff.Value;
+            }
+            if (hs.HasValue) row.HomeShots = hs; if (ass.HasValue) row.AwayShots = ass;
             if (hot.HasValue) row.HomeShotsOnTarget = hot; if (aot.HasValue) row.AwayShotsOnTarget = aot;
-            var possession = Map(Get(item, "possession"));
+            var possession = Map(Get(stats, "possession"));
+            if (possession.Count == 0) possession = Map(Get(item, "possession"));
             double? hp = Double(Get(possession, "home", null)); double? ap = Double(Get(possession, "away", null));
             if (hp.HasValue) row.HomePossession = hp; if (ap.HasValue) row.AwayPossession = ap;
             string referee = String(Get(item, "referee", Get(Map(Get(item, "fixture")), "referee", null)));
@@ -229,13 +238,22 @@ namespace KoaZa.Services
             foreach (var ev in events)
             {
                 var time = Map(Get(ev, "time"));
-                int? minute = Int(Get(time, "elapsed", null));
-                var team = Map(Get(ev, "team")); var player = Map(Get(ev, "player")); var assist = Map(Get(ev, "assist"));
+                int? minute = Int(Get(time, "elapsed", null)) ?? Int(Get(ev, "minute", null));
+                object teamObject = Get(ev, "team", null);
+                var team = Map(teamObject);
+                string teamName = String(Get(team, "name", teamObject));
+                if (string.Equals(teamName, "home", StringComparison.OrdinalIgnoreCase)) teamName = fixture.HomeTeam;
+                else if (string.Equals(teamName, "away", StringComparison.OrdinalIgnoreCase)) teamName = fixture.AwayTeam;
+                object playerObject = Get(ev, "player", Get(ev, "player_in", null));
+                object assistObject = Get(ev, "assist", Get(ev, "player_out", null));
+                var player = Map(playerObject); var assist = Map(assistObject);
+                string playerName = String(Get(player, "name", playerObject));
+                string assistName = String(Get(assist, "name", assistObject));
                 output.Add(new MatchEventRecord {
                     Provider = fixture.Provider, ExternalId = fixture.ExternalId, EventIndex = index++,
-                    Minute = minute, Team = String(Get(team, "name", "")),
-                    Player = String(Get(player, "name", "")), Assist = String(Get(assist, "name", "")),
-                    Type = String(Get(ev, "type", "")), Detail = String(Get(ev, "detail", ""))
+                    Minute = minute, Team = teamName,
+                    Player = playerName, Assist = assistName,
+                    Type = String(Get(ev, "type", "")), Detail = String(Get(ev, "detail", Get(ev, "period", "")))
                 });
             }
             return output;
