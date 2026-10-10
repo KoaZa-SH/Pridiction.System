@@ -292,6 +292,7 @@ namespace KoaZa
                     var priorProbabilities = PoissonModel.Analyze(homeRate, awayRate);
                     SetMarketRows(priorProbabilities, false, dataWarning);
                     ModelStatusText.Text = dataWarning;
+                    UpdateMultiMarketPredictions(fixture);
                     return;
                 }
 
@@ -388,6 +389,7 @@ namespace KoaZa
                       "Poisson baseline refined by head-to-head and shots-on-target when available; statistical markets use historical frequencies. Estimates, not guarantees.";
                 if (!string.IsNullOrEmpty(dataWarning))
                     ModelStatusText.Text += " " + dataWarning;
+                UpdateMultiMarketPredictions(fixture);
             }
             catch (Exception ex)
             {
@@ -509,6 +511,41 @@ namespace KoaZa
             catch (Exception ex) { MessageBox.Show(this, LocalizationService.IsPersian ? "باز کردن پیوند خبر ناموفق بود. اتصال اینترنت و مرورگر پیش‌فرض را بررسی کن." : ex.Message, LocalizationService.T("Could not open news link", "باز کردن خبر ناموفق بود"), MessageBoxButton.OK, MessageBoxImage.Information); }
         }
 
+
+        private void UpdateMultiMarketPredictions(FixtureRecord fixture)
+        {
+            try
+            {
+                var stats = _database.GetRecentMatchStatistics(fixture.League, 500);
+                var eventPrediction = MultiMarketPredictionService.AnalyzeEventMarkets(fixture, stats);
+                try { _database.SaveMarketPredictions(fixture, eventPrediction); }
+                catch (Exception saveError) { ModelStatusText.Text += LocalizationService.T(" Event prediction save warning: ", " هشدار ذخیره بازارهای آماری: ") + saveError.Message; }
+
+                var rows = (MarketsList.ItemsSource as IEnumerable<MarketRow> ?? Enumerable.Empty<MarketRow>()).ToList();
+                foreach (var m in eventPrediction.Markets)
+                {
+                    string label = LocalizationService.Market(m.Market, m.Outcome);
+                    var row = new MarketRow
+                    {
+                        Label = label,
+                        Percent = m.HasSufficientData ? Math.Round(m.Probability * 100, 1) : 0,
+                        PercentLabel = m.HasSufficientData
+                            ? (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% • n=" + m.SampleSize
+                            : LocalizationService.T("Stats unavailable", "آمار کافی نیست") + " • n=" + m.SampleSize,
+                        HasData = m.HasSufficientData,
+                        BarBrush = m.HasSufficientData ? System.Windows.Media.Brushes.SeaGreen : System.Windows.Media.Brushes.Gray,
+                        Reason = m.Explanation
+                    };
+                    int index = rows.FindIndex(existing => string.Equals(existing.Label, label, StringComparison.OrdinalIgnoreCase));
+                    if (index >= 0) rows[index] = row; else rows.Add(row);
+                }
+                MarketsList.ItemsSource = rows;
+            }
+            catch (Exception ex)
+            {
+                ModelStatusText.Text += LocalizationService.T(" Event-market layer unavailable: ", " لایه بازارهای آماری در دسترس نیست: ") + ex.Message;
+            }
+        }
 
         private void SetMarketRows(MatchProbabilities probabilities, bool hasSufficientData, string reason)
         {
