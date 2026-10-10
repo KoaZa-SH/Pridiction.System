@@ -197,6 +197,25 @@ namespace KoaZa.Services
             return row;
         }
 
+        public static bool HasEventPayload(string json, FixtureRecord fixture)
+        {
+            if (string.IsNullOrWhiteSpace(json) || fixture == null) return false;
+            var root = Deserialize(json);
+            var responses = List(Get(root, "response"));
+            var item = responses.FirstOrDefault();
+            if (item != null && Get(item, "events") is IList) return true;
+            var eventsPayload = Get(root, "eventsPayload");
+            if (eventsPayload is IDictionary)
+            {
+                object errors = Get(eventsPayload, "errors");
+                if (errors is IDictionary && ((IDictionary)errors).Count > 0) return false;
+                return Get(eventsPayload, "response") is IList;
+            }
+            var data = Get(root, "data");
+            var genericItem = List(data).FirstOrDefault() ?? data;
+            return genericItem != null && Get(genericItem, "events") is IList;
+        }
+
         public static List<MatchEventRecord> ParseEvents(string json, FixtureRecord fixture)
         {
             var output = new List<MatchEventRecord>();
