@@ -1796,7 +1796,7 @@ namespace KoaZa.Services
                         stats.HomeRedCards.HasValue || stats.AwayRedCards.HasValue;
                     if (!hasEventsStats) continue;
                     db.SaveMatchStatistics(stats);
-                    db.SaveMatchEvents(MatchStatisticsParser.ParseEvents(json, fixture));
+                    db.ReplaceMatchEvents(fixture.Provider, fixture.ExternalId, MatchStatisticsParser.ParseEvents(json, fixture));
                     imported++;
                 }
                 catch { /* One unavailable match must not cancel the rest of the import. */ }
