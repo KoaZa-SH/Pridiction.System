@@ -373,7 +373,7 @@ namespace KoaZa
             }).ToList();
             string unavailable = LocalizationService.T("Not calculated: historical corner/card statistics are unavailable.", "محاسبه نشده: آمار تاریخی کرنر و کارت در دسترس نیست.");
             rows.Add(new MarketRow { Label = LocalizationService.Market("Corners", "Total over 8.5"), Percent = 0, PercentLabel = LocalizationService.T("Stats unavailable", "آمار موجود نیست"), HasData = false, Reason = unavailable });
-            rows.Add(new MarketRow { Label = LocalizationService.Market("Corners", "Total under 8.5"), Percent = 0, PercentLabel = "—", HasData = false, Reason = unavailable });
+            rows.Add(new MarketRow { Label = LocalizationService.Market("Corners", "Total under 8.5"), Percent = 0, PercentLabel = LocalizationService.T("Stats unavailable", "آمار موجود نیست"), HasData = false, Reason = unavailable });
             rows.Add(new MarketRow { Label = LocalizationService.Market("Yellow cards", "Total over 3.5"), Percent = 0, PercentLabel = "—", HasData = false, Reason = unavailable });
             rows.Add(new MarketRow { Label = LocalizationService.Market("Yellow cards", "Total under 3.5"), Percent = 0, PercentLabel = "—", HasData = false, Reason = unavailable });
             MarketsList.ItemsSource = rows;
