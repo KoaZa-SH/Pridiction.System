@@ -44,28 +44,53 @@ jobs:
       - name: Restore NuGet packages
         shell: pwsh
         run: |
-          nuget restore "src/KoaZa/KoaZa.sln" `
-            -PackagesDirectory "src/KoaZa/packages" `
+          nuget install "src/KoaZa/packages.config" `
+            -OutputDirectory "src/KoaZa/packages" `
             -NonInteractive `
-            -Verbosity normal
+            -Verbosity detailed
 
           if ($LASTEXITCODE -ne 0) {
-            throw "NuGet restore failed."
+            throw "NuGet package installation failed."
           }
 
-      - name: Verify SQLite package
+      - name: Verify SQLite DLL
         shell: pwsh
         run: |
-          $dll = "src/KoaZa/packages/System.Data.SQLite.Core.1.0.119.0/lib/net46/System.Data.SQLite.dll"
+          $packageRoot = "src/KoaZa/packages"
+          $expected = Join-Path $packageRoot `
+            "System.Data.SQLite.Core.1.0.119.0/lib/net46/System.Data.SQLite.dll"
 
-          if (-not (Test-Path $dll)) {
-            Write-Host "Expected SQLite DLL was not found."
-            Get-ChildItem "src/KoaZa/packages" -Recurse -ErrorAction SilentlyContinue |
-              Select-Object -ExpandProperty FullName
-            throw "SQLite package restore did not produce the expected DLL."
+          if (-not (Test-Path $expected)) {
+            $found = Get-ChildItem $packageRoot `
+              -Recurse -Filter "System.Data.SQLite.dll" `
+              -ErrorAction SilentlyContinue
+
+            if ($found) {
+              Write-Host "SQLite DLL found at:"
+              $found | ForEach-Object {
+                Write-Host $_.FullName
+              }
+
+              $sourceDll = $found |
+                Select-Object -First 1
+
+              New-Item -ItemType Directory `
+                -Force -Path (Split-Path $expected) | Out-Null
+
+              Copy-Item $sourceDll.FullName $expected -Force
+            }
           }
 
-          Write-Host "SQLite package found: $dll"
+          if (-not (Test-Path $expected)) {
+            Write-Host "Package contents:"
+            Get-ChildItem $packageRoot -Recurse `
+              -ErrorAction SilentlyContinue |
+              Select-Object -ExpandProperty FullName
+
+            throw "System.Data.SQLite.dll was not found."
+          }
+
+          Write-Host "SQLite DLL verified: $expected"
 
       - name: Build Release
         shell: pwsh
@@ -87,17 +112,18 @@ jobs:
           $target = "artifact/KoaZa"
 
           if (-not (Test-Path "$source/KoaZa.exe")) {
-            throw "Build output KoaZa.exe was not found."
+            throw "KoaZa.exe was not produced."
           }
 
-          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          New-Item -ItemType Directory `
+            -Force -Path $target | Out-Null
+
           Copy-Item "$source/*" $target -Recurse -Force
 
           if (Test-Path "README_FA.md") {
             Copy-Item "README_FA.md" $target -Force
           }
 
-          Write-Host "Prepared application files:"
           Get-ChildItem $target -Recurse
 
       - name: Upload build artifact
