@@ -429,7 +429,8 @@ namespace KoaZa
                 if (goals.Count < 10) goals = _database.GetRecentCompletedMatches(null, 100);
                 var stats = _database.GetRecentMatchStatistics(fixture.League, 500);
                 var prediction = MultiMarketPredictionService.Analyze(fixture, goals, stats);
-                _database.SaveMarketPredictions(fixture, prediction);
+                try { _database.SaveMarketPredictions(fixture, prediction); }
+                catch (Exception saveError) { ModelStatusText.Text += LocalizationService.T(" Prediction history save warning: ", " هشدار ذخیره تاریخچه پیش‌بینی: ") + saveError.Message; }
                 var rows = prediction.Markets.Select(m => new MarketRow
                 {
                     Label = LocalizationService.Market(m.Market, m.Outcome),
