@@ -84,7 +84,8 @@ namespace KoaZa.Services
 
             var result = NewRecord(fixture);
             var fixtureMap = Map(Get(item, "fixture"));
-            result.Referee = String(Get(fixtureMap, "referee", null));
+            string referee = String(Get(fixtureMap, "referee", null));
+            if (!string.IsNullOrWhiteSpace(referee)) result.Referee = referee;
             fixture.Referee = result.Referee;
             var teams = Map(Get(item, "teams"));
             var home = Map(Get(teams, "home"));
