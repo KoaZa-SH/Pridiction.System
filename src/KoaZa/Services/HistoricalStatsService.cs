@@ -249,8 +249,8 @@ namespace KoaZa.Services
             }
             // Event data gently adjusts goal rates when a team has enough prior observations.
             // The adjustment is deliberately capped: raw shots/corners are not treated as goals.
-            double leagueSot = MeanPerTeam(statsHistory, s => s.HomeShotsOnTarget, s => s.AwayShotsOnTarget);
-            double leagueCorners = MeanPerTeam(statsHistory, s => s.HomeCorners, s => s.AwayCorners);
+            double leagueSot = MeanPerTeam(statsHistory, s => s.HomeShotsOnTarget, s => s.AwayShotsOnTarget, fixture.KickoffUtc);
+            double leagueCorners = MeanPerTeam(statsHistory, s => s.HomeCorners, s => s.AwayCorners, fixture.KickoffUtc);
             double homeSot = TeamAverage(statsHistory, fixture.HomeTeam, true, s => s.HomeShotsOnTarget, s => s.AwayShotsOnTarget, fixture.KickoffUtc);
             double homeSotConceded = TeamAverage(statsHistory, fixture.HomeTeam, false, s => s.HomeShotsOnTarget, s => s.AwayShotsOnTarget, fixture.KickoffUtc);
             double awaySot = TeamAverage(statsHistory, fixture.AwayTeam, true, s => s.HomeShotsOnTarget, s => s.AwayShotsOnTarget, fixture.KickoffUtc);
@@ -323,9 +323,11 @@ namespace KoaZa.Services
             output.Markets.Add(new MarketEstimate { Market=market, Outcome=underLabel, Probability=Clamp(1-pOver,0,1),
                 SampleSize=prior.Count, HasSufficientData=true, Explanation="Complement of over probability; Poisson approximation" });
         }
-        private static double MeanPerTeam(IList<MatchStatisticsRecord> rows, Func<MatchStatisticsRecord,int?> home, Func<MatchStatisticsRecord,int?> away)
+        private static double MeanPerTeam(IList<MatchStatisticsRecord> rows, Func<MatchStatisticsRecord,int?> home, Func<MatchStatisticsRecord,int?> away, string before)
         {
-            var values = (rows ?? new List<MatchStatisticsRecord>()).SelectMany(s => new[] { home(s), away(s) })
+            var values = (rows ?? new List<MatchStatisticsRecord>())
+                .Where(s => DateTimeOrder(s.KickoffUtc, before) < 0)
+                .SelectMany(s => new[] { home(s), away(s) })
                 .Where(v => v.HasValue).Select(v => (double)v.Value).ToList();
             return values.Count < 10 ? 0 : values.Average();
         }
