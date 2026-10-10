@@ -233,6 +233,8 @@ namespace KoaZa.Services
                 rows = FetchAllUpcoming(season, fromDate);
             else if (provider == "ApiFootball" || provider == "ApiSports")
                 rows = FetchApiFootballRange(league, fromDate, toDate);
+            else if (provider == "FootballData" && (string.IsNullOrWhiteSpace(league) || league.Trim().Equals("all", StringComparison.OrdinalIgnoreCase)))
+                rows = FetchFootballDataBulk(season, fromDate);
             else
                 rows = Fetch(provider, league, season);
 
@@ -1518,7 +1520,7 @@ namespace KoaZa.Services
             Grid.SetColumn(_leagueBox, 1); Grid.SetRow(_leagueBox, 1); top.Children.Add(_leagueBox);
             _seasonBox = new TextBox { Text = DateTime.UtcNow.Month >= 7 ? DateTime.UtcNow.Year.ToString() : (DateTime.UtcNow.Year - 1).ToString(), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "Season year (for providers that require it)" };
             Grid.SetColumn(_seasonBox, 2); Grid.SetRow(_seasonBox, 1); top.Children.Add(_seasonBox);
-            _startDateBox = new TextBox { Text = DateTime.UtcNow.Date.AddDays(-30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "Start date, format yyyy-MM-dd." };
+            _startDateBox = new TextBox { Text = DateTime.UtcNow.Date.AddDays(-7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "Start date, format yyyy-MM-dd." };
             Grid.SetColumn(_startDateBox, 3); Grid.SetRow(_startDateBox, 1); top.Children.Add(_startDateBox);
             _endDateBox = new TextBox { Text = DateTime.UtcNow.Date.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "End date, format yyyy-MM-dd. Maximum: 7 days in the future." };
             Grid.SetColumn(_endDateBox, 4); Grid.SetRow(_endDateBox, 1); top.Children.Add(_endDateBox);
