@@ -110,13 +110,20 @@ namespace KoaZa.Services
                 {
                     string type = String(Get(stat, "type", "")).Trim().ToLowerInvariant();
                     object value = Get(stat, "value", null);
-                    if (type == "total shots") { if (isHome) result.HomeShots = Int(value); else result.AwayShots = Int(value); }
-                    else if (type == "shots on goal") { if (isHome) result.HomeShotsOnTarget = Int(value); else result.AwayShotsOnTarget = Int(value); }
-                    else if (type == "corner kicks") { if (isHome) result.HomeCorners = Int(value); else result.AwayCorners = Int(value); }
-                    else if (type == "yellow cards") { if (isHome) result.HomeYellowCards = Int(value); else result.AwayYellowCards = Int(value); }
-                    else if (type == "red cards") { if (isHome) result.HomeRedCards = Int(value); else result.AwayRedCards = Int(value); }
-                    else if (type == "fouls") { if (isHome) result.HomeFouls = Int(value); else result.AwayFouls = Int(value); }
-                    else if (type == "ball possession") { if (isHome) result.HomePossession = Double(value); else result.AwayPossession = Double(value); }
+                    if (type == "ball possession")
+                    {
+                        double? possession = Double(value);
+                        if (possession.HasValue) { if (isHome) result.HomePossession = possession; else result.AwayPossession = possession; }
+                        continue;
+                    }
+                    int? parsed = Int(value);
+                    if (!parsed.HasValue) continue;
+                    if (type == "total shots") { if (isHome) result.HomeShots = parsed; else result.AwayShots = parsed; }
+                    else if (type == "shots on goal") { if (isHome) result.HomeShotsOnTarget = parsed; else result.AwayShotsOnTarget = parsed; }
+                    else if (type == "corner kicks") { if (isHome) result.HomeCorners = parsed; else result.AwayCorners = parsed; }
+                    else if (type == "yellow cards") { if (isHome) result.HomeYellowCards = parsed; else result.AwayYellowCards = parsed; }
+                    else if (type == "red cards") { if (isHome) result.HomeRedCards = parsed; else result.AwayRedCards = parsed; }
+                    else if (type == "fouls") { if (isHome) result.HomeFouls = parsed; else result.AwayFouls = parsed; }
                 }
             }
             return result;
@@ -133,12 +140,14 @@ namespace KoaZa.Services
             var home = Map(Get(item, "teams") is IDictionary ? Get(Map(Get(item, "teams")), "home") : null);
             var away = Map(Get(item, "teams") is IDictionary ? Get(Map(Get(item, "teams")), "away") : null);
             var corners = Map(Get(item, "corners"));
-            row.HomeCorners = Int(Get(corners, "home", null));
-            row.AwayCorners = Int(Get(corners, "away", null));
+            int? hc = Int(Get(corners, "home", null)); int? ac = Int(Get(corners, "away", null));
+            if (hc.HasValue) row.HomeCorners = hc; if (ac.HasValue) row.AwayCorners = ac;
             var cards = Map(Get(item, "cards"));
             var homeCards = Map(Get(cards, "home")); var awayCards = Map(Get(cards, "away"));
-            row.HomeYellowCards = Int(Get(homeCards, "yellow", null)); row.AwayYellowCards = Int(Get(awayCards, "yellow", null));
-            row.HomeRedCards = Int(Get(homeCards, "red", null)); row.AwayRedCards = Int(Get(awayCards, "red", null));
+            int? hy = Int(Get(homeCards, "yellow", null)); int? ay = Int(Get(awayCards, "yellow", null));
+            int? hr = Int(Get(homeCards, "red", null)); int? ar = Int(Get(awayCards, "red", null));
+            if (hy.HasValue) row.HomeYellowCards = hy; if (ay.HasValue) row.AwayYellowCards = ay;
+            if (hr.HasValue) row.HomeRedCards = hr; if (ar.HasValue) row.AwayRedCards = ar;
             var statRows = List(Get(item, "statistics"));
             foreach (var teamStats in statRows)
             {
@@ -151,24 +160,35 @@ namespace KoaZa.Services
                 {
                     string name = String(Get(stat, "type", Get(stat, "name", ""))).Trim().ToLowerInvariant();
                     object value = Get(stat, "value", null);
-                    if (name == "total shots" || name == "shots") { if (isHome) row.HomeShots = Int(value); else row.AwayShots = Int(value); }
-                    else if (name == "shots on goal" || name == "shots on target") { if (isHome) row.HomeShotsOnTarget = Int(value); else row.AwayShotsOnTarget = Int(value); }
-                    else if (name == "corner kicks" || name == "corners") { if (isHome) row.HomeCorners = Int(value); else row.AwayCorners = Int(value); }
-                    else if (name == "yellow cards") { if (isHome) row.HomeYellowCards = Int(value); else row.AwayYellowCards = Int(value); }
-                    else if (name == "red cards") { if (isHome) row.HomeRedCards = Int(value); else row.AwayRedCards = Int(value); }
-                    else if (name == "fouls") { if (isHome) row.HomeFouls = Int(value); else row.AwayFouls = Int(value); }
-                    else if (name == "ball possession") { if (isHome) row.HomePossession = Double(value); else row.AwayPossession = Double(value); }
+                    if (name == "ball possession")
+                    {
+                        double? possessionValue = Double(value);
+                        if (possessionValue.HasValue) { if (isHome) row.HomePossession = possessionValue; else row.AwayPossession = possessionValue; }
+                        continue;
+                    }
+                    int? parsed = Int(value);
+                    if (!parsed.HasValue) continue;
+                    if (name == "total shots" || name == "shots") { if (isHome) row.HomeShots = parsed; else row.AwayShots = parsed; }
+                    else if (name == "shots on goal" || name == "shots on target") { if (isHome) row.HomeShotsOnTarget = parsed; else row.AwayShotsOnTarget = parsed; }
+                    else if (name == "corner kicks" || name == "corners") { if (isHome) row.HomeCorners = parsed; else row.AwayCorners = parsed; }
+                    else if (name == "yellow cards") { if (isHome) row.HomeYellowCards = parsed; else row.AwayYellowCards = parsed; }
+                    else if (name == "red cards") { if (isHome) row.HomeRedCards = parsed; else row.AwayRedCards = parsed; }
+                    else if (name == "fouls") { if (isHome) row.HomeFouls = parsed; else row.AwayFouls = parsed; }
                 }
             }
             var stats = Map(Get(item, "stats"));
             var shots = Map(Get(stats, "shots"));
-            row.HomeShots = Int(Get(shots, "home", null)); row.AwayShots = Int(Get(shots, "away", null));
+            int? hs = Int(Get(shots, "home", null)); int? ass = Int(Get(shots, "away", null));
+            if (hs.HasValue) row.HomeShots = hs; if (ass.HasValue) row.AwayShots = ass;
             var onTarget = Map(Get(stats, "shots_on_target"));
             if (onTarget.Count == 0) onTarget = Map(Get(item, "shots_on_target"));
-            row.HomeShotsOnTarget = Int(Get(onTarget, "home", null)); row.AwayShotsOnTarget = Int(Get(onTarget, "away", null));
+            int? hot = Int(Get(onTarget, "home", null)); int? aot = Int(Get(onTarget, "away", null));
+            if (hot.HasValue) row.HomeShotsOnTarget = hot; if (aot.HasValue) row.AwayShotsOnTarget = aot;
             var possession = Map(Get(item, "possession"));
-            row.HomePossession = Double(Get(possession, "home", null)); row.AwayPossession = Double(Get(possession, "away", null));
-            row.Referee = String(Get(item, "referee", Get(Map(Get(item, "fixture")), "referee", null)));
+            double? hp = Double(Get(possession, "home", null)); double? ap = Double(Get(possession, "away", null));
+            if (hp.HasValue) row.HomePossession = hp; if (ap.HasValue) row.AwayPossession = ap;
+            string referee = String(Get(item, "referee", Get(Map(Get(item, "fixture")), "referee", null)));
+            if (!string.IsNullOrWhiteSpace(referee)) row.Referee = referee;
             fixture.Referee = row.Referee;
             if (home.Count > 0 && row.HomeTeam.Length == 0) row.HomeTeam = String(Get(home, "name", ""));
             if (away.Count > 0 && row.AwayTeam.Length == 0) row.AwayTeam = String(Get(away, "name", ""));
