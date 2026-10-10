@@ -36,7 +36,7 @@ namespace KoaZa
             }
             catch (Exception ex)
             {
-                FixtureStatusText.Text = LocalizationService.T("Database initialization failed: ", "خطا در پایگاه داده: ") + ex.Message;
+                FixtureStatusText.Text = LocalizationService.IsPersian ? "راه‌اندازی پایگاه داده ناموفق بود. پوشهٔ داده‌های برنامه و دسترسی نوشتن را بررسی کن." : "Database initialization failed: " + ex.Message;
             }
         }
 
@@ -98,7 +98,7 @@ namespace KoaZa
             }
             catch (Exception ex)
             {
-                FixtureStatusText.Text = LocalizationService.T("Could not load fixtures: ", "بارگذاری مسابقات ناموفق بود: ") + ex.Message;
+                FixtureStatusText.Text = LocalizationService.IsPersian ? "بارگذاری مسابقات ناموفق بود. پایگاه داده را بررسی و دوباره تلاش کن." : "Could not load fixtures: " + ex.Message;
             }
         }
 
@@ -185,7 +185,7 @@ namespace KoaZa
                 if (homeMatches.Count < 3 || awayMatches.Count < 3)
                 {
                     ModelStatusText.Text = LocalizationService.IsPersian
-                        ? "داده تاریخی کافی نیست. تعداد بازی‌های میزبان: " + homeMatches.Count + "؛ میهمان: " + awayMatches.Count + ". ابتدا نتایج کامل‌شده را دریافت کن."
+                        ? "نتایج تاریخی کافی نیست. میزبان: " + homeMatches.Count + " بازی؛ میهمان: " + awayMatches.Count + " بازی. روی «دریافت و ذخیره مسابقات» بزن تا نتایج اخیر دریافت شود؛ سپس مسابقه را دوباره انتخاب کن. اگر هنوز کافی نبود، سرویس داده یا سهمیهٔ API ممکن است این نتایج را پوشش ندهد."
                         : "Not enough historical matches. Found " + homeMatches.Count + " for the home team and " + awayMatches.Count + " for the away team. Import completed results first.";
                     return;
                 }
@@ -223,7 +223,7 @@ namespace KoaZa
             }
             catch (Exception ex)
             {
-                ModelStatusText.Text = LocalizationService.T("Analysis failed: ", "خطا در تحلیل: ") + ex.Message;
+                ModelStatusText.Text = LocalizationService.IsPersian ? "تحلیل احتمال‌ها ناموفق بود. نتایج تاریخی، امتیازهای ثبت‌شده و تنظیمات سرویس داده را بررسی کن." : "Analysis failed: " + ex.Message;
             }
         }
 
@@ -249,9 +249,9 @@ namespace KoaZa
             catch (Exception ex)
             {
                 if (!IsCurrentFixture(fixtureId)) return;
-                StatsText.Text = LocalizationService.T(
-                    "Detailed stats are unavailable for this provider/match, or the API plan does not cover them: ",
-                    "آمار تفصیلی برای این سرویس/مسابقه در دسترس نیست یا اشتراک آن را پوشش نمی‌دهد: ") + ex.Message;
+                StatsText.Text = LocalizationService.IsPersian
+                    ? "آمار تفصیلی این مسابقه در دسترس نیست؛ ممکن است سرویس داده، رقابت یا سطح اشتراک از آن پشتیبانی نکند."
+                    : "Detailed stats are unavailable for this provider/match, or the API plan does not cover them: " + ex.Message;
             }
 
             try
@@ -266,7 +266,7 @@ namespace KoaZa
             catch (Exception ex)
             {
                 if (!IsCurrentFixture(fixtureId)) return;
-                NewsStatusText.Text = LocalizationService.T("News feed unavailable: ", "خبرخوان در دسترس نیست: ") + ex.Message;
+                NewsStatusText.Text = LocalizationService.IsPersian ? "خبرخوان در دسترس نیست. اتصال اینترنت و دسترسی به Google News را بررسی کن." : "News feed unavailable: " + ex.Message;
             }
         }
 
@@ -290,7 +290,7 @@ namespace KoaZa
             string url = button == null ? null : Convert.ToString(button.Tag);
             if (string.IsNullOrWhiteSpace(url) || !(url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))) return;
             try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
-            catch (Exception ex) { MessageBox.Show(this, ex.Message, LocalizationService.T("Could not open news link", "باز کردن خبر ناموفق بود"), MessageBoxButton.OK, MessageBoxImage.Information); }
+            catch (Exception ex) { MessageBox.Show(this, LocalizationService.IsPersian ? "باز کردن پیوند خبر ناموفق بود. اتصال اینترنت و مرورگر پیش‌فرض را بررسی کن." : ex.Message, LocalizationService.T("Could not open news link", "باز کردن خبر ناموفق بود"), MessageBoxButton.OK, MessageBoxImage.Information); }
         }
 
         private static double Average(List<FixtureRecord> matches, string team, bool scored, bool? homeVenue)
