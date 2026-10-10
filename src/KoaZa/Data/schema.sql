@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS Predictions (
   Over25 REAL NOT NULL CHECK(Over25 BETWEEN 0 AND 1),
   Under25 REAL NOT NULL CHECK(Under25 BETWEEN 0 AND 1),
   BothTeamsScore REAL NOT NULL CHECK(BothTeamsScore BETWEEN 0 AND 1),
-  ModelVersion TEXT NOT NULL
+  ModelVersion TEXT NOT NULL,
+  MarketsJson TEXT NULL
 );
 CREATE INDEX IF NOT EXISTS IX_Predictions_CreatedUtc ON Predictions(CreatedUtc);
