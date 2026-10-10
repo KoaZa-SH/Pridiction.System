@@ -334,21 +334,27 @@ namespace KoaZa.Services
             goalHistory = goalHistory ?? new List<FixtureRecord>();
             statsHistory = statsHistory ?? new List<MatchStatisticsRecord>();
             var homeGoals = goalHistory.Where(m => m.HomeGoals.HasValue && m.AwayGoals.HasValue &&
-                (Same(m.HomeTeam, fixture.HomeTeam) || Same(m.AwayTeam, fixture.HomeTeam))).Take(12).ToList();
+                DateTimeOrder(m.KickoffUtc, fixture.KickoffUtc) < 0 &&
+                (Same(m.HomeTeam, fixture.HomeTeam) || Same(m.AwayTeam, fixture.HomeTeam)))
+                .OrderByDescending(m => m.KickoffUtc).Take(12).ToList();
             var awayGoals = goalHistory.Where(m => m.HomeGoals.HasValue && m.AwayGoals.HasValue &&
-                (Same(m.HomeTeam, fixture.AwayTeam) || Same(m.AwayTeam, fixture.AwayTeam))).Take(12).ToList();
-            double homeAttackAtHome = AverageTeamGoal(goalHistory, fixture.HomeTeam, true, true);
-            double awayDefenceAway = AverageTeamGoal(goalHistory, fixture.AwayTeam, false, false);
-            double awayAttackAway = AverageTeamGoal(goalHistory, fixture.AwayTeam, false, true);
-            double homeDefenceHome = AverageTeamGoal(goalHistory, fixture.HomeTeam, true, false);
+                DateTimeOrder(m.KickoffUtc, fixture.KickoffUtc) < 0 &&
+                (Same(m.HomeTeam, fixture.AwayTeam) || Same(m.AwayTeam, fixture.AwayTeam)))
+                .OrderByDescending(m => m.KickoffUtc).Take(12).ToList();
+            double homeAttackAtHome = AverageTeamGoal(goalHistory, fixture.HomeTeam, true, true, fixture.KickoffUtc);
+            double awayDefenceAway = AverageTeamGoal(goalHistory, fixture.AwayTeam, false, false, fixture.KickoffUtc);
+            double awayAttackAway = AverageTeamGoal(goalHistory, fixture.AwayTeam, false, true, fixture.KickoffUtc);
+            double homeDefenceHome = AverageTeamGoal(goalHistory, fixture.HomeTeam, true, false, fixture.KickoffUtc);
             double homeOverallAttack = homeGoals.Count == 0 ? double.NaN : AverageGoals(homeGoals, fixture.HomeTeam, true);
             double awayOverallAttack = awayGoals.Count == 0 ? double.NaN : AverageGoals(awayGoals, fixture.AwayTeam, true);
             double awayOverallDefence = awayGoals.Count == 0 ? double.NaN : AverageGoals(awayGoals, fixture.AwayTeam, false);
             double homeOverallDefence = homeGoals.Count == 0 ? double.NaN : AverageGoals(homeGoals, fixture.HomeTeam, false);
             double homeRate = MeanAvailable(homeAttackAtHome, awayDefenceAway, homeOverallAttack, awayOverallDefence, 1.35);
             double awayRate = MeanAvailable(awayAttackAway, homeDefenceHome, awayOverallAttack, homeOverallDefence, 1.10);
-            var h2h = goalHistory.Where(m => (Same(m.HomeTeam, fixture.HomeTeam) && Same(m.AwayTeam, fixture.AwayTeam)) ||
-                (Same(m.HomeTeam, fixture.AwayTeam) && Same(m.AwayTeam, fixture.HomeTeam))).Take(8).ToList();
+            var h2h = goalHistory.Where(m => DateTimeOrder(m.KickoffUtc, fixture.KickoffUtc) < 0 &&
+                ((Same(m.HomeTeam, fixture.HomeTeam) && Same(m.AwayTeam, fixture.AwayTeam)) ||
+                 (Same(m.HomeTeam, fixture.AwayTeam) && Same(m.AwayTeam, fixture.HomeTeam))))
+                .OrderByDescending(m => m.KickoffUtc).Take(8).ToList();
             if (h2h.Count >= 3) {
                 double h2hHome = h2h.Average(m => Same(m.HomeTeam, fixture.HomeTeam) ? m.HomeGoals.Value : m.AwayGoals.Value);
                 double h2hAway = h2h.Average(m => Same(m.HomeTeam, fixture.AwayTeam) ? m.HomeGoals.Value : m.AwayGoals.Value);
@@ -416,6 +422,7 @@ namespace KoaZa.Services
                 DateTimeOrder(s.KickoffUtc, fixture.KickoffUtc) < 0 &&
                 (Same(s.HomeTeam,fixture.HomeTeam) || Same(s.AwayTeam,fixture.HomeTeam) ||
                  Same(s.HomeTeam,fixture.AwayTeam) || Same(s.AwayTeam,fixture.AwayTeam)))
+                .OrderByDescending(s => s.KickoffUtc)
                 .Select(s => selector(s)).Where(v => v.HasValue).Select(v => (double)v.Value).Take(80).ToList();
             if (prior.Count < minSample) {
                 output.Markets.Add(new MarketEstimate { Market=market, Outcome=overLabel, Probability=0, SampleSize=prior.Count,
@@ -460,11 +467,12 @@ namespace KoaZa.Services
             if (pa && pb) return DateTime.Compare(da, db);
             return string.Compare(a ?? "", b ?? "", StringComparison.Ordinal);
         }
-        private static double AverageTeamGoal(IList<FixtureRecord> rows, string team, bool venueHome, bool scored)
+        private static double AverageTeamGoal(IList<FixtureRecord> rows, string team, bool venueHome, bool scored, string before)
         {
             var values = (rows ?? new List<FixtureRecord>())
-                .Where(m => m.HomeGoals.HasValue && m.AwayGoals.HasValue &&
+                .Where(m => m.HomeGoals.HasValue && m.AwayGoals.HasValue && DateTimeOrder(m.KickoffUtc, before) < 0 &&
                     (venueHome ? Same(m.HomeTeam, team) : Same(m.AwayTeam, team)))
+                .OrderByDescending(m => m.KickoffUtc)
                 .Take(12)
                 .Select(m => {
                     bool home = Same(m.HomeTeam, team);
