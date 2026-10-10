@@ -368,6 +368,25 @@ namespace KoaZa.Services
         public static string FetchFixtureDetails(FixtureRecord fixture)
         {
             if (fixture == null) throw new ArgumentNullException("fixture");
+            if (fixture.Provider == "FiveDollarFootballAPI")
+            {
+                var fiveDollarKeys = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "FiveDollarFootballAPI" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+                if (fiveDollarKeys.Count == 0) throw new InvalidOperationException("Enable 5DollarFootballAPI and save its bearer key first.");
+                Exception lastFiveDollarError = null;
+                foreach (var config in fiveDollarKeys)
+                {
+                    try
+                    {
+                        string json = Request("https://api.5dollarfootballapi.com/v1/fixtures/" + Uri.EscapeDataString(fixture.ExternalId) + "?include=stats,events", "Authorization", "Bearer " + config.Key);
+                        var root = Parse(json);
+                        if (HasErrors(root)) throw new InvalidOperationException("5DollarFootballAPI returned an API/quota error.");
+                        root["detailsVersion"] = 2;
+                        return new JavaScriptSerializer().Serialize(root);
+                    }
+                    catch (Exception ex) { lastFiveDollarError = ex; }
+                }
+                throw new InvalidOperationException("Could not retrieve 5DollarFootballAPI fixture details.", lastFiveDollarError);
+            }
             if (fixture.Provider != "API-Football" && fixture.Provider != "ApiFootball" && fixture.Provider != "ApiSports")
                 throw new InvalidOperationException("Detailed statistics are currently available through the API-SPORTS/API-Football adapter. Other providers may not expose a compatible fixture-details endpoint.");
             int fixtureId;
@@ -539,6 +558,31 @@ namespace KoaZa.Services
             string summary = sb.ToString();
             return LocalizationService.IsPersian ? TranslateFixtureSummary(summary) : summary;
         }
+
+        public static string SummarizeFixtureDetails(string json, FixtureRecord fixture)
+        {
+            var root = Parse(json);
+            if (GetList(root, "response").Count > 0) return SummarizeFixtureDetails(json);
+            var s = MatchStatisticsParser.ParseFiveDollarOrGeneric(json, fixture);
+            if (s == null) return LocalizationService.T("No detailed statistics are available for this match yet.", "هنوز آمار تفصیلی برای این مسابقه منتشر نشده است.");
+            var sb = new StringBuilder();
+            sb.AppendLine("MATCH STATISTICS");
+            if (s.HomeShots.HasValue || s.AwayShots.HasValue) sb.AppendLine("Total shots: " + fixture.HomeTeam + " " + Value(s.HomeShots) + " — " + fixture.AwayTeam + " " + Value(s.AwayShots));
+            if (s.HomeShotsOnTarget.HasValue || s.AwayShotsOnTarget.HasValue) sb.AppendLine("Shots on target: " + fixture.HomeTeam + " " + Value(s.HomeShotsOnTarget) + " — " + fixture.AwayTeam + " " + Value(s.AwayShotsOnTarget));
+            if (s.HomeCorners.HasValue || s.AwayCorners.HasValue) sb.AppendLine("Corner kicks: " + fixture.HomeTeam + " " + Value(s.HomeCorners) + " — " + fixture.AwayTeam + " " + Value(s.AwayCorners));
+            if (s.HomeYellowCards.HasValue || s.AwayYellowCards.HasValue) sb.AppendLine("Yellow cards: " + fixture.HomeTeam + " " + Value(s.HomeYellowCards) + " — " + fixture.AwayTeam + " " + Value(s.AwayYellowCards));
+            if (s.HomeRedCards.HasValue || s.AwayRedCards.HasValue) sb.AppendLine("Red cards: " + fixture.HomeTeam + " " + Value(s.HomeRedCards) + " — " + fixture.AwayTeam + " " + Value(s.AwayRedCards));
+            if (s.HomeFouls.HasValue || s.AwayFouls.HasValue) sb.AppendLine("Fouls: " + fixture.HomeTeam + " " + Value(s.HomeFouls) + " — " + fixture.AwayTeam + " " + Value(s.AwayFouls));
+            if (!string.IsNullOrWhiteSpace(s.Referee)) sb.AppendLine("Referee: " + s.Referee);
+            if (sb.ToString().Trim().Equals("MATCH STATISTICS", StringComparison.OrdinalIgnoreCase))
+                return LocalizationService.T("The provider returned the match but no supported event-stat fields. Missing values are not assumed to be zero.", "سرویس مسابقه را برگرداند اما آمار رویدادی قابل‌استفاده‌ای نداشت؛ مقادیر ناموجود صفر فرض نمی‌شوند.");
+            sb.AppendLine();
+            sb.Append("Missing fields are not assumed to be zero.");
+            string summary = sb.ToString();
+            return LocalizationService.IsPersian ? TranslateFixtureSummary(summary) : summary;
+        }
+
+        private static string Value(int? value) { return value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : "—"; }
 
         private static string TranslateFixtureSummary(string summary)
         {
