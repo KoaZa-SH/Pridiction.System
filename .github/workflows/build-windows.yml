@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    name: Build KoaZa with SQLite
+    name: Build KoaZa
     runs-on: windows-latest
 
     steps:
@@ -29,45 +29,47 @@ jobs:
       - name: Check project files
         shell: pwsh
         run: |
-          $required = @(
+          $files = @(
             "src/KoaZa/KoaZa.sln",
             "src/KoaZa/KoaZa.csproj",
             "src/KoaZa/packages.config"
           )
 
-          foreach ($file in $required) {
+          foreach ($file in $files) {
             if (-not (Test-Path $file)) {
               throw "Required file missing: $file"
             }
           }
 
-      - name: Install SQLite .NET Framework package
+      - name: Install SQLite package
         shell: pwsh
         run: |
           $root = "src/KoaZa/packages"
-
           New-Item -ItemType Directory -Force -Path $root | Out-Null
 
           nuget install Stub.System.Data.SQLite.Core.NetFramework `
             -Version 1.0.119 `
             -OutputDirectory $root `
             -NonInteractive `
-            -Verbosity detailed
+            -Verbosity normal
 
           if ($LASTEXITCODE -ne 0) {
-            throw "Failed to download SQLite package."
+            throw "Failed to install SQLite NuGet package."
           }
 
-          $package = Join-Path $root `
-            "Stub.System.Data.SQLite.Core.NetFramework.1.0.119"
+          $package = Get-ChildItem $root -Directory |
+            Where-Object {
+              $_.Name -like "Stub.System.Data.SQLite.Core.NetFramework*"
+            } |
+            Select-Object -First 1
 
-          if (-not (Test-Path $package)) {
-            Get-ChildItem $root -Recurse |
-              Select-Object -ExpandProperty FullName
-            throw "SQLite package folder was not created."
+          if (-not $package) {
+            throw "SQLite package folder was not found under $root"
           }
 
-          $provider = Get-ChildItem $package -Recurse `
+          Write-Host "SQLite package folder: $($package.FullName)"
+
+          $provider = Get-ChildItem $package.FullName -Recurse `
             -Filter "System.Data.SQLite.dll" |
             Select-Object -First 1
 
@@ -75,18 +77,43 @@ jobs:
             throw "System.Data.SQLite.dll was not found in the package."
           }
 
-          $providerTarget = `
-            "src/KoaZa/packages/System.Data.SQLite.Core.1.0.119.0/lib/net46"
-
-          New-Item -ItemType Directory -Force `
-            -Path $providerTarget | Out-Null
+          $expected = "src/KoaZa/packages/System.Data.SQLite.Core.1.0.119.0/lib/net46"
+          New-Item -ItemType Directory -Force -Path $expected | Out-Null
 
           Copy-Item $provider.FullName `
-            "$providerTarget/System.Data.SQLite.dll" -Force
+            "$expected/System.Data.SQLite.dll" -Force
 
-          Write-Host "SQLite managed provider installed."
+          Write-Host "Managed SQLite provider copied."
 
-      - name: Restore solution packages
+          $native = Get-ChildItem $package.FullName -Recurse `
+            -Filter "SQLite.Interop.dll"
+
+          if (-not $native) {
+            Write-Host "Package file listing:"
+            Get-ChildItem $package.FullName -Recurse |
+              Select-Object -ExpandProperty FullName
+
+            throw "SQLite.Interop.dll was not found in the package."
+          }
+
+          $x86 = $native |
+            Where-Object { $_.FullName -match '[\\/]x86[\\/]' } |
+            Select-Object -First 1
+
+          $x64 = $native |
+            Where-Object { $_.FullName -match '[\\/]x64[\\/]' } |
+            Select-Object -First 1
+
+          if (-not $x86 -or -not $x64) {
+            Write-Host "Native DLL locations:"
+            $native | ForEach-Object { Write-Host $_.FullName }
+            throw "Could not identify both x86 and x64 SQLite native DLLs."
+          }
+
+          Write-Host "x86 DLL: $($x86.FullName)"
+          Write-Host "x64 DLL: $($x64.FullName)"
+
+      - name: Restore solution
         shell: pwsh
         run: |
           nuget restore "src/KoaZa/KoaZa.sln" -NonInteractive
@@ -108,40 +135,35 @@ jobs:
             throw "MSBuild failed."
           }
 
-      - name: Package SQLite native DLLs
+      - name: Copy SQLite native DLLs
         shell: pwsh
         run: |
           $root = "src/KoaZa/packages"
           $output = "src/KoaZa/bin/Release"
 
-          if (-not (Test-Path "$output/KoaZa.exe")) {
-            throw "KoaZa.exe was not produced."
+          $package = Get-ChildItem $root -Directory |
+            Where-Object {
+              $_.Name -like "Stub.System.Data.SQLite.Core.NetFramework*"
+            } |
+            Select-Object -First 1
+
+          if (-not $package) {
+            throw "SQLite package folder was not found."
           }
 
-          $nativeFiles = Get-ChildItem $root -Recurse `
-            -Filter "SQLite.Interop.dll" `
-            -ErrorAction SilentlyContinue
+          $native = Get-ChildItem $package.FullName -Recurse `
+            -Filter "SQLite.Interop.dll"
 
-          if (-not $nativeFiles) {
-            Get-ChildItem $root -Recurse |
-              Select-Object -ExpandProperty FullName
-            throw "SQLite.Interop.dll was not found in the installed packages."
-          }
-
-          $x86 = $nativeFiles |
+          $x86 = $native |
             Where-Object { $_.FullName -match '[\\/]x86[\\/]' } |
             Select-Object -First 1
 
-          $x64 = $nativeFiles |
+          $x64 = $native |
             Where-Object { $_.FullName -match '[\\/]x64[\\/]' } |
             Select-Object -First 1
 
-          if (-not $x86) {
-            throw "The x86 SQLite.Interop.dll was not found."
-          }
-
-          if (-not $x64) {
-            throw "The x64 SQLite.Interop.dll was not found."
+          if (-not $x86 -or -not $x64) {
+            throw "Required SQLite native DLLs are missing."
           }
 
           New-Item -ItemType Directory -Force `
@@ -156,17 +178,7 @@ jobs:
           Copy-Item $x64.FullName `
             "$output/x64/SQLite.Interop.dll" -Force
 
-          if (-not (Test-Path "$output/x86/SQLite.Interop.dll")) {
-            throw "The x86 native SQLite DLL was not copied."
-          }
-
-          if (-not (Test-Path "$output/x64/SQLite.Interop.dll")) {
-            throw "The x64 native SQLite DLL was not copied."
-          }
-
-          Write-Host "Both SQLite native DLLs were packaged."
-          Get-ChildItem $output -Recurse -Filter "SQLite.Interop.dll" |
-            Select-Object -ExpandProperty FullName
+          Write-Host "SQLite native files copied to Release output."
 
       - name: Prepare portable output
         shell: pwsh
@@ -174,26 +186,27 @@ jobs:
           $source = "src/KoaZa/bin/Release"
           $target = "artifact/KoaZa"
 
-          New-Item -ItemType Directory -Force `
-            -Path $target | Out-Null
+          if (-not (Test-Path "$source/KoaZa.exe")) {
+            throw "KoaZa.exe was not produced."
+          }
 
+          if (-not (Test-Path "$source/System.Data.SQLite.dll")) {
+            throw "System.Data.SQLite.dll is missing from Release output."
+          }
+
+          if (-not (Test-Path "$source/x86/SQLite.Interop.dll")) {
+            throw "x86 SQLite.Interop.dll is missing."
+          }
+
+          if (-not (Test-Path "$source/x64/SQLite.Interop.dll")) {
+            throw "x64 SQLite.Interop.dll is missing."
+          }
+
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
           Copy-Item "$source/*" $target -Recurse -Force
 
           if (Test-Path "README_FA.md") {
             Copy-Item "README_FA.md" $target -Force
-          }
-
-          $requiredOutput = @(
-            "$target/KoaZa.exe",
-            "$target/System.Data.SQLite.dll",
-            "$target/x86/SQLite.Interop.dll",
-            "$target/x64/SQLite.Interop.dll"
-          )
-
-          foreach ($file in $requiredOutput) {
-            if (-not (Test-Path $file)) {
-              throw "Required output file missing: $file"
-            }
           }
 
           Write-Host "Portable output prepared successfully."
