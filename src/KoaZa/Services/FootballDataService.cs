@@ -146,6 +146,7 @@ namespace KoaZa.Services
         public int? AwayGoals { get; set; }
         public string Status { get; set; }
         public string ExternalId { get; set; }
+        public string Referee { get; set; }
     }
 
     public static class FootballDataService
@@ -1507,7 +1508,7 @@ namespace KoaZa.Services
                     return;
                 }
             }
-            if (choice.Id != "OpenLigaDB" && key.Length == 0)
+            if (choice.Id != "OpenLigaDB" && choice.Id != "FootballCharts" && key.Length == 0)
             {
                 MessageBox.Show(this, LocalizationService.T("This provider requires an API key/token.", "این سرویس به کلید API یا توکن نیاز دارد."), LocalizationService.T("API settings", "تنظیمات API"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
@@ -1610,6 +1611,8 @@ namespace KoaZa.Services
             }
             _providerBox = new ComboBox { Padding = new Thickness(6), Margin = new Thickness(0, 0, 8, 0) };
             _providerBox.Items.Add(new ProviderChoice("Auto", LocalizationService.T("Auto fallback (recommended)", "انتخاب خودکار سرویس")));
+            _providerBox.Items.Add(new ProviderChoice("FiveDollarFootball", "5DollarFootballAPI"));
+            _providerBox.Items.Add(new ProviderChoice("FootballCharts", "Football-Charts"));
             _providerBox.Items.Add(new ProviderChoice("OddsPapi", "OddsPapi"));
             _providerBox.Items.Add(new ProviderChoice("Floodlight", "Floodlight"));
             _providerBox.Items.Add(new ProviderChoice("SportsOpenData", "Sports Open Data"));
