@@ -332,6 +332,7 @@ namespace KoaZa
                 // The goal model is shown normally when team and competition history is sufficient;
                 // unsupported corner/card rows remain individually orange and explicitly unavailable.
                 SetMarketRows(probabilities, hasReliableHistory, dataWarning);
+                UpdateMultiMarketPredictions(fixture);
 
                 _database.SavePrediction(fixture.HomeTeam, fixture.AwayTeam, homeRate, awayRate, probabilities);
                 bool usedFallback = homeLeagueMatches.Count < 3 || awayLeagueMatches.Count < 3;
@@ -373,6 +374,14 @@ namespace KoaZa
                 }
                 if (!IsCurrentFixture(fixtureId)) return;
                 StatsText.Text = FootballDataService.SummarizeFixtureDetails(json);
+                MatchStatisticsRecord normalized = fixture.Provider == "FiveDollarFootball" || fixture.Provider == "5DollarFootballAPI"
+                    ? MatchStatisticsParser.ParseFiveDollarOrGeneric(json, fixture)
+                    : MatchStatisticsParser.ParseApiFootball(json, fixture);
+                if (normalized != null)
+                {
+                    _database.SaveMatchStatistics(normalized);
+                    UpdateMultiMarketPredictions(fixture);
+                }
             }
             catch (Exception ex)
             {
@@ -409,6 +418,39 @@ namespace KoaZa
             catch (Exception ex) { MessageBox.Show(this, LocalizationService.IsPersian ? "باز کردن پیوند خبر ناموفق بود. اتصال اینترنت و مرورگر پیش‌فرض را بررسی کن." : ex.Message, LocalizationService.T("Could not open news link", "باز کردن خبر ناموفق بود"), MessageBoxButton.OK, MessageBoxImage.Information); }
         }
 
+
+        private void UpdateMultiMarketPredictions(FixtureRecord fixture)
+        {
+            try
+            {
+                var goals = _database.GetRecentCompletedMatches(fixture.League, 100);
+                if (goals.Count < 10) goals = _database.GetRecentCompletedMatches(null, 100);
+                var stats = _database.GetHistoricalMatchStatistics(fixture.League, fixture.HomeTeam, fixture.AwayTeam, 120);
+                var prediction = MultiMarketPredictionService.Analyze(fixture, goals, stats);
+                var rows = prediction.Markets.Select(m => new MarketRow
+                {
+                    Label = LocalizationService.Market(m.Market, m.Outcome),
+                    Percent = Math.Round(m.Probability * 100, 1),
+                    PercentLabel = m.HasSufficientData
+                        ? (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%"
+                        : LocalizationService.T("Stats unavailable", "آمار کافی نیست"),
+                    HasData = m.HasSufficientData,
+                    BarBrush = m.HasSufficientData ? System.Windows.Media.Brushes.SeaGreen : System.Windows.Media.Brushes.Gray,
+                    Reason = m.Explanation
+                }).ToList();
+                MarketsList.ItemsSource = rows;
+                bool hasGoalData = prediction.Markets.Any(m => (m.Market == "Match result" || m.Market == "Total goals") && m.HasSufficientData);
+                SetMarketChartState(hasGoalData, hasGoalData ? "" : LocalizationService.T(
+                    "Goal estimates have limited historical coverage; event markets are only shown when their own historical samples are sufficient.",
+                    "پوشش داده تاریخی گل محدود است؛ بازارهای آماری فقط وقتی نمایش داده می‌شوند که نمونه تاریخی کافی داشته باشند."));
+                ModelStatusText.Text += LocalizationService.T(
+                    " Multi-market data: ", " داده مدل چندبازاره: ") + prediction.DataQuality;
+            }
+            catch (Exception ex)
+            {
+                ModelStatusText.Text += LocalizationService.T(" Multi-market layer unavailable: ", " لایه چندبازاره در دسترس نیست: ") + ex.Message;
+            }
+        }
 
         private void SetMarketRows(MatchProbabilities probabilities, bool hasSufficientData, string reason)
         {
