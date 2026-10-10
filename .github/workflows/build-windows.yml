@@ -26,55 +26,86 @@ jobs:
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
 
-      - name: Restore NuGet packages
+      - name: Check project files
         shell: pwsh
         run: |
-          nuget restore "src/KoaZa/KoaZa.sln" `
-            -PackagesDirectory "src/KoaZa/packages" `
+          $required = @(
+            "src/KoaZa/KoaZa.sln",
+            "src/KoaZa/KoaZa.csproj",
+            "src/KoaZa/packages.config"
+          )
+
+          foreach ($file in $required) {
+            if (-not (Test-Path $file)) {
+              throw "Required project file is missing: $file"
+            }
+          }
+
+      - name: Install SQLite packages
+        shell: pwsh
+        run: |
+          $root = "src/KoaZa/packages"
+
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+
+          nuget install Stub.System.Data.SQLite.Core.NetFramework `
+            -Version 1.0.119 `
+            -OutputDirectory $root `
             -NonInteractive `
             -Verbosity detailed
 
           if ($LASTEXITCODE -ne 0) {
-            throw "NuGet restore failed."
+            throw "Failed to install the SQLite .NET Framework package."
           }
 
-      - name: Extract SQLite package if needed
-        shell: pwsh
-        run: |
-          $root = "src/KoaZa/packages"
-          $expected = Join-Path $root "System.Data.SQLite.Core.1.0.119.0/lib/net46/System.Data.SQLite.dll"
+          $dll = Get-ChildItem $root -Recurse `
+            -Filter "System.Data.SQLite.dll" `
+            -ErrorAction SilentlyContinue |
+            Select-Object -First 1
 
-          if (-not (Test-Path $expected)) {
-            $nupkg = Get-ChildItem $root -Recurse -Filter "System.Data.SQLite.Core.1.0.119.0.nupkg" |
-              Select-Object -First 1
-
-            if ($nupkg) {
-              $zip = Join-Path $env:RUNNER_TEMP "sqlite-package.zip"
-              $temp = Join-Path $env:RUNNER_TEMP "sqlite-package"
-
-              Copy-Item $nupkg.FullName $zip -Force
-              Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue
-              Expand-Archive -LiteralPath $zip -DestinationPath $temp -Force
-
-              $dll = Get-ChildItem $temp -Recurse -Filter "System.Data.SQLite.dll" |
-                Select-Object -First 1
-
-              if ($dll) {
-                New-Item -ItemType Directory -Force -Path (Split-Path $expected) | Out-Null
-                Copy-Item $dll.FullName $expected -Force
-              }
-            }
-          }
-
-          if (-not (Test-Path $expected)) {
-            Write-Host "SQLite package files:"
+          if (-not $dll) {
+            Write-Host "Installed package contents:"
             Get-ChildItem $root -Recurse -ErrorAction SilentlyContinue |
               Select-Object -ExpandProperty FullName
 
-            throw "System.Data.SQLite.dll is still missing. Check the NuGet package contents and restore log."
+            throw "System.Data.SQLite.dll was not found in the installed package."
           }
 
-          Write-Host "SQLite DLL found: $expected"
+          Write-Host "SQLite DLL found at: $($dll.FullName)"
+
+          $expected = Join-Path $root `
+            "System.Data.SQLite.Core.1.0.119.0/lib/net46/System.Data.SQLite.dll"
+
+          New-Item -ItemType Directory -Force `
+            -Path (Split-Path $expected) | Out-Null
+
+          if ($dll.FullName -ne (Join-Path (Get-Location) $expected)) {
+            Copy-Item $dll.FullName $expected -Force
+          }
+
+          Write-Host "SQLite reference prepared: $expected"
+
+      - name: Restore solution packages
+        shell: pwsh
+        run: |
+          nuget restore "src/KoaZa/KoaZa.sln" `
+            -NonInteractive `
+            -Verbosity normal
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Solution package restore failed."
+          }
+
+      - name: Verify SQLite reference
+        shell: pwsh
+        run: |
+          $dll = "src/KoaZa/packages/System.Data.SQLite.Core.1.0.119.0/lib/net46/System.Data.SQLite.dll"
+
+          if (-not (Test-Path $dll)) {
+            throw "The SQLite DLL required by KoaZa.csproj is missing: $dll"
+          }
+
+          Write-Host "SQLite reference verified."
 
       - name: Build Release
         shell: pwsh
@@ -86,16 +117,27 @@ jobs:
             /verbosity:minimal
 
           if ($LASTEXITCODE -ne 0) {
-            throw "MSBuild failed."
+            throw "MSBuild failed. Check the build output above."
           }
 
-      - name: Prepare artifact
+      - name: Prepare build artifact
         shell: pwsh
         run: |
           $source = "src/KoaZa/bin/Release"
           $target = "artifact/KoaZa"
 
-          if (-not (Test-Path "$source/KoaZa.exe")) {
+          if (-not (Test-Path $source)) {
+            throw "Release output directory was not created: $source"
+          }
+
+          $exe = Get-ChildItem $source -Filter "KoaZa.exe" `
+            -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+
+          if (-not $exe) {
+            Get-ChildItem $source -Recurse |
+              Select-Object -ExpandProperty FullName
+
             throw "KoaZa.exe was not produced."
           }
 
@@ -106,7 +148,11 @@ jobs:
             Copy-Item "README_FA.md" $target -Force
           }
 
-      - name: Upload build artifact
+          Write-Host "Build files prepared:"
+          Get-ChildItem $target -Recurse |
+            Select-Object -ExpandProperty FullName
+
+      - name: Upload Windows build
         uses: actions/upload-artifact@v4
         with:
           name: KoaZa-Windows-Build
