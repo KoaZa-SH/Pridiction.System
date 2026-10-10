@@ -67,6 +67,7 @@
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
+              <TextBlock Text="Corner and card probabilities require historical match statistics; this model currently calculates goal markets." TextWrapping="Wrap" Foreground="#7A8980" FontSize="11" Margin="0,2,0,6"/>
               <Separator Margin="0,8"/>
               <TextBlock Text="Match statistics &amp; events / آمار و رویدادهای مسابقه" FontSize="14" FontWeight="Bold" Margin="0,4,0,6"/>
               <TextBlock x:Name="StatsText" Text="Select a match to load statistics, cards, fouls, corners and events." TextWrapping="Wrap" Foreground="#405449" FontSize="12"/>
