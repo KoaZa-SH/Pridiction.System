@@ -1462,6 +1462,7 @@ namespace KoaZa.Services
         private readonly TextBox _leagueBox;
         private readonly TextBox _seasonBox;
         private readonly TextBox _startDateBox;
+        private readonly TextBox _endDateBox;
         private readonly DataGrid _grid;
         private readonly TextBlock _status;
 
@@ -1479,16 +1480,18 @@ namespace KoaZa.Services
             var top = new Grid { Margin = new Thickness(0, 0, 0, 12) };
             top.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             top.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.35, GridUnitType.Star) });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.95, GridUnitType.Star) });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.58, GridUnitType.Star) });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.25, GridUnitType.Star) });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.9, GridUnitType.Star) });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.55, GridUnitType.Star) });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.85, GridUnitType.Star) });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.85, GridUnitType.Star) });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             string[] fieldLabels = {
                 LocalizationService.T("Provider / سرویس", "سرویس دریافت"),
                 LocalizationService.T("League or tournament ID", "شناسه لیگ یا تورنمنت"),
                 LocalizationService.T("Season / فصل", "فصل"),
                 LocalizationService.T("From date / از تاریخ", "از تاریخ"),
+                LocalizationService.T("To date / تا تاریخ", "تا تاریخ"),
                 LocalizationService.T("Action / اجرا", "اجرا")
             };
             for (int i = 0; i < fieldLabels.Length; i++)
@@ -1515,11 +1518,13 @@ namespace KoaZa.Services
             Grid.SetColumn(_leagueBox, 1); Grid.SetRow(_leagueBox, 1); top.Children.Add(_leagueBox);
             _seasonBox = new TextBox { Text = DateTime.UtcNow.Month >= 7 ? DateTime.UtcNow.Year.ToString() : (DateTime.UtcNow.Year - 1).ToString(), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "Season year (for providers that require it)" };
             Grid.SetColumn(_seasonBox, 2); Grid.SetRow(_seasonBox, 1); top.Children.Add(_seasonBox);
-            _startDateBox = new TextBox { Text = DateTime.UtcNow.Date.AddDays(-30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "From date, format yyyy-MM-dd. Imports this date through today, plus the next 7 days." };
+            _startDateBox = new TextBox { Text = DateTime.UtcNow.Date.AddDays(-30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "Start date, format yyyy-MM-dd." };
             Grid.SetColumn(_startDateBox, 3); Grid.SetRow(_startDateBox, 1); top.Children.Add(_startDateBox);
-            var fetch = new Button { Content = "Fetch & save from date", Padding = new Thickness(14, 8, 14, 8), Background = new SolidColorBrush(Color.FromRgb(22, 134, 91)), Foreground = Brushes.White, BorderThickness = new Thickness(0), ToolTip = "Fetch fixtures/results from the selected start date and save them in the local database." };
+            _endDateBox = new TextBox { Text = DateTime.UtcNow.Date.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "End date, format yyyy-MM-dd. Maximum: 7 days in the future." };
+            Grid.SetColumn(_endDateBox, 4); Grid.SetRow(_endDateBox, 1); top.Children.Add(_endDateBox);
+            var fetch = new Button { Content = "Fetch & save from date", Padding = new Thickness(14, 8, 14, 8), Background = new SolidColorBrush(Color.FromRgb(22, 134, 91)), Foreground = Brushes.White, BorderThickness = new Thickness(0), ToolTip = "Fetch fixtures/results between the selected dates and save them locally." };
             fetch.Content = LocalizationService.T("Fetch & save", "دریافت و ذخیره");
-            fetch.Click += Fetch_Click; Grid.SetColumn(fetch, 4); Grid.SetRow(fetch, 1); top.Children.Add(fetch);
+            fetch.Click += Fetch_Click; Grid.SetColumn(fetch, 5); Grid.SetRow(fetch, 1); top.Children.Add(fetch);
             root.Children.Add(top); Grid.SetRow(top, 0);
 
             _grid = new DataGrid { IsReadOnly = true, AutoGenerateColumns = false, CanUserAddRows = false, Margin = new Thickness(0, 0, 0, 10) };
@@ -1556,6 +1561,7 @@ namespace KoaZa.Services
             var choice = _providerBox.SelectedItem as ProviderChoice;
             int season;
             DateTime startDate;
+            DateTime endDate;
             if (choice == null || !int.TryParse(_seasonBox.Text.Trim(), out season) || season < 2000 || season > 2100)
             {
                 MessageBox.Show(this, LocalizationService.T("Enter a valid season year.", "سال فصل معتبر وارد کن."), LocalizationService.T("Fixture import", "دریافت مسابقات"), MessageBoxButton.OK, MessageBoxImage.Information);
@@ -1563,7 +1569,13 @@ namespace KoaZa.Services
             }
             if (!DateTime.TryParseExact(_startDateBox.Text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out startDate) || startDate.Date > DateTime.UtcNow.Date)
             {
-                MessageBox.Show(this, LocalizationService.T("Enter a start date in yyyy-MM-dd format that is not in the future.", "تاریخ شروع را با قالب yyyy-MM-dd وارد کن؛ تاریخ نباید در آینده باشد."), LocalizationService.T("Fixture import", "دریافت مسابقات"), MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(this, LocalizationService.T("Enter a valid From date in yyyy-MM-dd format; it cannot be in the future.", "تاریخ «از» را با قالب yyyy-MM-dd وارد کن؛ تاریخ شروع نباید در آینده باشد."), LocalizationService.T("Fixture import", "دریافت مسابقات"), MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            if (!DateTime.TryParseExact(_endDateBox.Text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out endDate) ||
+                endDate.Date < startDate.Date || endDate.Date > DateTime.UtcNow.Date.AddDays(7))
+            {
+                MessageBox.Show(this, LocalizationService.T("Enter a valid To date on or after the From date and no more than 7 days in the future.", "تاریخ «تا» باید معتبر، هم‌زمان یا بعد از تاریخ شروع و حداکثر تا ۷ روز آینده باشد."), LocalizationService.T("Fixture import", "دریافت مسابقات"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             var fetchButton = sender as Button;
@@ -1573,15 +1585,15 @@ namespace KoaZa.Services
             {
                 _status.Text = LocalizationService.T("Requesting fixture data. Please wait...", "در حال دریافت مسابقات...");
                 _status.Text = LocalizationService.IsPersian
-                    ? "در حال دریافت نتایج از " + startDate.ToString("yyyy-MM-dd") + " تا امروز و بازی‌های ۷ روز آینده..."
-                    : "Fetching fixtures/results from " + startDate.ToString("yyyy-MM-dd") + " through today, plus the next 7 days...";
+                    ? "در حال دریافت مسابقات از " + startDate.ToString("yyyy-MM-dd") + " تا " + endDate.ToString("yyyy-MM-dd") + "..."
+                    : "Fetching fixtures/results from " + startDate.ToString("yyyy-MM-dd") + " through " + endDate.ToString("yyyy-MM-dd") + "...";
                 var records = await System.Threading.Tasks.Task.Run(() =>
-                    FootballDataService.FetchFromDate(choice.Id, competition, season, startDate));
+                    FootballDataService.FetchFromDate(choice.Id, competition, season, startDate, endDate));
                 DatabaseServiceProxy.SaveFixtures(records);
                 _grid.ItemsSource = records.Select(r => new FixtureImportRow(r)).ToList();
                 _status.Text = LocalizationService.IsPersian
-                    ? records.Count + " مسابقه از " + startDate.ToString("yyyy-MM-dd") + " تا امروز (به‌علاوه ۷ روز آینده) دریافت و در پایگاه داده محلی ذخیره شد. داده‌های قبلی پاک نمی‌شوند؛ پوشش آمار به سرویس و سهمیه وابسته است."
-                    : "Received and saved " + records.Count + " fixtures/results from " + startDate.ToString("yyyy-MM-dd") + " through today plus 7 upcoming days. Existing local records are retained; detailed-stat coverage depends on provider and quota.";
+                    ? records.Count + " مسابقه از " + startDate.ToString("yyyy-MM-dd") + " تا " + endDate.ToString("yyyy-MM-dd") + " دریافت و در پایگاه داده محلی ذخیره شد. داده‌های قبلی پاک نمی‌شوند؛ پوشش به سرویس و سهمیه وابسته است."
+                    : "Received and saved " + records.Count + " fixtures/results from " + startDate.ToString("yyyy-MM-dd") + " through " + endDate.ToString("yyyy-MM-dd") + ". Existing local records are retained; coverage depends on provider and quota.";
             }
             catch (Exception ex) { _status.Text = LocalizationService.T("Import failed: ", "دریافت ناموفق بود: ") + ex.Message; }
             finally { if (fetchButton != null) fetchButton.IsEnabled = true; }
