@@ -777,6 +777,7 @@ namespace KoaZa.Services
                 if (competition == "LIGUE1" || competition == "FL1") return "FL1";
             }
             if (provider == "OpenLigaDB" && (competition == "BUNDESLIGA" || competition == "BL1")) return "bl1";
+            if ((provider == "FootballCharts" || provider == "Football-Charts") && (competition == "EPL" || competition == "PL")) return "premier";
             return null;
         }
 
