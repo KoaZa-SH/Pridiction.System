@@ -924,46 +924,66 @@ namespace KoaZa.Services
             {
                 try
                 {
-                    string url = "https://footballcharts-backend.onrender.com/api/v1/leagues/" + Uri.EscapeDataString(slug) + "/" + kind + "/?season=" + Uri.EscapeDataString(seasonValue);
+                    string url = "https://footballcharts-backend.onrender.com/api/v1/leagues/" + Uri.EscapeDataString(slug) + "/" + kind + "/";
+                    if (kind == "results") url += "?season=" + Uri.EscapeDataString(seasonValue);
                     var request = (HttpWebRequest)WebRequest.Create(url);
                     request.Method = "GET"; request.Accept = "application/json"; request.Timeout = 25000; request.ReadWriteTimeout = 25000;
                     if (!string.IsNullOrWhiteSpace(key)) request.Headers[HttpRequestHeader.Authorization] = "Bearer " + key;
                     var parsed = new JavaScriptSerializer().DeserializeObject(ReadResponse(request));
                     var root = parsed as Dictionary<string, object>;
-                    var rows = GetList(root, "matches");
-                    if (rows.Count == 0) rows = GetList(root, "results");
-                    if (rows.Count == 0) rows = GetList(root, "fixtures");
+                    var rows = new List<object>();
+                    if (root != null)
+                    {
+                        rows = GetList(root, "matches");
+                        if (rows.Count == 0) rows = GetList(root, "results");
+                        if (rows.Count == 0) rows = GetList(root, "fixtures");
+                        if (rows.Count == 0) rows = GetList(root, "data");
+                        if (rows.Count == 0) rows = GetList(root, "response");
+                    }
+                    else
+                    {
+                        var topLevel = parsed as System.Collections.ArrayList;
+                        if (topLevel != null) rows = topLevel.Cast<object>().ToList();
+                    }
                     foreach (var item in rows)
                     {
-                        string home = GetString(item, "home_team", GetString(item, "homeTeam", GetString(item, "home", "")));
-                        string away = GetString(item, "away_team", GetString(item, "awayTeam", GetString(item, "away", "")));
-                        if (home.IndexOf("Dictionary", StringComparison.OrdinalIgnoreCase) >= 0) home = GetString(GetMap(item, "home_team"), "name", GetString(GetMap(item, "homeTeam"), "name", ""));
-                        if (away.IndexOf("Dictionary", StringComparison.OrdinalIgnoreCase) >= 0) away = GetString(GetMap(item, "away_team"), "name", GetString(GetMap(item, "awayTeam"), "name", ""));
+                        string home = GetString(item, "home_team", GetString(item, "homeTeam", GetString(item, "home_team_name", GetString(item, "home", ""))));
+                        string away = GetString(item, "away_team", GetString(item, "awayTeam", GetString(item, "away_team_name", GetString(item, "away", ""))));
+                        if (home.IndexOf("Dictionary", StringComparison.OrdinalIgnoreCase) >= 0)
+                            home = GetString(GetMap(item, "home_team"), "name", GetString(GetMap(item, "homeTeam"), "name", GetString(GetMap(item, "home"), "name", "")));
+                        if (away.IndexOf("Dictionary", StringComparison.OrdinalIgnoreCase) >= 0)
+                            away = GetString(GetMap(item, "away_team"), "name", GetString(GetMap(item, "awayTeam"), "name", GetString(GetMap(item, "away"), "name", "")));
                         if (home.Length == 0) home = GetString(GetMap(item, "homeTeam"), "name", "");
                         if (away.Length == 0) away = GetString(GetMap(item, "awayTeam"), "name", "");
                         if (home.Length == 0 || away.Length == 0) continue;
-                        string score = GetString(item, "score", GetString(item, "ft_result", GetString(item, "result", "")));
-                        int? hg = GetNullableInt(item, "homeGoals"), ag = GetNullableInt(item, "awayGoals");
-                        if ((!hg.HasValue || !ag.HasValue) && score.Contains(":"))
+
+                        var score = GetMap(item, "score");
+                        int? hg = GetNullableInt(item, "homeGoals") ?? GetNullableInt(item, "home_goals") ?? GetNullableInt(item, "home_score") ?? GetNullableInt(score, "home");
+                        int? ag = GetNullableInt(item, "awayGoals") ?? GetNullableInt(item, "away_goals") ?? GetNullableInt(item, "away_score") ?? GetNullableInt(score, "away");
+                        string scoreText = GetString(item, "score", GetString(item, "ft_result", GetString(item, "result", "")));
+                        if ((!hg.HasValue || !ag.HasValue) && scoreText.Contains(":"))
                         {
-                            var parts = score.Split(':'); int h, a;
+                            var parts = scoreText.Split(':'); int h, a;
                             if (parts.Length == 2 && int.TryParse(parts[0].Trim(), out h) && int.TryParse(parts[1].Trim(), out a)) { hg = h; ag = a; }
                         }
+                        string leagueName = GetString(item, "league", "");
+                        if (leagueName.IndexOf("Dictionary", StringComparison.OrdinalIgnoreCase) >= 0 || leagueName.Length == 0)
+                            leagueName = GetString(GetMap(item, "league"), "name", GetString(item, "competition", slug));
                         output.Add(new FixtureRecord
                         {
                             Provider = "FootballCharts",
-                            League = GetString(item, "league", GetString(item, "competition", slug)),
-                            KickoffUtc = GetString(item, "date", GetString(item, "kickoff", GetString(item, "utcDate", GetString(item, "match_date", "")))),
+                            League = leagueName,
+                            KickoffUtc = GetString(item, "kickoff_utc", GetString(item, "date", GetString(item, "kickoff", GetString(item, "utcDate", GetString(item, "match_date", GetString(item, "datetime", "")))))),
                             HomeTeam = home, AwayTeam = away, HomeGoals = hg, AwayGoals = ag,
                             Status = GetString(item, "status", kind == "results" ? "FINISHED" : "SCHEDULED"),
-                            ExternalId = GetString(item, "slug", GetString(item, "id", ""))
+                            ExternalId = GetString(item, "slug", GetString(item, "id", GetString(item, "footballcharts_id", "")))
                         });
                     }
                 }
                 catch (Exception ex) { last = ex; }
             }
             if (output.Count > 0) return output;
-            throw new InvalidOperationException("Football-Charts returned no compatible match rows. Check the league slug and season; this API does not provide corner, card or shot statistics.", last);
+            throw new InvalidOperationException("Football-Charts returned no compatible match rows. Check the league slug and season; this source provides results and its own model probabilities, not corner/card/shot statistics.", last);
         }
 
         private static string ReadResponse(HttpWebRequest request)
