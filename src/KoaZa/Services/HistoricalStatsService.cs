@@ -89,6 +89,7 @@ namespace KoaZa.Services
             var home = Map(Get(teams, "home"));
             var away = Map(Get(teams, "away"));
             var stats = List(Get(item, "statistics"));
+            if (stats.Count == 0) stats = List(Get(Get(root, "statisticsPayload"), "response"));
             foreach (var teamStats in stats)
             {
                 var team = Map(Get(teamStats, "team"));
@@ -182,6 +183,7 @@ namespace KoaZa.Services
             var item = List(Get(root, "response")).FirstOrDefault();
             if (item == null) item = Get(root, "data", root);
             var events = List(Get(item, "events"));
+            if (events.Count == 0) events = List(Get(Get(root, "eventsPayload"), "response"));
             int index = 0;
             foreach (var ev in events)
             {
@@ -201,7 +203,11 @@ namespace KoaZa.Services
         private static MatchStatisticsRecord NewRecord(FixtureRecord f) {
             return new MatchStatisticsRecord { Provider=f.Provider, ExternalId=f.ExternalId, League=f.League,
                 KickoffUtc=f.KickoffUtc, HomeTeam=f.HomeTeam, AwayTeam=f.AwayTeam, HomeGoals=f.HomeGoals,
-                AwayGoals=f.AwayGoals, DataSource=f.Provider, UpdatedUtc=DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) };
+                AwayGoals=f.AwayGoals, Referee=f.Referee,
+                HomeCorners=f.HomeCorners, AwayCorners=f.AwayCorners,
+                HomeShotsOnTarget=f.HomeShotsOnTarget, AwayShotsOnTarget=f.AwayShotsOnTarget,
+                HomeYellowCards=f.HomeYellowCards, AwayYellowCards=f.AwayYellowCards,
+                DataSource=f.Provider, UpdatedUtc=DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) };
         }
         private static Dictionary<string, object> Deserialize(string json) {
             return Map(new JavaScriptSerializer { MaxJsonLength = int.MaxValue }.DeserializeObject(json));
