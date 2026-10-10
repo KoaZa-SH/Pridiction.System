@@ -113,7 +113,11 @@ namespace KoaZa.Services
             if (provider == "ApiFootball" || provider == "ApiSports") return FetchApiFootball(league, season);
             if (provider == "FootballData") return FetchFootballData(league, season);
             if (provider == "OpenLigaDB") return FetchOpenLiga(league, season);
-            throw new InvalidOperationException("Select a supported data provider.");
+            if (provider == "OddsPapi") return FetchOddsPapi(league);
+            if (provider == "SportsAPI360") return FetchSportsApi360(league);
+            var custom = ApiProviderStore.Load().FirstOrDefault(p => p.Enabled && p.Provider == provider && !string.IsNullOrWhiteSpace(p.BaseUrl));
+            if (custom != null) return FetchCustom(custom);
+            throw new InvalidOperationException("This provider is configured but does not yet have a built-in adapter. For Floodlight or Sports Open Data, enter the provider's HTTPS fixtures endpoint or use a custom provider with the documented normalized JSON format.");
         }
 
 
@@ -148,7 +152,7 @@ namespace KoaZa.Services
 
         private static string MapLeague(string provider, string competition)
         {
-            if (provider == "ApiFootball")
+            if (provider == "ApiFootball" || provider == "ApiSports")
             {
                 if (competition == "EPL" || competition == "PL") return "39";
                 if (competition == "LALIGA" || competition == "PD") return "140";
@@ -167,6 +171,128 @@ namespace KoaZa.Services
             }
             if (provider == "OpenLigaDB" && (competition == "BUNDESLIGA" || competition == "BL1")) return "bl1";
             return null;
+        }
+
+        private static List<FixtureRecord> FetchOddsPapi(string tournamentId)
+        {
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "OddsPapi" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+            if (configs.Count == 0) throw new InvalidOperationException("Add an enabled OddsPapi API key in API Settings.");
+            Exception last = null;
+            foreach (var config in configs)
+            {
+                try
+                {
+                    string url = "https://api.oddspapi.io/v4/fixtures?tournamentId=" + Uri.EscapeDataString(tournamentId) +
+                        "&language=" + (LocalizationService.IsPersian ? "fa" : "en") + "&apiKey=" + Uri.EscapeDataString(config.Key);
+                    object root = new JavaScriptSerializer().DeserializeObject(Request(url, null, null));
+                    var rows = root as System.Collections.ArrayList;
+                    if (rows == null) throw new InvalidOperationException("OddsPapi returned an unexpected fixtures response.");
+                    var output = new List<FixtureRecord>();
+                    foreach (var item in rows)
+                    {
+                        output.Add(new FixtureRecord {
+                            Provider = "OddsPapi",
+                            League = GetString(item, "tournamentName", tournamentId),
+                            KickoffUtc = GetString(item, "startTime", ""),
+                            HomeTeam = GetString(item, "participant1Name", "Home"),
+                            AwayTeam = GetString(item, "participant2Name", "Away"),
+                            Status = GetString(item, "statusName", ""),
+                            ExternalId = GetString(item, "fixtureId", "")
+                        });
+                    }
+                    return output;
+                }
+                catch (Exception ex) { last = ex; }
+            }
+            throw new InvalidOperationException("OddsPapi fixture request failed. Check tournament ID, API key and quota.", last);
+        }
+
+        private static List<FixtureRecord> FetchSportsApi360(string tournamentId)
+        {
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "SportsAPI360" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+            if (configs.Count == 0) throw new InvalidOperationException("Add an enabled SportsAPI360 API key in API Settings.");
+            var output = new List<FixtureRecord>();
+            Exception last = null;
+            foreach (var config in configs)
+            {
+                try
+                {
+                    for (int day = 0; day < 7; day++)
+                    {
+                        string date = DateTime.UtcNow.Date.AddDays(day).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                        string url = "https://apiv3.sportsapi360.com/football/api/v1/matches/schedule?date=" + date;
+                        object parsed = new JavaScriptSerializer().DeserializeObject(Request(url, "x-app-key", config.Key));
+                        var root = parsed as Dictionary<string, object>;
+                        if (root == null) continue;
+                        foreach (var tournament in GetList(root, "response"))
+                        {
+                            string tid = GetString(tournament, "tournamentId", "");
+                            string leagueName = GetString(GetMap(tournament, "tournament"), "name", tournamentId);
+                            if (!string.IsNullOrWhiteSpace(tournamentId) && !tournamentId.Equals("all", StringComparison.OrdinalIgnoreCase) &&
+                                !tournamentId.Equals(tid, StringComparison.OrdinalIgnoreCase) &&
+                                !tournamentId.Equals(leagueName, StringComparison.OrdinalIgnoreCase)) continue;
+                            foreach (var match in GetList(tournament, "matches"))
+                            {
+                                long stamp;
+                                string kickoff = long.TryParse(GetString(match, "startTimestamp", ""), out stamp)
+                                    ? DateTimeOffset.FromUnixTimeSeconds(stamp).UtcDateTime.ToString("o", CultureInfo.InvariantCulture) : "";
+                                output.Add(new FixtureRecord {
+                                    Provider = "SportsAPI360",
+                                    League = GetString(GetMap(match, "tournament"), "name", leagueName),
+                                    KickoffUtc = kickoff,
+                                    HomeTeam = GetString(GetMap(match, "homeTeam"), "name", "Home"),
+                                    AwayTeam = GetString(GetMap(match, "awayTeam"), "name", "Away"),
+                                    HomeGoals = GetNullableInt(GetMap(match, "homeScore"), "current"),
+                                    AwayGoals = GetNullableInt(GetMap(match, "awayScore"), "current"),
+                                    Status = GetString(GetMap(match, "status"), "type", ""),
+                                    ExternalId = GetString(match, "id", "")
+                                });
+                            }
+                        }
+                    }
+                    return output;
+                }
+                catch (Exception ex) { last = ex; }
+            }
+            if (output.Count > 0) return output;
+            throw new InvalidOperationException("SportsAPI360 schedule request failed. Check API key and tournament ID (or use 'all').", last);
+        }
+
+        // Custom endpoints should return a JSON array, or an object containing response/matches/fixtures/data.
+        // Each row should provide homeTeam, awayTeam, date (or kickoff/date fields), and optional league/homeGoals/awayGoals.
+        private static List<FixtureRecord> FetchCustom(ApiProviderConfig config)
+        {
+            string json = Request(config.BaseUrl, string.IsNullOrWhiteSpace(config.HeaderName) ? "x-api-key" : config.HeaderName, config.Key);
+            object parsed = new JavaScriptSerializer().DeserializeObject(json);
+            var rootMap = parsed as Dictionary<string, object>;
+            object rowsObject = parsed;
+            if (rootMap != null)
+            {
+                rowsObject = rootMap.ContainsKey("response") ? rootMap["response"] :
+                    rootMap.ContainsKey("matches") ? rootMap["matches"] :
+                    rootMap.ContainsKey("fixtures") ? rootMap["fixtures"] :
+                    rootMap.ContainsKey("data") ? rootMap["data"] : parsed;
+            }
+            var rows = rowsObject as System.Collections.ArrayList;
+            if (rows == null) throw new InvalidOperationException("Custom provider response must be a JSON array or contain response/matches/fixtures/data array.");
+            var output = new List<FixtureRecord>();
+            foreach (var item in rows)
+            {
+                var home = GetString(item, "homeTeam", GetString(GetMap(item, "homeTeam"), "name", ""));
+                var away = GetString(item, "awayTeam", GetString(GetMap(item, "awayTeam"), "name", ""));
+                if (string.IsNullOrWhiteSpace(home) || string.IsNullOrWhiteSpace(away)) continue;
+                output.Add(new FixtureRecord {
+                    Provider = config.Provider,
+                    League = GetString(item, "league", GetString(item, "competition", config.Provider)),
+                    KickoffUtc = GetString(item, "date", GetString(item, "kickoff", GetString(item, "utcDate", ""))),
+                    HomeTeam = home, AwayTeam = away,
+                    HomeGoals = GetNullableInt(item, "homeGoals"),
+                    AwayGoals = GetNullableInt(item, "awayGoals"),
+                    Status = GetString(item, "status", ""),
+                    ExternalId = GetString(item, "id", "")
+                });
+            }
+            return output;
         }
 
         private static List<FixtureRecord> FetchApiFootball(string league, int season)
