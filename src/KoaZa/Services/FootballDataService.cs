@@ -555,7 +555,9 @@ namespace KoaZa.Services
             _providerBox.SelectedIndex = 0;
             _providerBox.SelectionChanged += ProviderBox_SelectionChanged;
             Grid.SetColumn(_providerBox, 0); entry.Children.Add(_providerBox);
-            _keyBox = new TextBox { Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "API key / token" };
+            _keyBox = new TextBox { Text = "API key / token", Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "API key / token" };
+            _keyBox.GotKeyboardFocus += (s, e) => { if (_keyBox.Text == "API key / token") _keyBox.Text = ""; };
+            _keyBox.LostKeyboardFocus += (s, e) => { if (string.IsNullOrWhiteSpace(_keyBox.Text)) _keyBox.Text = "API key / token"; };
             Grid.SetColumn(_keyBox, 1); entry.Children.Add(_keyBox);
             _customNameBox = new TextBox { Text = "Custom name", Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "Custom provider name" };
             _customNameBox.GotKeyboardFocus += (s, e) => { if (_customNameBox.Text == "Custom name") _customNameBox.Text = ""; };
@@ -598,7 +600,7 @@ namespace KoaZa.Services
             var choice = _providerBox.SelectedItem as ProviderChoice;
             if (choice == null) return;
             _keyBox.IsEnabled = choice.Id != "OpenLigaDB";
-            _keyBox.Text = "";
+            _keyBox.Text = "API key / token";
             _customNameBox.Text = "Custom name";
             _baseUrlBox.Text = "HTTPS endpoint";
             _headerBox.Text = "x-api-key";
@@ -611,7 +613,7 @@ namespace KoaZa.Services
         {
             var choice = _providerBox.SelectedItem as ProviderChoice;
             if (choice == null) return;
-            string key = (_keyBox.Text ?? "").Trim();
+            string key = (_keyBox.Text == "API key / token" ? "" : (_keyBox.Text ?? "").Trim());
             string providerId = choice.Id;
             string baseUrl = (_baseUrlBox.Text == "HTTPS endpoint" ? "" : (_baseUrlBox.Text ?? "").Trim());
             string headerName = string.IsNullOrWhiteSpace(_headerBox.Text) ? "x-api-key" : _headerBox.Text.Trim();
