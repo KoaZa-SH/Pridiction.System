@@ -179,6 +179,40 @@ namespace KoaZa.Data
             }
         }
 
+        public void ReplaceMatchEvents(string provider, string externalId, IEnumerable<MatchEventRecord> events)
+        {
+            if (string.IsNullOrWhiteSpace(provider) || string.IsNullOrWhiteSpace(externalId)) return;
+            var rows = (events ?? Enumerable.Empty<MatchEventRecord>()).ToList();
+            using (var con = new SQLiteConnection(_connectionString))
+            {
+                con.Open();
+                using (var tx = con.BeginTransaction())
+                {
+                    using (var delete = new SQLiteCommand("DELETE FROM MatchEvents WHERE Provider=@p AND ExternalId=@id;", con, tx))
+                    {
+                        delete.Parameters.AddWithValue("@p", provider); delete.Parameters.AddWithValue("@id", externalId);
+                        delete.ExecuteNonQuery();
+                    }
+                    foreach (var e in rows)
+                    {
+                        using (var cmd = new SQLiteCommand("INSERT INTO MatchEvents (Provider,ExternalId,EventIndex,Minute,Team,Player,Assist,Type,Detail) VALUES (@p,@id,@i,@m,@t,@player,@assist,@type,@detail);", con, tx))
+                        {
+                            cmd.Parameters.AddWithValue("@p", provider); cmd.Parameters.AddWithValue("@id", externalId);
+                            cmd.Parameters.AddWithValue("@i", e.EventIndex);
+                            cmd.Parameters.AddWithValue("@m", e.Minute.HasValue ? (object)e.Minute.Value : DBNull.Value);
+                            cmd.Parameters.AddWithValue("@t", (object)e.Team ?? DBNull.Value);
+                            cmd.Parameters.AddWithValue("@player", (object)e.Player ?? DBNull.Value);
+                            cmd.Parameters.AddWithValue("@assist", (object)e.Assist ?? DBNull.Value);
+                            cmd.Parameters.AddWithValue("@type", (object)e.Type ?? DBNull.Value);
+                            cmd.Parameters.AddWithValue("@detail", (object)e.Detail ?? DBNull.Value);
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                    tx.Commit();
+                }
+            }
+        }
+
         public List<MatchStatisticsRecord> GetRecentMatchStatistics(string league, int limit)
         {
             var rows = new List<MatchStatisticsRecord>();
