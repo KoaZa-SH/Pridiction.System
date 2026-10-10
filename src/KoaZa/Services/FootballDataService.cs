@@ -1039,7 +1039,7 @@ namespace KoaZa.Services
                 "For Floodlight, Sports Open Data or custom providers, configure the HTTPS fixtures endpoint in API Settings.";
         }
 
-        private void Fetch_Click(object sender, RoutedEventArgs e)
+        private async void Fetch_Click(object sender, RoutedEventArgs e)
         {
             var choice = _providerBox.SelectedItem as ProviderChoice;
             int season;
@@ -1048,12 +1048,15 @@ namespace KoaZa.Services
                 MessageBox.Show(this, LocalizationService.T("Enter a valid season year.", "سال فصل معتبر وارد کن."), LocalizationService.T("Fixture import", "دریافت مسابقات"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
+            var fetchButton = sender as Button;
+            if (fetchButton != null) fetchButton.IsEnabled = false;
+            string competition = _leagueBox.Text.Trim();
             try
             {
                 _status.Text = LocalizationService.T("Requesting fixture data. Please wait...", "در حال دریافت مسابقات...");
-                var records = choice.Id == "Auto"
+                var records = await System.Threading.Tasks.Task.Run(() => choice.Id == "Auto"
                     ? FootballDataService.FetchAllUpcoming(season)
-                    : FootballDataService.Fetch(choice.Id, _leagueBox.Text.Trim(), season);
+                    : FootballDataService.Fetch(choice.Id, competition, season));
                 DatabaseServiceProxy.SaveFixtures(records);
                 _grid.ItemsSource = records.Select(r => new FixtureImportRow(r)).ToList();
                 _status.Text = LocalizationService.IsPersian
@@ -1061,6 +1064,7 @@ namespace KoaZa.Services
                     : "Received and saved " + records.Count + " fixtures across competitions covered by the enabled providers. Coverage depends on provider support and quota.";
             }
             catch (Exception ex) { _status.Text = LocalizationService.T("Import failed: ", "دریافت ناموفق بود: ") + ex.Message; }
+            finally { if (fetchButton != null) fetchButton.IsEnabled = true; }
         }
 
         private sealed class FixtureImportRow
