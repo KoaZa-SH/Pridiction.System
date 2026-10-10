@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Diagnostics;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -173,6 +174,7 @@ namespace KoaZa
         private void AnalyzeFixture(FixtureRecord fixture)
         {
             MatchTitleText.Text = LocalizationService.Team(fixture.HomeTeam) + LocalizationService.T(" vs ", " در برابر ") + LocalizationService.Team(fixture.AwayTeam);
+            LoadFixtureInsights(fixture);
             HomeChartTeamText.Text = LocalizationService.T("HOME: ", "میزبان: ") + LocalizationService.Team(fixture.HomeTeam);
             AwayChartTeamText.Text = LocalizationService.T("AWAY: ", "میهمان: ") + LocalizationService.Team(fixture.AwayTeam);
             MarketsList.ItemsSource = null;
@@ -223,6 +225,52 @@ namespace KoaZa
             {
                 ModelStatusText.Text = LocalizationService.T("Analysis failed: ", "خطا در تحلیل: ") + ex.Message;
             }
+        }
+
+        private void LoadFixtureInsights(FixtureRecord fixture)
+        {
+            StatsText.Text = LocalizationService.T("Loading match statistics...", "در حال دریافت آمار مسابقه...");
+            NewsStatusText.Text = LocalizationService.T("Searching current news...", "در حال جست‌وجوی اخبار مرتبط...");
+            NewsList.ItemsSource = null;
+
+            try
+            {
+                string json = _database.GetFixtureDetails(fixture.Provider, fixture.ExternalId);
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    json = FootballDataService.FetchFixtureDetails(fixture);
+                    _database.SaveFixtureDetails(fixture.Provider, fixture.ExternalId, json);
+                }
+                StatsText.Text = FootballDataService.SummarizeFixtureDetails(json);
+            }
+            catch (Exception ex)
+            {
+                StatsText.Text = LocalizationService.T(
+                    "Detailed stats are unavailable for this provider/match, or the API plan does not cover them: ",
+                    "آمار تفصیلی برای این سرویس/مسابقه در دسترس نیست یا اشتراک آن را پوشش نمی‌دهد: ") + ex.Message;
+            }
+
+            try
+            {
+                var news = FootballDataService.FetchMatchNews(fixture.HomeTeam, fixture.AwayTeam, fixture.League);
+                NewsList.ItemsSource = news;
+                NewsStatusText.Text = news.Count == 0
+                    ? LocalizationService.T("No matching headlines found in the current news feed.", "در خبرخوان فعلی خبر مرتبطی پیدا نشد.")
+                    : LocalizationService.T("Headlines from Google News RSS. Open a headline to read the source article.", "تیترها از خبرخوان Google News هستند؛ برای خواندن منبع، روی تیتر کلیک کن.");
+            }
+            catch (Exception ex)
+            {
+                NewsStatusText.Text = LocalizationService.T("News feed unavailable: ", "خبرخوان در دسترس نیست: ") + ex.Message;
+            }
+        }
+
+        private void NewsItem_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as Button;
+            string url = button == null ? null : Convert.ToString(button.Tag);
+            if (string.IsNullOrWhiteSpace(url) || !(url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))) return;
+            try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, LocalizationService.T("Could not open news link", "باز کردن خبر ناموفق بود"), MessageBoxButton.OK, MessageBoxImage.Information); }
         }
 
         private static double Average(List<FixtureRecord> matches, string team, bool scored, bool? homeVenue)
