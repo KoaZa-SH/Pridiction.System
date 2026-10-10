@@ -16,3 +16,63 @@ CREATE TABLE IF NOT EXISTS Predictions (
   MarketsJson TEXT NULL
 );
 CREATE INDEX IF NOT EXISTS IX_Predictions_CreatedUtc ON Predictions(CreatedUtc);
+
+CREATE TABLE IF NOT EXISTS Fixtures (
+  Id INTEGER PRIMARY KEY AUTOINCREMENT,
+  Provider TEXT NOT NULL,
+  League TEXT NOT NULL,
+  KickoffUtc TEXT,
+  HomeTeam TEXT NOT NULL,
+  AwayTeam TEXT NOT NULL,
+  HomeGoals INTEGER NULL,
+  AwayGoals INTEGER NULL,
+  Status TEXT,
+  ExternalId TEXT,
+  UpdatedUtc TEXT NOT NULL,
+  HomeCorners INTEGER NULL,
+  AwayCorners INTEGER NULL,
+  HomeShotsOnTarget INTEGER NULL,
+  AwayShotsOnTarget INTEGER NULL,
+  HomeYellowCards INTEGER NULL,
+  AwayYellowCards INTEGER NULL,
+  Referee TEXT NULL,
+  VarReviews INTEGER NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS UX_Fixtures_Provider_ExternalId ON Fixtures(Provider, ExternalId);
+CREATE INDEX IF NOT EXISTS IX_Fixtures_Kickoff ON Fixtures(KickoffUtc);
+CREATE INDEX IF NOT EXISTS IX_Fixtures_League_Kickoff ON Fixtures(League, KickoffUtc);
+CREATE INDEX IF NOT EXISTS IX_Fixtures_HomeTeam_Kickoff ON Fixtures(HomeTeam, KickoffUtc);
+CREATE INDEX IF NOT EXISTS IX_Fixtures_AwayTeam_Kickoff ON Fixtures(AwayTeam, KickoffUtc);
+
+CREATE TABLE IF NOT EXISTS FixtureDetails (
+  Id INTEGER PRIMARY KEY AUTOINCREMENT,
+  Provider TEXT NOT NULL,
+  ExternalId TEXT NOT NULL,
+  RawJson TEXT NOT NULL,
+  UpdatedUtc TEXT NOT NULL,
+  UNIQUE(Provider, ExternalId)
+);
+
+CREATE TABLE IF NOT EXISTS FixtureHistory (
+  Id INTEGER PRIMARY KEY AUTOINCREMENT,
+  Provider TEXT NOT NULL,
+  League TEXT NOT NULL,
+  KickoffUtc TEXT,
+  HomeTeam TEXT NOT NULL,
+  AwayTeam TEXT NOT NULL,
+  HomeGoals INTEGER,
+  AwayGoals INTEGER,
+  Status TEXT,
+  ExternalId TEXT,
+  UpdatedUtc TEXT NOT NULL,
+  ArchivedUtc TEXT NOT NULL,
+  HomeCorners INTEGER NULL,
+  AwayCorners INTEGER NULL,
+  HomeShotsOnTarget INTEGER NULL,
+  AwayShotsOnTarget INTEGER NULL,
+  HomeYellowCards INTEGER NULL,
+  AwayYellowCards INTEGER NULL,
+  Referee TEXT NULL,
+  VarReviews INTEGER NULL,
+  UNIQUE(Provider, ExternalId, HomeGoals, AwayGoals, Status, KickoffUtc)
+);
