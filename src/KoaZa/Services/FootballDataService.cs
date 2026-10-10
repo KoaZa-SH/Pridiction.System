@@ -374,13 +374,15 @@ namespace KoaZa.Services
     {
         private readonly ComboBox _providerBox;
         private readonly TextBox _keyBox;
+        private readonly TextBox _customNameBox;
+        private readonly TextBox _baseUrlBox;
         private readonly ListBox _providersList;
         private readonly TextBlock _status;
         private List<ApiProviderConfig> _providers;
 
         public ApiSettingsWindow()
         {
-            Title = "KoaZa — API Provider Settings";
+            Title = LocalizationService.T("KoaZa — API Provider Settings", "KoaZa — تنظیمات سرویس‌های API");
             Width = 760; Height = 570; MinWidth = 600; MinHeight = 460;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Background = new SolidColorBrush(Color.FromRgb(244, 247, 245));
@@ -397,20 +399,31 @@ namespace KoaZa.Services
             root.Children.Add(title); Grid.SetRow(title, 0);
 
             var entry = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.25, GridUnitType.Star) });
             entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.3, GridUnitType.Star) });
-            entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+            entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.3, GridUnitType.Star) });
+            entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.8, GridUnitType.Star) });
             entry.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             _providerBox = new ComboBox { Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(6), VerticalContentAlignment = VerticalAlignment.Center };
-            _providerBox.Items.Add(new ProviderChoice("ApiFootball", "API-Football (API key required)"));
-            _providerBox.Items.Add(new ProviderChoice("FootballData", "football-data.org (token required)"));
-            _providerBox.Items.Add(new ProviderChoice("OpenLigaDB", "OpenLigaDB (no key; German leagues)"));
+            _providerBox.Items.Add(new ProviderChoice("OddsPapi", "OddsPapi"));
+            _providerBox.Items.Add(new ProviderChoice("Floodlight", "Floodlight"));
+            _providerBox.Items.Add(new ProviderChoice("SportsOpenData", "Sports Open Data"));
+            _providerBox.Items.Add(new ProviderChoice("OpenLigaDB", "OpenLigaDB (no key)"));
+            _providerBox.Items.Add(new ProviderChoice("ApiSports", "API-SPORTS"));
+            _providerBox.Items.Add(new ProviderChoice("SportsAPI360", "SportsAPI360"));
+            _providerBox.Items.Add(new ProviderChoice("FootballData", "football-data.org"));
+            _providerBox.Items.Add(new ProviderChoice("Custom", "Add provider manually / افزودن دستی"));
             _providerBox.SelectedIndex = 0;
             _providerBox.SelectionChanged += ProviderBox_SelectionChanged;
             Grid.SetColumn(_providerBox, 0); entry.Children.Add(_providerBox);
-            _keyBox = new TextBox { Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), VerticalContentAlignment = VerticalAlignment.Center };
+            _keyBox = new TextBox { Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "API key / token" };
             Grid.SetColumn(_keyBox, 1); entry.Children.Add(_keyBox);
-            var add = new Button { Content = "Add provider", Padding = new Thickness(12, 7, 12, 7), Background = new SolidColorBrush(Color.FromRgb(22, 134, 91)), Foreground = Brushes.White, BorderThickness = new Thickness(0) };
-            add.Click += Add_Click; Grid.SetColumn(add, 2); entry.Children.Add(add);
+            _customNameBox = new TextBox { Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "Custom provider name" };
+            Grid.SetColumn(_customNameBox, 2); entry.Children.Add(_customNameBox);
+            _baseUrlBox = new TextBox { Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "Custom HTTPS endpoint" };
+            Grid.SetColumn(_baseUrlBox, 3); entry.Children.Add(_baseUrlBox);
+            var add = new Button { Content = LocalizationService.T("Add", "افزودن"), Padding = new Thickness(12, 7, 12, 7), Background = new SolidColorBrush(Color.FromRgb(22, 134, 91)), Foreground = Brushes.White, BorderThickness = new Thickness(0) };
+            add.Click += Add_Click; Grid.SetColumn(add, 4); entry.Children.Add(add);
             root.Children.Add(entry); Grid.SetRow(entry, 1);
 
             _providersList = new ListBox { Margin = new Thickness(0, 0, 0, 10), Padding = new Thickness(8) };
@@ -431,6 +444,7 @@ namespace KoaZa.Services
             Content = root;
             ProviderBox_SelectionChanged(null, null);
             RefreshList();
+            LocalizationService.Apply(this);
         }
 
         private void ProviderBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -439,6 +453,10 @@ namespace KoaZa.Services
             if (choice == null) return;
             _keyBox.IsEnabled = choice.Id != "OpenLigaDB";
             _keyBox.Text = "";
+            _customNameBox.Text = "";
+            _baseUrlBox.Text = "";
+            _customNameBox.IsEnabled = choice.Id == "Custom";
+            _baseUrlBox.IsEnabled = choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData";
             _keyBox.ToolTip = choice.Id == "OpenLigaDB" ? "This provider does not require a key." : "Paste the token/key from this provider's official account.";
         }
 
@@ -447,20 +465,33 @@ namespace KoaZa.Services
             var choice = _providerBox.SelectedItem as ProviderChoice;
             if (choice == null) return;
             string key = (_keyBox.Text ?? "").Trim();
+            string providerId = choice.Id;
+            string baseUrl = (_baseUrlBox.Text ?? "").Trim();
+            if (choice.Id == "Custom")
+            {
+                providerId = (_customNameBox.Text ?? "").Trim();
+                if (providerId.Length == 0 || baseUrl.Length == 0 || !baseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    _status.Text = LocalizationService.T("For a custom provider, enter a name and an HTTPS endpoint.", "برای سرویس دستی، نام و نشانی HTTPS وارد کن.");
+                    return;
+                }
+            }
             if (choice.Id != "OpenLigaDB" && key.Length == 0)
             {
                 MessageBox.Show(this, "This provider requires an API key/token.", "API settings", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            if (_providers.Any(p => p.Provider == choice.Id && p.Key == key))
+            if (_providers.Any(p => p.Provider == providerId && p.Key == key))
             {
-                _status.Text = "That provider/key combination is already in the list.";
+                _status.Text = LocalizationService.T("That provider/key combination is already in the list.", "این سرویس و کلید از قبل وجود دارد.");
                 return;
             }
-            _providers.Add(new ApiProviderConfig { Provider = choice.Id, Key = key, Enabled = true });
+            _providers.Add(new ApiProviderConfig { Provider = providerId, Key = key, Enabled = true, BaseUrl = baseUrl });
             RefreshList();
             _keyBox.Text = "";
-            _status.Text = "Provider added in memory. Click Save securely to persist it.";
+            _customNameBox.Text = "";
+            _baseUrlBox.Text = "";
+            _status.Text = LocalizationService.T("Provider added. Click Save securely to persist it.", "سرویس اضافه شد؛ برای ذخیره، دکمه ذخیره امن را بزن.");
         }
 
         private void Toggle_Click(object sender, RoutedEventArgs e)
@@ -482,7 +513,7 @@ namespace KoaZa.Services
             try
             {
                 ApiProviderStore.Save(_providers);
-                _status.Text = "Saved " + _providers.Count + " provider configuration(s), encrypted for this Windows user.";
+                _status.Text = LocalizationService.T("Saved ", "ذخیره شد: ") + _providers.Count + LocalizationService.T(" provider configuration(s), encrypted for this Windows user.", " سرویس؛ اطلاعات برای کاربر ویندوز رمزگذاری شد.");
             }
             catch (Exception ex) { _status.Text = "Save failed: " + ex.Message; }
         }
