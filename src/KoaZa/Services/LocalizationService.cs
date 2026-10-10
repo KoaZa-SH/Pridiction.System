@@ -17,7 +17,7 @@ namespace KoaZa.Services
 
         private static readonly Dictionary<string, string> Persian = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            {"Refresh list / نوسازی","نوسازی فهرست"},{"Import fixtures / دریافت بازی‌ها","دریافت مسابقات"},
+            {"Refresh list / نوسازی","نوسازی فهرست"},{"Language / زبان","زبان"},{"All next 7 days","تمام ۷ روز آینده"},{"All competitions","همه رقابت‌ها"},{"Import fixtures / دریافت بازی‌ها","دریافت مسابقات"},
             {"API Settings / تنظیمات API","تنظیمات API"},{"Historical-data match analysis • تحلیل آماری بر اساس نتایج تاریخی","تحلیل مسابقه بر پایه نتایج تاریخی"},
             {"Date / روز:","روز:"},{"Competition / لیگ:","رقابت:"},{"Upcoming fixtures / بازی‌های پیش رو","مسابقات پیش رو"},
             {"Date / ساعت","تاریخ / ساعت"},{"League / لیگ","رقابت"},{"Home / میزبان","میزبان"},{"Away / میهمان","میهمان"},
@@ -63,28 +63,29 @@ namespace KoaZa.Services
         }
         private static void ApplyTo(DependencyObject parent)
         {
-            int count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent);
-            for (int i = 0; i < count; i++)
+            foreach (object item in LogicalTreeHelper.GetChildren(parent).Cast<object>().ToList())
             {
-                var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+                var child = item as DependencyObject;
+                if (child == null) continue;
                 var tb = child as TextBlock; if (tb != null) tb.Text = Translate(tb.Text);
                 var button = child as Button; if (button != null && button.Content is string) button.Content = Translate((string)button.Content);
                 var label = child as Label; if (label != null && label.Content is string) label.Content = Translate((string)label.Content);
-                var combo = child as ComboBox;
-                if (combo != null)
-                {
-                    foreach (var item in combo.Items)
-                    {
-                        var text = item as string;
-                        if (text != null)
-                        {
-                            int index = combo.Items.IndexOf(item);
-                            combo.Items[index] = Translate(text);
-                        }
-                    }
-                }
+                var comboItem = child as ComboBoxItem;
+                if (comboItem != null && comboItem.Content is string) comboItem.Content = Translate((string)comboItem.Content);
+                var column = child as DataGrid;
+                if (column != null)
+                    foreach (var gridColumn in column.Columns)
+                        if (gridColumn.Header is string) gridColumn.Header = Translate((string)gridColumn.Header);
                 ApplyTo(child);
             }
+        }
+
+        public static string League(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name) || !IsPersian) return name;
+            string v = name.Trim();
+            var leagues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { {"Premier League","لیگ برتر انگلیس"},{"Bundesliga","بوندسلیگا"},{"La Liga","لالیگا"},{"Serie A","سری آ"},{"Ligue 1","لیگ یک فرانسه"},{"Persian Gulf Pro League","لیگ برتر ایران"},{"Iran Pro League","لیگ برتر ایران"},{"UEFA Champions League","لیگ قهرمانان اروپا"},{"UEFA Europa League","لیگ اروپا"},{"World Cup","جام جهانی"},{"FA Cup","جام حذفی انگلیس"} };
+            string translated; return leagues.TryGetValue(v, out translated) ? translated : v;
         }
 
         public static string Team(string name)
