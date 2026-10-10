@@ -373,7 +373,7 @@ namespace KoaZa
                     _database.SaveFixtureDetails(fixture.Provider, fixture.ExternalId, json);
                 }
                 if (!IsCurrentFixture(fixtureId)) return;
-                StatsText.Text = FootballDataService.SummarizeFixtureDetails(json);
+                StatsText.Text = FootballDataService.SummarizeFixtureDetails(json, fixture);
                 MatchStatisticsRecord normalized = fixture.Provider == "FiveDollarFootball" || fixture.Provider == "5DollarFootballAPI"
                     ? MatchStatisticsParser.ParseFiveDollarOrGeneric(json, fixture)
                     : MatchStatisticsParser.ParseApiFootball(json, fixture);
