@@ -50,9 +50,10 @@
         <TextBlock x:Name="FixtureCountText" VerticalAlignment="Center" Foreground="#5E6E65" Margin="18,0,0,0"/>
       </StackPanel>
     </Border>
-    <Grid Grid.Row="2">
-      <Grid.RowDefinitions><RowDefinition Height="1.55*"/><RowDefinition Height="1*"/></Grid.RowDefinitions>
-      <Grid Grid.Row="0">
+    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel>
+      <Grid Height="620">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="1.08*"/><ColumnDefinition Width="1.45*"/></Grid.ColumnDefinitions>
       <Grid.ColumnDefinitions><ColumnDefinition Width="1.08*"/><ColumnDefinition Width="1.45*"/></Grid.ColumnDefinitions>
       <Border Grid.Column="0" Background="White" CornerRadius="10" Padding="12" Margin="0,0,12,0">
         <Grid>
@@ -122,7 +123,7 @@
         </Grid>
       </Border>
       </Grid>
-      <Border Grid.Row="1" Background="White" CornerRadius="10" Padding="12" Margin="0,12,0,0">
+      <Border Height="430" Background="White" CornerRadius="10" Padding="12" Margin="0,12,0,0">
         <Grid>
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
           <DockPanel Grid.Row="0" Margin="0,0,0,6">
@@ -148,7 +149,8 @@
           </ScrollViewer>
         </Grid>
       </Border>
-    </Grid>
+      </StackPanel>
+    </ScrollViewer>
     <TextBlock Grid.Row="3" Text="KoaZa • Local SQLite • Historical Poisson baseline" Foreground="#7A8980" Margin="0,12,0,0" HorizontalAlignment="Right"/>
   </Grid>
 </Window>
