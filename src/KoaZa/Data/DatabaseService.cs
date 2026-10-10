@@ -428,7 +428,6 @@ namespace KoaZa.Data
                     }
                     return best;
                 })
-                .OrderBy(f => f.KickoffUtc)
                 .ToList();
         }
 
