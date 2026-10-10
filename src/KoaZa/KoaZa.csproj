@@ -14,6 +14,7 @@
     <WarningLevel>4</WarningLevel>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
+    <ApplicationIcon Condition="Exists('Data\koaza.ico')">Data\koaza.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols><DebugType>full</DebugType><Optimize>false</Optimize><OutputPath>bin\Debug\</OutputPath><DefineConstants>DEBUG;TRACE</DefineConstants><ErrorReport>prompt</ErrorReport><WarningLevel>4</WarningLevel><PlatformTarget>AnyCPU</PlatformTarget>
@@ -35,6 +36,7 @@
     <Compile Include="MainWindow.xaml.cs"><DependentUpon>MainWindow.xaml</DependentUpon></Compile>
     <Compile Include="Services\PoissonModel.cs" /><Compile Include="Services\ApiKeyManager.cs" /><Compile Include="Services\FootballDataService.cs" /><Compile Include="Data\DatabaseService.cs" />
     <None Include="Data\schema.sql" /><None Include="packages.config" />
+    <Content Include="Data\koaza.ico" Condition="Exists('Data\koaza.ico')"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
   </ItemGroup>
   <ItemGroup><None Include="App.config" /></ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
