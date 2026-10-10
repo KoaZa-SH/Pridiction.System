@@ -464,7 +464,7 @@ namespace KoaZa.Data
                 {
                     if (!string.IsNullOrWhiteSpace(league)) cmd.Parameters.AddWithValue("@league", league);
                     cmd.Parameters.AddWithValue("@team", team ?? "");
-                    cmd.Parameters.AddWithValue("@limit", limit);
+                    cmd.Parameters.AddWithValue("@limit", Math.Max(1, limit) * 3);
                     using (var reader = cmd.ExecuteReader())
                     {
                         while (reader.Read())
@@ -497,7 +497,7 @@ namespace KoaZa.Data
                 using (var cmd = new SQLiteCommand(sql, con))
                 {
                     if (!string.IsNullOrWhiteSpace(league)) cmd.Parameters.AddWithValue("@league", league);
-                    cmd.Parameters.AddWithValue("@limit", limit);
+                    cmd.Parameters.AddWithValue("@limit", Math.Max(1, limit) * 3);
                     using (var reader = cmd.ExecuteReader())
                     {
                         while (reader.Read())
@@ -514,7 +514,17 @@ namespace KoaZa.Data
                     }
                 }
             }
-            return matches;
+            return DeduplicateFixtures(matches).Take(Math.Max(1, limit)).ToList();
+        }
+
+        private static List<FixtureRecord> DeduplicateFixtures(IEnumerable<FixtureRecord> source)
+        {
+            return (source ?? Enumerable.Empty<FixtureRecord>())
+                .GroupBy(f => NormalizeTeam(f.HomeTeam) + "|" + NormalizeTeam(f.AwayTeam) + "|" + NormalizeDate(f.KickoffUtc), StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderByDescending(f => f.HomeGoals.HasValue && f.AwayGoals.HasValue)
+                    .ThenByDescending(f => !string.IsNullOrWhiteSpace(f.ExternalId))
+                    .ThenByDescending(f => !string.IsNullOrWhiteSpace(f.League)).First())
+                .OrderByDescending(f => f.KickoffUtc).ToList();
         }
 
         public List<string> GetKnownLeagues()
