@@ -29,7 +29,7 @@ namespace KoaZa.Services
                     Provider == "FootballData" ? "football-data.org" :
                     Provider == "OpenLigaDB" ? "OpenLigaDB (no key)" :
                     Provider == "OddsPapi" ? "OddsPapi" : Provider == "Floodlight" ? "Floodlight" :
-                    Provider == "SportsOpenData" ? "Sports Open Data" : Provider == "SportsAPI360" ? "SportsAPI360" : Provider;
+                    Provider == "SportsOpenData" ? "Sports Open Data" : Provider == "SportsAPI360" ? "SportsAPI360" : Provider == "FiveDollarFootballAPI" ? "5DollarFootballAPI" : Provider == "FootballCharts" ? "Football-Charts" : Provider;
                 return label + (string.IsNullOrEmpty(Key) ? "" : " • " + Mask(Key)) +
                     (Enabled ? LocalizationService.T(" • enabled", " • فعال") : LocalizationService.T(" • disabled", " • غیرفعال"));
             }
@@ -146,6 +146,14 @@ namespace KoaZa.Services
         public int? AwayGoals { get; set; }
         public string Status { get; set; }
         public string ExternalId { get; set; }
+        public int? HomeCorners { get; set; }
+        public int? AwayCorners { get; set; }
+        public int? HomeShotsOnTarget { get; set; }
+        public int? AwayShotsOnTarget { get; set; }
+        public int? HomeYellowCards { get; set; }
+        public int? AwayYellowCards { get; set; }
+        public string Referee { get; set; }
+        public int? VarReviews { get; set; }
     }
 
     public static class FootballDataService
@@ -233,6 +241,10 @@ namespace KoaZa.Services
                 rows = FetchAllUpcoming(season, fromDate);
             else if (provider == "ApiFootball" || provider == "ApiSports")
                 rows = FetchApiFootballRange(league, fromDate, toDate);
+            else if (provider == "FiveDollarFootballAPI")
+                rows = FetchFiveDollarRange(league, fromDate, toDate);
+            else if (provider == "FootballCharts")
+                rows = FetchFootballCharts(league, season);
             else if (provider == "FootballData" && (string.IsNullOrWhiteSpace(league) || league.Trim().Equals("all", StringComparison.OrdinalIgnoreCase)))
                 rows = FetchFootballDataBulk(season, fromDate);
             else
@@ -340,7 +352,8 @@ namespace KoaZa.Services
                     HomeGoals = GetNullableInt(goals, "home"),
                     AwayGoals = GetNullableInt(goals, "away"),
                     Status = GetString(GetMap(fixture, "status"), "short", ""),
-                    ExternalId = GetString(fixture, "id", "")
+                    ExternalId = GetString(fixture, "id", ""),
+                    Referee = GetString(fixture, "referee", "")
                 });
             }
             return output;
@@ -644,6 +657,8 @@ namespace KoaZa.Services
             if (provider == "OpenLigaDB") return FetchOpenLiga(league, season);
             if (provider == "OddsPapi") return FetchOddsPapi(league);
             if (provider == "SportsAPI360") return FetchSportsApi360(league);
+            if (provider == "FiveDollarFootballAPI") return FetchFiveDollarRange(league, DateTime.UtcNow.Date.AddDays(-7), DateTime.UtcNow.Date.AddDays(7));
+            if (provider == "FootballCharts") return FetchFootballCharts(league, season);
             var custom = ApiProviderStore.Load().FirstOrDefault(p => p.Enabled && p.Provider == provider && !string.IsNullOrWhiteSpace(p.BaseUrl));
             if (custom != null) return FetchCustom(custom);
             throw new InvalidOperationException("This provider is configured but does not yet have a built-in adapter. For Floodlight or Sports Open Data, enter the provider's HTTPS fixtures endpoint or use a custom provider with the documented normalized JSON format.");
@@ -706,6 +721,149 @@ namespace KoaZa.Services
             }
             if (provider == "OpenLigaDB" && (competition == "BUNDESLIGA" || competition == "BL1")) return "bl1";
             return null;
+        }
+
+        private static List<FixtureRecord> FetchFiveDollarRange(string league, DateTime fromDate, DateTime toDate)
+        {
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "FiveDollarFootballAPI" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+            if (configs.Count == 0) throw new InvalidOperationException("Add an enabled 5DollarFootballAPI key in API Settings.");
+            string leagueValue = (league ?? "").Trim();
+            var output = new List<FixtureRecord>();
+            Exception last = null;
+            foreach (var config in configs)
+            {
+                try
+                {
+                    for (DateTime day = fromDate.Date; day <= toDate.Date; day = day.AddDays(1))
+                    {
+                        long start = new DateTimeOffset(DateTime.SpecifyKind(day, DateTimeKind.Utc)).ToUnixTimeSeconds();
+                        long end = new DateTimeOffset(DateTime.SpecifyKind(day.AddDays(1), DateTimeKind.Utc)).ToUnixTimeSeconds();
+                        int page = 1;
+                        bool more;
+                        do
+                        {
+                            string url = "https://api.5dollarfootballapi.com/v1/fixtures?start_time=" + start +
+                                "&end_time=" + end + "&include=stats,events&per_page=50&page=" + page;
+                            if (!string.IsNullOrWhiteSpace(leagueValue) && !leagueValue.Equals("all", StringComparison.OrdinalIgnoreCase))
+                                url += "&league=" + Uri.EscapeDataString(leagueValue);
+                            var request = (HttpWebRequest)WebRequest.Create(url);
+                            request.Method = "GET"; request.Accept = "application/json"; request.Timeout = 20000; request.ReadWriteTimeout = 20000;
+                            request.Headers[HttpRequestHeader.Authorization] = "Bearer " + config.Key;
+                            var root = Parse(ReadResponse(request));
+                            if (HasErrors(root)) throw new InvalidOperationException("5DollarFootballAPI returned an API/quota error.");
+                            foreach (var item in GetList(root, "data"))
+                            {
+                                var leagueMap = GetMap(item, "league");
+                                var teams = GetMap(item, "teams");
+                                var goals = GetMap(item, "goals");
+                                var corners = GetMap(item, "corners");
+                                var cards = GetMap(item, "cards");
+                                var homeCards = GetMap(cards, "home");
+                                var awayCards = GetMap(cards, "away");
+                                var stats = GetMap(item, "stats");
+                                if (stats.Count == 0) stats = GetMap(item, "statistics");
+                                var events = GetList(item, "events");
+                                int varCount = events.Count(e =>
+                                {
+                                    string type = GetString(e, "type", "").ToLowerInvariant();
+                                    return type.Contains("var") || type.Contains("video_assistant");
+                                });
+                                output.Add(new FixtureRecord
+                                {
+                                    Provider = "FiveDollarFootballAPI",
+                                    League = GetString(leagueMap, "name", leagueValue.Length == 0 ? "Unknown competition" : leagueValue),
+                                    KickoffUtc = GetString(item, "kickoff_utc", GetString(item, "date", "")),
+                                    HomeTeam = GetString(GetMap(teams, "home"), "name", GetString(item, "home_team", "Home")),
+                                    AwayTeam = GetString(GetMap(teams, "away"), "name", GetString(item, "away_team", "Away")),
+                                    HomeGoals = GetNullableInt(goals, "home"),
+                                    AwayGoals = GetNullableInt(goals, "away"),
+                                    HomeCorners = GetNullableInt(corners, "home"),
+                                    AwayCorners = GetNullableInt(corners, "away"),
+                                    HomeYellowCards = GetNullableInt(homeCards, "yellow"),
+                                    AwayYellowCards = GetNullableInt(awayCards, "yellow"),
+                                    HomeShotsOnTarget = GetNullableInt(GetMap(stats, "shots_on_target"), "home"),
+                                    AwayShotsOnTarget = GetNullableInt(GetMap(stats, "shots_on_target"), "away"),
+                                    Referee = GetString(item, "referee", GetString(item, "referee_name", "")),
+                                    VarReviews = events.Count == 0 ? (int?)null : varCount,
+                                    Status = GetString(item, "status", ""),
+                                    ExternalId = GetString(item, "id", "")
+                                });
+                            }
+                            var pagination = GetMap(root, "pagination");
+                            more = GetString(pagination, "has_more", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
+                            page++;
+                        } while (more && page <= 100);
+                    }
+                    return output;
+                }
+                catch (Exception ex) { last = ex; }
+            }
+            if (output.Count > 0) return output;
+            throw new InvalidOperationException("5DollarFootballAPI fixture request failed. Check the bearer key, league ID, plan history limit and quota.", last);
+        }
+
+        private static List<FixtureRecord> FetchFootballCharts(string league, int season)
+        {
+            string slug = (league ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(slug) || slug.Equals("all", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Football-Charts needs a league slug, e.g. 'premier' or 'germany3'.");
+            string seasonValue = season + "-" + (season + 1);
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "FootballCharts").ToList();
+            string key = configs.Select(p => p.Key).FirstOrDefault(k => !string.IsNullOrWhiteSpace(k));
+            var output = new List<FixtureRecord>();
+            Exception last = null;
+            foreach (string kind in new[] { "results", "fixtures" })
+            {
+                try
+                {
+                    string url = "https://footballcharts-backend.onrender.com/api/v1/leagues/" + Uri.EscapeDataString(slug) + "/" + kind + "/?season=" + Uri.EscapeDataString(seasonValue);
+                    var request = (HttpWebRequest)WebRequest.Create(url);
+                    request.Method = "GET"; request.Accept = "application/json"; request.Timeout = 25000; request.ReadWriteTimeout = 25000;
+                    if (!string.IsNullOrWhiteSpace(key)) request.Headers[HttpRequestHeader.Authorization] = "Bearer " + key;
+                    var parsed = new JavaScriptSerializer().DeserializeObject(ReadResponse(request));
+                    var root = parsed as Dictionary<string, object>;
+                    var rows = GetList(root, "matches");
+                    if (rows.Count == 0) rows = GetList(root, "results");
+                    if (rows.Count == 0) rows = GetList(root, "fixtures");
+                    foreach (var item in rows)
+                    {
+                        string home = GetString(item, "home_team", GetString(item, "homeTeam", GetString(item, "home", "")));
+                        string away = GetString(item, "away_team", GetString(item, "awayTeam", GetString(item, "away", "")));
+                        if (home.IndexOf("Dictionary", StringComparison.OrdinalIgnoreCase) >= 0) home = GetString(GetMap(item, "home_team"), "name", GetString(GetMap(item, "homeTeam"), "name", ""));
+                        if (away.IndexOf("Dictionary", StringComparison.OrdinalIgnoreCase) >= 0) away = GetString(GetMap(item, "away_team"), "name", GetString(GetMap(item, "awayTeam"), "name", ""));
+                        if (home.Length == 0) home = GetString(GetMap(item, "homeTeam"), "name", "");
+                        if (away.Length == 0) away = GetString(GetMap(item, "awayTeam"), "name", "");
+                        if (home.Length == 0 || away.Length == 0) continue;
+                        string score = GetString(item, "score", GetString(item, "ft_result", GetString(item, "result", "")));
+                        int? hg = GetNullableInt(item, "homeGoals"), ag = GetNullableInt(item, "awayGoals");
+                        if ((!hg.HasValue || !ag.HasValue) && score.Contains(":"))
+                        {
+                            var parts = score.Split(':'); int h, a;
+                            if (parts.Length == 2 && int.TryParse(parts[0].Trim(), out h) && int.TryParse(parts[1].Trim(), out a)) { hg = h; ag = a; }
+                        }
+                        output.Add(new FixtureRecord
+                        {
+                            Provider = "FootballCharts",
+                            League = GetString(item, "league", GetString(item, "competition", slug)),
+                            KickoffUtc = GetString(item, "date", GetString(item, "kickoff", GetString(item, "utcDate", GetString(item, "match_date", "")))),
+                            HomeTeam = home, AwayTeam = away, HomeGoals = hg, AwayGoals = ag,
+                            Status = GetString(item, "status", kind == "results" ? "FINISHED" : "SCHEDULED"),
+                            ExternalId = GetString(item, "slug", GetString(item, "id", ""))
+                        });
+                    }
+                }
+                catch (Exception ex) { last = ex; }
+            }
+            if (output.Count > 0) return output;
+            throw new InvalidOperationException("Football-Charts returned no compatible match rows. Check the league slug and season; this API does not provide corner, card or shot statistics.", last);
+        }
+
+        private static string ReadResponse(HttpWebRequest request)
+        {
+            using (var response = (HttpWebResponse)request.GetResponse())
+            using (var stream = response.GetResponseStream())
+            using (var reader = new StreamReader(stream, Encoding.UTF8))
+                return reader.ReadToEnd();
         }
 
         private static List<FixtureRecord> FetchOddsPapi(string tournamentId)
@@ -1100,6 +1258,8 @@ namespace KoaZa.Services
             _providerBox.Items.Add(new ProviderChoice("OpenLigaDB", "OpenLigaDB (no key)"));
             _providerBox.Items.Add(new ProviderChoice("ApiSports", "API-SPORTS"));
             _providerBox.Items.Add(new ProviderChoice("SportsAPI360", "SportsAPI360"));
+            _providerBox.Items.Add(new ProviderChoice("FiveDollarFootballAPI", "5DollarFootballAPI"));
+            _providerBox.Items.Add(new ProviderChoice("FootballCharts", "Football-Charts"));
             _providerBox.Items.Add(new ProviderChoice("FootballData", "football-data.org"));
             _providerBox.Items.Add(new ProviderChoice("Custom", LocalizationService.T("Add provider manually", "افزودن دستی")));
             _providerBox.SelectedIndex = 0;
@@ -1373,7 +1533,7 @@ namespace KoaZa.Services
         {
             var choice = _providerBox.SelectedItem as ProviderChoice;
             if (choice == null) return;
-            _keyBox.IsEnabled = choice.Id != "OpenLigaDB";
+            _keyBox.IsEnabled = choice.Id != "OpenLigaDB" && choice.Id != "FootballCharts";
             _keyBox.Text = "API key / token";
             _customNameBox.Text = "Custom name";
             _baseUrlBox.Text = "HTTPS endpoint";
@@ -1401,7 +1561,7 @@ namespace KoaZa.Services
                     return;
                 }
             }
-            if (choice.Id != "OpenLigaDB" && key.Length == 0)
+            if (choice.Id != "OpenLigaDB" && choice.Id != "FootballCharts" && key.Length == 0)
             {
                 MessageBox.Show(this, LocalizationService.T("This provider requires an API key/token.", "این سرویس به کلید API یا توکن نیاز دارد."), LocalizationService.T("API settings", "تنظیمات API"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
@@ -1510,8 +1670,10 @@ namespace KoaZa.Services
             _providerBox.Items.Add(new ProviderChoice("OpenLigaDB", "OpenLigaDB"));
             _providerBox.Items.Add(new ProviderChoice("ApiSports", "API-SPORTS"));
             _providerBox.Items.Add(new ProviderChoice("SportsAPI360", "SportsAPI360"));
+            _providerBox.Items.Add(new ProviderChoice("FiveDollarFootballAPI", "5DollarFootballAPI"));
+            _providerBox.Items.Add(new ProviderChoice("FootballCharts", "Football-Charts"));
             _providerBox.Items.Add(new ProviderChoice("FootballData", "football-data.org"));
-            foreach (var configured in ApiProviderStore.Load().Where(p => p.Enabled && p.Provider != "ApiFootball" && p.Provider != "ApiSports" && p.Provider != "FootballData" && p.Provider != "OpenLigaDB" && p.Provider != "OddsPapi" && p.Provider != "Floodlight" && p.Provider != "SportsOpenData" && p.Provider != "SportsAPI360"))
+            foreach (var configured in ApiProviderStore.Load().Where(p => p.Enabled && p.Provider != "ApiFootball" && p.Provider != "ApiSports" && p.Provider != "FootballData" && p.Provider != "OpenLigaDB" && p.Provider != "OddsPapi" && p.Provider != "Floodlight" && p.Provider != "SportsOpenData" && p.Provider != "SportsAPI360" && p.Provider != "FiveDollarFootballAPI" && p.Provider != "FootballCharts"))
                 _providerBox.Items.Add(new ProviderChoice(configured.Provider, configured.Provider));
             _providerBox.SelectedIndex = 0;
             _providerBox.SelectionChanged += ProviderChanged;
@@ -1548,13 +1710,15 @@ namespace KoaZa.Services
         {
             var choice = _providerBox.SelectedItem as ProviderChoice;
             if (choice == null) return;
-            _leagueBox.Text = choice.Id == "Auto" ? "all" : choice.Id == "ApiFootball" || choice.Id == "ApiSports" ? "39" : choice.Id == "FootballData" ? "PL" : choice.Id == "OpenLigaDB" ? "bl1" : "all";
+            _leagueBox.Text = choice.Id == "Auto" ? "all" : choice.Id == "ApiFootball" || choice.Id == "ApiSports" ? "39" : choice.Id == "FootballData" ? "PL" : choice.Id == "OpenLigaDB" ? "bl1" : choice.Id == "FootballCharts" ? "premier" : "all";
             _leagueBox.ToolTip = choice.Id == "Auto" ? "Bulk refresh: all competitions available from enabled compatible feeds for the next 7 days plus live matches. The field is informational in Auto mode." :
                 choice.Id == "ApiFootball" || choice.Id == "ApiSports" ? "Enter an API-Sports numeric league ID (e.g. 39 for Premier League)." :
                 choice.Id == "FootballData" ? "Enter competition code (e.g. PL, PD, BL1, SA, FL1)." :
                 choice.Id == "OpenLigaDB" ? "Enter OpenLigaDB league shortcut (e.g. bl1)." :
                 choice.Id == "OddsPapi" ? "Enter the OddsPapi tournamentId (not the API-Sports league ID)." :
                 choice.Id == "SportsAPI360" ? "Enter tournamentId, tournament name, or 'all' for the next 7 days." :
+                choice.Id == "FiveDollarFootballAPI" ? "Enter a numeric league ID or 'all'. Historical coverage depends on your plan." :
+                choice.Id == "FootballCharts" ? "Enter a Football-Charts league slug (e.g. premier, germany3). No key is required." :
                 "For Floodlight, Sports Open Data or custom providers, configure the HTTPS fixtures endpoint in API Settings.";
         }
 
