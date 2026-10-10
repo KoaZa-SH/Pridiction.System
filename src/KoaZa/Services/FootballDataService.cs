@@ -1990,6 +1990,21 @@ namespace KoaZa.Services
             {
                 try
                 {
+                    var baseline = new MatchStatisticsRecord
+                    {
+                        Provider = fixture.Provider, ExternalId = fixture.ExternalId, League = fixture.League,
+                        KickoffUtc = fixture.KickoffUtc, Status = fixture.Status, HomeTeam = fixture.HomeTeam, AwayTeam = fixture.AwayTeam,
+                        HomeGoals = fixture.HomeGoals, AwayGoals = fixture.AwayGoals, Referee = fixture.Referee,
+                        HomeShotsOnTarget = fixture.HomeShotsOnTarget, AwayShotsOnTarget = fixture.AwayShotsOnTarget,
+                        HomeCorners = fixture.HomeCorners, AwayCorners = fixture.AwayCorners,
+                        HomeYellowCards = fixture.HomeYellowCards, AwayYellowCards = fixture.AwayYellowCards,
+                        DataSource = fixture.Provider, UpdatedUtc = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)
+                    };
+                    if (baseline.HomeShotsOnTarget.HasValue || baseline.AwayShotsOnTarget.HasValue ||
+                        baseline.HomeCorners.HasValue || baseline.AwayCorners.HasValue ||
+                        baseline.HomeYellowCards.HasValue || baseline.AwayYellowCards.HasValue ||
+                        !string.IsNullOrWhiteSpace(baseline.Referee))
+                        db.SaveMatchStatistics(baseline);
                     string json = FootballDataService.FetchFixtureDetails(fixture);
                     if (string.IsNullOrWhiteSpace(json)) continue;
                     db.SaveFixtureDetails(fixture.Provider, fixture.ExternalId, json);
