@@ -92,10 +92,10 @@ namespace KoaZa.Services
             {
                 var team = Map(Get(teamStats, "team"));
                 string name = String(Get(team, "name", ""));
-                bool isHome = Same(name, fixture.HomeTeam) || Same(String(Get(team, "id", "")), "");
-                if (!isHome && Same(name, fixture.AwayTeam)) isHome = false;
-                else if (!Same(name, fixture.HomeTeam) && Same(name, fixture.AwayTeam)) isHome = false;
-                else if (!Same(name, fixture.HomeTeam) && !Same(name, fixture.AwayTeam))
+                bool isHome;
+                if (Same(name, fixture.HomeTeam)) isHome = true;
+                else if (Same(name, fixture.AwayTeam)) isHome = false;
+                else
                 {
                     string id = String(Get(team, "id", ""));
                     string homeId = String(Get(home, "id", ""));
@@ -108,13 +108,13 @@ namespace KoaZa.Services
                 {
                     string type = String(Get(stat, "type", "")).Trim().ToLowerInvariant();
                     object value = Get(stat, "value", null);
-                    if (type == "total shots") Set(ref result.HomeShots, ref result.AwayShots, Int(value), isHome);
-                    else if (type == "shots on goal") Set(ref result.HomeShotsOnTarget, ref result.AwayShotsOnTarget, Int(value), isHome);
-                    else if (type == "corner kicks") Set(ref result.HomeCorners, ref result.AwayCorners, Int(value), isHome);
-                    else if (type == "yellow cards") Set(ref result.HomeYellowCards, ref result.AwayYellowCards, Int(value), isHome);
-                    else if (type == "red cards") Set(ref result.HomeRedCards, ref result.AwayRedCards, Int(value), isHome);
-                    else if (type == "fouls") Set(ref result.HomeFouls, ref result.AwayFouls, Int(value), isHome);
-                    else if (type == "ball possession") Set(ref result.HomePossession, ref result.AwayPossession, Double(value), isHome);
+                    if (type == "total shots") { if (isHome) result.HomeShots = Int(value); else result.AwayShots = Int(value); }
+                    else if (type == "shots on goal") { if (isHome) result.HomeShotsOnTarget = Int(value); else result.AwayShotsOnTarget = Int(value); }
+                    else if (type == "corner kicks") { if (isHome) result.HomeCorners = Int(value); else result.AwayCorners = Int(value); }
+                    else if (type == "yellow cards") { if (isHome) result.HomeYellowCards = Int(value); else result.AwayYellowCards = Int(value); }
+                    else if (type == "red cards") { if (isHome) result.HomeRedCards = Int(value); else result.AwayRedCards = Int(value); }
+                    else if (type == "fouls") { if (isHome) result.HomeFouls = Int(value); else result.AwayFouls = Int(value); }
+                    else if (type == "ball possession") { if (isHome) result.HomePossession = Double(value); else result.AwayPossession = Double(value); }
                 }
             }
             return result;
@@ -131,8 +131,8 @@ namespace KoaZa.Services
             var home = Map(Get(item, "teams") is IDictionary ? Get(Map(Get(item, "teams")), "home") : null);
             var away = Map(Get(item, "teams") is IDictionary ? Get(Map(Get(item, "teams")), "away") : null);
             var corners = Map(Get(item, "corners"));
-            Set(ref row.HomeCorners, ref row.AwayCorners, Int(Get(corners, "home", null)), true);
-            Set(ref row.HomeCorners, ref row.AwayCorners, Int(Get(corners, "away", null)), false);
+            row.HomeCorners = Int(Get(corners, "home", null));
+            row.AwayCorners = Int(Get(corners, "away", null));
             var cards = Map(Get(item, "cards"));
             var homeCards = Map(Get(cards, "home")); var awayCards = Map(Get(cards, "away"));
             row.HomeYellowCards = Int(Get(homeCards, "yellow", null)); row.AwayYellowCards = Int(Get(awayCards, "yellow", null));
@@ -201,8 +201,6 @@ namespace KoaZa.Services
             double n; return double.TryParse(String(o).Replace("%","").Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out n) ? (double?)n : null;
         }
         private static bool Same(string a, string b) { return string.Equals((a??"").Trim(), (b??"").Trim(), StringComparison.OrdinalIgnoreCase); }
-        private static void Set(ref int? home, ref int? away, int? value, bool isHome) { if(isHome) home=value; else away=value; }
-        private static void Set(ref double? home, ref double? away, double? value, bool isHome) { if(isHome) home=value; else away=value; }
     }
 
     public static class MultiMarketPredictionService
