@@ -80,7 +80,7 @@ namespace KoaZa.Services
             var root = Deserialize(json);
             var responses = List(Get(root, "response"));
             var item = responses.FirstOrDefault();
-            if (item == null) return ParseFiveDollarOrGeneric(root, fixture);
+            if (item == null) return ParseFiveDollarOrGeneric(json, fixture);
 
             var result = NewRecord(fixture);
             var fixtureMap = Map(Get(item, "fixture"));
