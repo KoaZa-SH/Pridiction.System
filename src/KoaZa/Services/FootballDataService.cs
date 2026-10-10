@@ -811,8 +811,8 @@ namespace KoaZa.Services
                         foreach (var item in rows)
                         {
                             var home = GetMap(item, "home"); var away = GetMap(item, "away");
-                            object homeObject = item is Dictionary<string, object> && ((Dictionary<string, object>)item).ContainsKey("home_team") ? ((Dictionary<string, object>)item)["home_team"] : Get(item, "home", "");
-                            object awayObject = item is Dictionary<string, object> && ((Dictionary<string, object>)item).ContainsKey("away_team") ? ((Dictionary<string, object>)item)["away_team"] : Get(item, "away", "");
+                            object homeObject = item is Dictionary<string, object> && ((Dictionary<string, object>)item).ContainsKey("home_team") ? ((Dictionary<string, object>)item)["home_team"] : GetString(item, "home", "");
+                            object awayObject = item is Dictionary<string, object> && ((Dictionary<string, object>)item).ContainsKey("away_team") ? ((Dictionary<string, object>)item)["away_team"] : GetString(item, "away", "");
                             string hn = homeObject is Dictionary<string, object> ? GetString(homeObject, "name", GetString(homeObject, "team", "")) : Convert.ToString(homeObject, CultureInfo.InvariantCulture);
                             string an = awayObject is Dictionary<string, object> ? GetString(awayObject, "name", GetString(awayObject, "team", "")) : Convert.ToString(awayObject, CultureInfo.InvariantCulture);
                             if (string.IsNullOrWhiteSpace(hn)) hn = GetString(home, "name", "");
