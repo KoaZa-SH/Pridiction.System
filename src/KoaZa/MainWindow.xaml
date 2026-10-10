@@ -77,7 +77,7 @@
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
                     <StackPanel Margin="0,4,0,8">
-                      <Button Content="{Binding Title}" Tag="{Binding Url}" Click="NewsItem_Click" HorizontalContentAlignment="Left" Padding="0" BorderThickness="0" Background="Transparent" Foreground="#16734D" FontWeight="SemiBold" TextBlock.TextWrapping="Wrap"/>
+                      <Button Tag="{Binding Url}" Click="NewsItem_Click" HorizontalContentAlignment="Left" Padding="0" BorderThickness="0" Background="Transparent" Foreground="#16734D" FontWeight="SemiBold"><TextBlock Text="{Binding Title}" TextWrapping="Wrap" Foreground="#16734D" FontWeight="SemiBold"/></Button>
                       <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Foreground="#6A766E" FontSize="11" Margin="0,2,0,0"/>
                     </StackPanel>
                   </DataTemplate>
