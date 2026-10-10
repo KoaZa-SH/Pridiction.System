@@ -15,6 +15,7 @@ namespace KoaZa.Services
         public string ExternalId { get; set; }
         public string League { get; set; }
         public string KickoffUtc { get; set; }
+        public string Status { get; set; }
         public string HomeTeam { get; set; }
         public string AwayTeam { get; set; }
         public int? HomeGoals { get; set; }
@@ -222,7 +223,7 @@ namespace KoaZa.Services
 
         private static MatchStatisticsRecord NewRecord(FixtureRecord f) {
             return new MatchStatisticsRecord { Provider=f.Provider, ExternalId=f.ExternalId, League=f.League,
-                KickoffUtc=f.KickoffUtc, HomeTeam=f.HomeTeam, AwayTeam=f.AwayTeam, HomeGoals=f.HomeGoals,
+                KickoffUtc=f.KickoffUtc, Status=f.Status, HomeTeam=f.HomeTeam, AwayTeam=f.AwayTeam, HomeGoals=f.HomeGoals,
                 AwayGoals=f.AwayGoals, Referee=f.Referee,
                 HomeCorners=f.HomeCorners, AwayCorners=f.AwayCorners,
                 HomeShotsOnTarget=f.HomeShotsOnTarget, AwayShotsOnTarget=f.AwayShotsOnTarget,
