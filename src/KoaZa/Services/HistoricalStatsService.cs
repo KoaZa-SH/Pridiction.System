@@ -1,0 +1,310 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Web.Script.Serialization;
+using KoaZa.Data;
+
+namespace KoaZa.Services
+{
+    // One normalized row per completed fixture. Null means "not supplied", never zero.
+    public sealed class MatchStatisticsRecord
+    {
+        public string Provider { get; set; }
+        public string ExternalId { get; set; }
+        public string League { get; set; }
+        public string KickoffUtc { get; set; }
+        public string HomeTeam { get; set; }
+        public string AwayTeam { get; set; }
+        public int? HomeGoals { get; set; }
+        public int? AwayGoals { get; set; }
+        public string Referee { get; set; }
+        public int? HomeShots { get; set; }
+        public int? AwayShots { get; set; }
+        public int? HomeShotsOnTarget { get; set; }
+        public int? AwayShotsOnTarget { get; set; }
+        public int? HomeCorners { get; set; }
+        public int? AwayCorners { get; set; }
+        public int? HomeYellowCards { get; set; }
+        public int? AwayYellowCards { get; set; }
+        public int? HomeRedCards { get; set; }
+        public int? AwayRedCards { get; set; }
+        public int? HomeFouls { get; set; }
+        public int? AwayFouls { get; set; }
+        public double? HomePossession { get; set; }
+        public double? AwayPossession { get; set; }
+        public string DataSource { get; set; }
+        public string UpdatedUtc { get; set; }
+    }
+
+    public sealed class MatchEventRecord
+    {
+        public string Provider { get; set; }
+        public string ExternalId { get; set; }
+        public int EventIndex { get; set; }
+        public int? Minute { get; set; }
+        public string Team { get; set; }
+        public string Player { get; set; }
+        public string Assist { get; set; }
+        public string Type { get; set; }
+        public string Detail { get; set; }
+    }
+
+    public sealed class MarketEstimate
+    {
+        public string Market { get; set; }
+        public string Outcome { get; set; }
+        public double Probability { get; set; }
+        public int SampleSize { get; set; }
+        public bool HasSufficientData { get; set; }
+        public string Explanation { get; set; }
+    }
+
+    public sealed class MultiMarketPrediction
+    {
+        public double ExpectedHomeGoals { get; set; }
+        public double ExpectedAwayGoals { get; set; }
+        public int HomeGoalSamples { get; set; }
+        public int AwayGoalSamples { get; set; }
+        public IList<MarketEstimate> Markets { get; set; }
+        public string DataQuality { get; set; }
+    }
+
+    public static class MatchStatisticsParser
+    {
+        public static MatchStatisticsRecord ParseApiFootball(string json, FixtureRecord fixture)
+        {
+            if (string.IsNullOrWhiteSpace(json) || fixture == null) return null;
+            var root = Deserialize(json);
+            var responses = List(Get(root, "response"));
+            var item = responses.FirstOrDefault();
+            if (item == null) return ParseFiveDollarOrGeneric(root, fixture);
+
+            var result = NewRecord(fixture);
+            var fixtureMap = Map(Get(item, "fixture"));
+            result.Referee = String(Get(fixtureMap, "referee", null));
+            var teams = Map(Get(item, "teams"));
+            var home = Map(Get(teams, "home"));
+            var away = Map(Get(teams, "away"));
+            var stats = List(Get(item, "statistics"));
+            foreach (var teamStats in stats)
+            {
+                var team = Map(Get(teamStats, "team"));
+                string name = String(Get(team, "name", ""));
+                bool isHome = Same(name, fixture.HomeTeam) || Same(String(Get(team, "id", "")), "");
+                if (!isHome && Same(name, fixture.AwayTeam)) isHome = false;
+                else if (!Same(name, fixture.HomeTeam) && Same(name, fixture.AwayTeam)) isHome = false;
+                else if (!Same(name, fixture.HomeTeam) && !Same(name, fixture.AwayTeam))
+                {
+                    string id = String(Get(team, "id", ""));
+                    string homeId = String(Get(home, "id", ""));
+                    string awayId = String(Get(away, "id", ""));
+                    if (homeId.Length > 0 && id == homeId) isHome = true;
+                    else if (awayId.Length > 0 && id == awayId) isHome = false;
+                    else continue;
+                }
+                foreach (var stat in List(Get(teamStats, "statistics")))
+                {
+                    string type = String(Get(stat, "type", "")).Trim().ToLowerInvariant();
+                    object value = Get(stat, "value", null);
+                    if (type == "total shots") Set(ref result.HomeShots, ref result.AwayShots, Int(value), isHome);
+                    else if (type == "shots on goal") Set(ref result.HomeShotsOnTarget, ref result.AwayShotsOnTarget, Int(value), isHome);
+                    else if (type == "corner kicks") Set(ref result.HomeCorners, ref result.AwayCorners, Int(value), isHome);
+                    else if (type == "yellow cards") Set(ref result.HomeYellowCards, ref result.AwayYellowCards, Int(value), isHome);
+                    else if (type == "red cards") Set(ref result.HomeRedCards, ref result.AwayRedCards, Int(value), isHome);
+                    else if (type == "fouls") Set(ref result.HomeFouls, ref result.AwayFouls, Int(value), isHome);
+                    else if (type == "ball possession") Set(ref result.HomePossession, ref result.AwayPossession, Double(value), isHome);
+                }
+            }
+            return result;
+        }
+
+        public static MatchStatisticsRecord ParseFiveDollarOrGeneric(string json, FixtureRecord fixture)
+        {
+            if (string.IsNullOrWhiteSpace(json) || fixture == null) return null;
+            var root = Deserialize(json);
+            object data = Get(root, "data", root);
+            var list = List(data);
+            object item = list.FirstOrDefault() ?? data;
+            var row = NewRecord(fixture);
+            var home = Map(Get(item, "teams") is IDictionary ? Get(Map(Get(item, "teams")), "home") : null);
+            var away = Map(Get(item, "teams") is IDictionary ? Get(Map(Get(item, "teams")), "away") : null);
+            var corners = Map(Get(item, "corners"));
+            Set(ref row.HomeCorners, ref row.AwayCorners, Int(Get(corners, "home", null)), true);
+            Set(ref row.HomeCorners, ref row.AwayCorners, Int(Get(corners, "away", null)), false);
+            var cards = Map(Get(item, "cards"));
+            var homeCards = Map(Get(cards, "home")); var awayCards = Map(Get(cards, "away"));
+            row.HomeYellowCards = Int(Get(homeCards, "yellow", null)); row.AwayYellowCards = Int(Get(awayCards, "yellow", null));
+            row.HomeRedCards = Int(Get(homeCards, "red", null)); row.AwayRedCards = Int(Get(awayCards, "red", null));
+            var stats = Map(Get(item, "stats"));
+            var shots = Map(Get(stats, "shots"));
+            row.HomeShots = Int(Get(shots, "home", null)); row.AwayShots = Int(Get(shots, "away", null));
+            var onTarget = Map(Get(stats, "shots_on_target"));
+            if (onTarget.Count == 0) onTarget = Map(Get(item, "shots_on_target"));
+            row.HomeShotsOnTarget = Int(Get(onTarget, "home", null)); row.AwayShotsOnTarget = Int(Get(onTarget, "away", null));
+            var possession = Map(Get(item, "possession"));
+            row.HomePossession = Double(Get(possession, "home", null)); row.AwayPossession = Double(Get(possession, "away", null));
+            row.Referee = String(Get(item, "referee", null));
+            if (home.Count > 0 && row.HomeTeam.Length == 0) row.HomeTeam = String(Get(home, "name", ""));
+            if (away.Count > 0 && row.AwayTeam.Length == 0) row.AwayTeam = String(Get(away, "name", ""));
+            return row;
+        }
+
+        public static List<MatchEventRecord> ParseEvents(string json, FixtureRecord fixture)
+        {
+            var output = new List<MatchEventRecord>();
+            if (string.IsNullOrWhiteSpace(json) || fixture == null) return output;
+            var root = Deserialize(json);
+            var item = List(Get(root, "response")).FirstOrDefault();
+            if (item == null) item = Get(root, "data", root);
+            var events = List(Get(item, "events"));
+            int index = 0;
+            foreach (var ev in events)
+            {
+                var time = Map(Get(ev, "time"));
+                int? minute = Int(Get(time, "elapsed", null));
+                var team = Map(Get(ev, "team")); var player = Map(Get(ev, "player")); var assist = Map(Get(ev, "assist"));
+                output.Add(new MatchEventRecord {
+                    Provider = fixture.Provider, ExternalId = fixture.ExternalId, EventIndex = index++,
+                    Minute = minute, Team = String(Get(team, "name", "")),
+                    Player = String(Get(player, "name", "")), Assist = String(Get(assist, "name", "")),
+                    Type = String(Get(ev, "type", "")), Detail = String(Get(ev, "detail", ""))
+                });
+            }
+            return output;
+        }
+
+        private static MatchStatisticsRecord NewRecord(FixtureRecord f) {
+            return new MatchStatisticsRecord { Provider=f.Provider, ExternalId=f.ExternalId, League=f.League,
+                KickoffUtc=f.KickoffUtc, HomeTeam=f.HomeTeam, AwayTeam=f.AwayTeam, HomeGoals=f.HomeGoals,
+                AwayGoals=f.AwayGoals, DataSource=f.Provider, UpdatedUtc=DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) };
+        }
+        private static Dictionary<string, object> Deserialize(string json) {
+            return Map(new JavaScriptSerializer { MaxJsonLength = int.MaxValue }.DeserializeObject(json));
+        }
+        private static Dictionary<string, object> Map(object o) { return o as Dictionary<string, object> ?? new Dictionary<string, object>(); }
+        private static object Get(object o, string key, object fallback = null) { var m=Map(o); return m.ContainsKey(key) ? m[key] : fallback; }
+        private static List<object> List(object o) {
+            if (o is ArrayList) return ((ArrayList)o).Cast<object>().ToList();
+            if (o is object[]) return ((object[])o).ToList();
+            return new List<object>();
+        }
+        private static string String(object o) { return o == null ? "" : Convert.ToString(o, CultureInfo.InvariantCulture); }
+        private static int? Int(object o) {
+            if (o == null || o == DBNull.Value) return null;
+            int n; if (int.TryParse(String(o).Replace("%","").Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) return n;
+            double d; return double.TryParse(String(o), NumberStyles.Any, CultureInfo.InvariantCulture, out d) ? (int?)Math.Round(d) : null;
+        }
+        private static double? Double(object o) {
+            if (o == null || o == DBNull.Value) return null;
+            double n; return double.TryParse(String(o).Replace("%","").Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out n) ? (double?)n : null;
+        }
+        private static bool Same(string a, string b) { return string.Equals((a??"").Trim(), (b??"").Trim(), StringComparison.OrdinalIgnoreCase); }
+        private static void Set(ref int? home, ref int? away, int? value, bool isHome) { if(isHome) home=value; else away=value; }
+        private static void Set(ref double? home, ref double? away, double? value, bool isHome) { if(isHome) home=value; else away=value; }
+    }
+
+    public static class MultiMarketPredictionService
+    {
+        public static MultiMarketPrediction Analyze(FixtureRecord fixture, IList<FixtureRecord> goalHistory,
+            IList<MatchStatisticsRecord> statsHistory)
+        {
+            goalHistory = goalHistory ?? new List<FixtureRecord>();
+            statsHistory = statsHistory ?? new List<MatchStatisticsRecord>();
+            var homeGoals = goalHistory.Where(m => m.HomeGoals.HasValue && m.AwayGoals.HasValue &&
+                (Same(m.HomeTeam, fixture.HomeTeam) || Same(m.AwayTeam, fixture.HomeTeam))).Take(12).ToList();
+            var awayGoals = goalHistory.Where(m => m.HomeGoals.HasValue && m.AwayGoals.HasValue &&
+                (Same(m.HomeTeam, fixture.AwayTeam) || Same(m.AwayTeam, fixture.AwayTeam))).Take(12).ToList();
+            double homeRate = homeGoals.Count == 0 ? 1.35 : AverageGoals(homeGoals, fixture.HomeTeam, true);
+            double awayRate = awayGoals.Count == 0 ? 1.10 : AverageGoals(awayGoals, fixture.AwayTeam, true);
+            var h2h = goalHistory.Where(m => (Same(m.HomeTeam, fixture.HomeTeam) && Same(m.AwayTeam, fixture.AwayTeam)) ||
+                (Same(m.HomeTeam, fixture.AwayTeam) && Same(m.AwayTeam, fixture.HomeTeam))).Take(8).ToList();
+            if (h2h.Count >= 3) {
+                double h2hHome = h2h.Average(m => Same(m.HomeTeam, fixture.HomeTeam) ? m.HomeGoals.Value : m.AwayGoals.Value);
+                double h2hAway = h2h.Average(m => Same(m.HomeTeam, fixture.AwayTeam) ? m.HomeGoals.Value : m.AwayGoals.Value);
+                homeRate = 0.8 * homeRate + 0.2 * h2hHome;
+                awayRate = 0.8 * awayRate + 0.2 * h2hAway;
+            }
+            homeRate = Clamp(homeRate, 0.05, 5); awayRate = Clamp(awayRate, 0.05, 5);
+            var output = new MultiMarketPrediction { ExpectedHomeGoals=homeRate, ExpectedAwayGoals=awayRate,
+                HomeGoalSamples=homeGoals.Count, AwayGoalSamples=awayGoals.Count, Markets=new List<MarketEstimate>() };
+            var goalMarkets = PoissonModel.Analyze(homeRate, awayRate);
+            foreach (var m in goalMarkets.Markets) output.Markets.Add(new MarketEstimate { Market=m.Market, Outcome=m.Outcome,
+                Probability=Clamp(m.Probability,0,1), SampleSize=Math.Min(homeGoals.Count,awayGoals.Count),
+                HasSufficientData=homeGoals.Count>=5 && awayGoals.Count>=5, Explanation="Historical scores + modest head-to-head blend" });
+
+            AddCountMarket(output, statsHistory, fixture, "Corners", "Total over 8.5", "Total under 8.5",
+                s => Sum(s.HomeCorners,s.AwayCorners), 8.5, 5);
+            AddCountMarket(output, statsHistory, fixture, "Yellow cards", "Total over 3.5", "Total under 3.5",
+                s => Sum(s.HomeYellowCards,s.AwayYellowCards), 3.5, 5);
+            AddCountMarket(output, statsHistory, fixture, "Shots on target", "Total over 8.5", "Total under 8.5",
+                s => Sum(s.HomeShotsOnTarget,s.AwayShotsOnTarget), 8.5, 5);
+            AddCountMarket(output, statsHistory, fixture, "Total shots", "Total over 22.5", "Total under 22.5",
+                s => Sum(s.HomeShots,s.AwayShots), 22.5, 5);
+            AddCountMarket(output, statsHistory, fixture, "Home team corners", "Over 4.5", "Under 4.5",
+                s => Same(s.HomeTeam,fixture.HomeTeam) ? s.HomeCorners : s.AwayCorners, 4.5, 5);
+            AddCountMarket(output, statsHistory, fixture, "Away team corners", "Over 4.5", "Under 4.5",
+                s => Same(s.HomeTeam,fixture.AwayTeam) ? s.HomeCorners : s.AwayCorners, 4.5, 5);
+            var referee = statsHistory.Where(s => !string.IsNullOrWhiteSpace(s.Referee) && s.HomeYellowCards.HasValue && s.AwayYellowCards.HasValue)
+                .Where(s => s.KickoffUtc.CompareTo(fixture.KickoffUtc ?? "") < 0).ToList();
+            string targetReferee = statsHistory.Where(s => Same(s.HomeTeam,fixture.HomeTeam) && Same(s.AwayTeam,fixture.AwayTeam))
+                .Select(s => s.Referee).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+            var refereeRows = string.IsNullOrWhiteSpace(targetReferee) ? new List<MatchStatisticsRecord>() :
+                referee.Where(s => Same(s.Referee,targetReferee)).Take(30).ToList();
+            if (refereeRows.Count >= 5) {
+                double mean = refereeRows.Average(s => s.HomeYellowCards.Value + s.AwayYellowCards.Value);
+                double pOver = 1 - CdfPoisson(3, mean);
+                output.Markets.Add(new MarketEstimate { Market="Referee yellow cards", Outcome="Average per match",
+                    Probability=Clamp(mean/10.0,0,1), SampleSize=refereeRows.Count, HasSufficientData=true,
+                    Explanation="Referee historical mean: "+mean.ToString("0.00",CultureInfo.InvariantCulture)+" cards/match" });
+                output.Markets.Add(new MarketEstimate { Market="Referee yellow cards", Outcome="Total over 3.5",
+                    Probability=Clamp(pOver,0,1), SampleSize=refereeRows.Count, HasSufficientData=true,
+                    Explanation="Poisson approximation using this referee's prior matches" });
+            } else output.Markets.Add(new MarketEstimate { Market="Referee yellow cards", Outcome="Total over 3.5",
+                Probability=0, SampleSize=refereeRows.Count, HasSufficientData=false,
+                Explanation="Need at least five earlier matches with the same referee; no probability invented." });
+            output.DataQuality = "Goals: " + homeGoals.Count + "/" + awayGoals.Count + " team matches; stats rows: " + statsHistory.Count;
+            return output;
+        }
+
+        private static void AddCountMarket(MultiMarketPrediction output, IList<MatchStatisticsRecord> history, FixtureRecord fixture,
+            string market, string overLabel, string underLabel, Func<MatchStatisticsRecord,int?> selector, double threshold, int minSample)
+        {
+            var prior = history.Where(s => s.HomeGoals.HasValue && s.AwayGoals.HasValue &&
+                DateTimeOrder(s.KickoffUtc, fixture.KickoffUtc) < 0 &&
+                (Same(s.HomeTeam,fixture.HomeTeam) || Same(s.AwayTeam,fixture.HomeTeam) ||
+                 Same(s.HomeTeam,fixture.AwayTeam) || Same(s.AwayTeam,fixture.AwayTeam)))
+                .Select(s => selector(s)).Where(v => v.HasValue).Select(v => (double)v.Value).Take(80).ToList();
+            if (prior.Count < minSample) {
+                output.Markets.Add(new MarketEstimate { Market=market, Outcome=overLabel, Probability=0, SampleSize=prior.Count,
+                    HasSufficientData=false, Explanation="Insufficient historical event statistics; not calculated." });
+                output.Markets.Add(new MarketEstimate { Market=market, Outcome=underLabel, Probability=0, SampleSize=prior.Count,
+                    HasSufficientData=false, Explanation="Insufficient historical event statistics; not calculated." });
+                return;
+            }
+            double mean = Clamp(prior.Average(), 0.05, 50);
+            double pOver = 1 - CdfPoisson((int)Math.Floor(threshold), mean);
+            output.Markets.Add(new MarketEstimate { Market=market, Outcome=overLabel, Probability=Clamp(pOver,0,1),
+                SampleSize=prior.Count, HasSufficientData=true, Explanation="Empirical historical mean "+mean.ToString("0.00",CultureInfo.InvariantCulture)+"; Poisson approximation" });
+            output.Markets.Add(new MarketEstimate { Market=market, Outcome=underLabel, Probability=Clamp(1-pOver,0,1),
+                SampleSize=prior.Count, HasSufficientData=true, Explanation="Complement of over probability; Poisson approximation" });
+        }
+        private static int? Sum(int? a,int? b) { return a.HasValue && b.HasValue ? (int?)(a.Value+b.Value) : null; }
+        private static int DateTimeOrder(string a,string b) { return string.Compare(a??"",b??"",StringComparison.Ordinal); }
+        private static double AverageGoals(List<FixtureRecord> rows,string team,bool scored) {
+            return rows.Average(m => {
+                bool home=Same(m.HomeTeam,team);
+                int own=scored ? (home?m.HomeGoals.Value:m.AwayGoals.Value) : (home?m.AwayGoals.Value:m.HomeGoals.Value);
+                return (double)own;
+            });
+        }
+        private static double CdfPoisson(int max,double lambda) {
+            double term=Math.Exp(-lambda), sum=term;
+            for(int i=1;i<=max;i++){term*=lambda/i;sum+=term;}
+            return Clamp(sum,0,1);
+        }
+        private static double Clamp(double v,double min,double max) { return double.IsNaN(v)||double.IsInfinity(v)?min:Math.Max(min,Math.Min(max,v)); }
+        private static bool Same(string a,string b) { return string.Equals((a??"").Trim(),(b??"").Trim(),StringComparison.OrdinalIgnoreCase); }
+    }
+}
