@@ -349,6 +349,20 @@ namespace KoaZa
                     double factor = Math.Max(0.65, Math.Min(1.35, awayShots / (leagueShots / 2.0)));
                     awayRate = Clamp(awayRate * (0.90 + 0.10 * factor));
                 }
+                // Corners are a weaker attack-pressure signal, so they receive only a small 5% influence.
+                double leagueCorners = AverageTotalCorners(baselineMatches);
+                double homeCornersAverage = TeamCornerSamples(homeMatches, fixture.HomeTeam).DefaultIfEmpty(0).Average();
+                double awayCornersAverage = TeamCornerSamples(awayMatches, fixture.AwayTeam).DefaultIfEmpty(0).Average();
+                if (leagueCorners > 0 && homeCornersAverage > 0)
+                {
+                    double factor = Math.Max(0.70, Math.Min(1.30, homeCornersAverage / (leagueCorners / 2.0)));
+                    homeRate = Clamp(homeRate * (0.95 + 0.05 * factor));
+                }
+                if (leagueCorners > 0 && awayCornersAverage > 0)
+                {
+                    double factor = Math.Max(0.70, Math.Min(1.30, awayCornersAverage / (leagueCorners / 2.0)));
+                    awayRate = Clamp(awayRate * (0.95 + 0.05 * factor));
+                }
 
                 var probabilities = PoissonModel.Analyze(homeRate, awayRate);
                 AddHistoricalStatMarkets(probabilities, baselineMatches, homeMatches, awayMatches, fixture);
@@ -561,6 +575,13 @@ namespace KoaZa
                 if (value.HasValue) result.Add(value.Value);
             }
             return result;
+        }
+
+        private static double AverageTotalCorners(List<FixtureRecord> matches)
+        {
+            var values = (matches ?? new List<FixtureRecord>()).Where(m => m.HomeCorners.HasValue && m.AwayCorners.HasValue)
+                .Select(m => (double)(m.HomeCorners.Value + m.AwayCorners.Value)).ToList();
+            return values.Count == 0 ? 0 : values.Average();
         }
 
         private static double AverageTotalShotsOnTarget(List<FixtureRecord> matches)
