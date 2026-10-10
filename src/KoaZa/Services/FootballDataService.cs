@@ -268,7 +268,11 @@ namespace KoaZa.Services
             string value = errors as string;
             if (value != null) return value.Length > 0;
             var map = errors as Dictionary<string, object>;
-            return map != null && map.Count > 0;
+            if (map != null) return map.Count > 0;
+            var array = errors as object[];
+            if (array != null) return array.Length > 0;
+            var list = errors as System.Collections.ArrayList;
+            return list != null && list.Count > 0;
         }
         private static Dictionary<string, object> GetMap(object source, string key)
         {
