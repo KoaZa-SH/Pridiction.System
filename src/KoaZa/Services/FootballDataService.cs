@@ -1929,9 +1929,11 @@ namespace KoaZa.Services
                     FootballDataService.FetchFromDate(choice.Id, competition, season, startDate, endDate));
                 DatabaseServiceProxy.SaveFixtures(records);
                 _grid.ItemsSource = records.Select(r => new FixtureImportRow(r)).ToList();
+                _status.Text = LocalizationService.T("Fixtures saved. Importing detailed stats for up to 10 completed matches...", "مسابقات ذخیره شد؛ در حال دریافت آمار تفصیلی حداکثر ۱۰ بازی تمام‌شده...");
+                int statsImported = await System.Threading.Tasks.Task.Run(() => DatabaseServiceProxy.ImportHistoricalStatistics(records));
                 _status.Text = LocalizationService.IsPersian
-                    ? records.Count + " مسابقه از " + startDate.ToString("yyyy-MM-dd") + " تا " + endDate.ToString("yyyy-MM-dd") + " دریافت و در پایگاه داده محلی ذخیره شد. داده‌های قبلی پاک نمی‌شوند؛ پوشش به سرویس و سهمیه وابسته است."
-                    : "Received and saved " + records.Count + " fixtures/results from " + startDate.ToString("yyyy-MM-dd") + " through " + endDate.ToString("yyyy-MM-dd") + ". Existing local records are retained; coverage depends on provider and quota.";
+                    ? records.Count + " مسابقه از " + startDate.ToString("yyyy-MM-dd") + " تا " + endDate.ToString("yyyy-MM-dd") + " دریافت و ذخیره شد؛ آمار ساختاریافته برای " + statsImported + " مسابقه وارد شد. داده‌های قبلی حفظ می‌شوند؛ پوشش به سرویس و سهمیه وابسته است."
+                    : "Received and saved " + records.Count + " fixtures/results from " + startDate.ToString("yyyy-MM-dd") + " through " + endDate.ToString("yyyy-MM-dd") + "; structured event stats imported for " + statsImported + " matches. Existing local data is retained; coverage depends on provider and quota.";
             }
             catch (Exception ex) { _status.Text = LocalizationService.T("Import failed: ", "دریافت ناموفق بود: ") + ex.Message; }
             finally { if (fetchButton != null) fetchButton.IsEnabled = true; }
@@ -1971,6 +1973,47 @@ namespace KoaZa.Services
         public static void SaveFixtures(List<FixtureRecord> fixtures)
         {
             new KoaZa.Data.DatabaseService().SaveFixtures(fixtures);
+        }
+
+        public static int ImportHistoricalStatistics(List<FixtureRecord> fixtures)
+        {
+            if (fixtures == null) return 0;
+            var candidates = fixtures.Where(f => f.HomeGoals.HasValue && f.AwayGoals.HasValue &&
+                new[] { "FT", "AET", "PEN", "FINISHED", "MATCH FINISHED", "FULL TIME", "AFTER EXTRA TIME", "AFTER PENALTIES" }.Contains((f.Status ?? "").Trim().ToUpperInvariant()) &&
+                (f.Provider == "API-Football" || f.Provider == "ApiFootball" || f.Provider == "ApiSports" || f.Provider == "FiveDollarFootballAPI"))
+                .OrderByDescending(f => f.KickoffUtc).Take(10).ToList();
+            var db = new KoaZa.Data.DatabaseService();
+            int imported = 0;
+            foreach (var fixture in candidates)
+            {
+                try
+                {
+                    string json = FootballDataService.FetchFixtureDetails(fixture);
+                    if (string.IsNullOrWhiteSpace(json)) continue;
+                    db.SaveFixtureDetails(fixture.Provider, fixture.ExternalId, json);
+                    var normalized = fixture.Provider == "FiveDollarFootballAPI"
+                        ? MatchStatisticsParser.ParseFiveDollarOrGeneric(json, fixture)
+                        : MatchStatisticsParser.ParseApiFootball(json, fixture);
+                    if (normalized == null) continue;
+                    bool hasStats = normalized.HomeShots.HasValue || normalized.AwayShots.HasValue ||
+                        normalized.HomeShotsOnTarget.HasValue || normalized.AwayShotsOnTarget.HasValue ||
+                        normalized.HomeCorners.HasValue || normalized.AwayCorners.HasValue ||
+                        normalized.HomeYellowCards.HasValue || normalized.AwayYellowCards.HasValue ||
+                        normalized.HomeRedCards.HasValue || normalized.AwayRedCards.HasValue;
+                    if (!hasStats) continue;
+                    db.SaveMatchStatistics(normalized);
+                    var legacy = FootballDataService.ExtractFixtureStatistics(json, fixture);
+                    legacy.HomeCorners = normalized.HomeCorners; legacy.AwayCorners = normalized.AwayCorners;
+                    legacy.HomeShotsOnTarget = normalized.HomeShotsOnTarget; legacy.AwayShotsOnTarget = normalized.AwayShotsOnTarget;
+                    legacy.HomeYellowCards = normalized.HomeYellowCards; legacy.AwayYellowCards = normalized.AwayYellowCards;
+                    legacy.Referee = normalized.Referee;
+                    db.SaveNormalizedFixtureStatistics(legacy);
+                    db.ReplaceMatchEvents(fixture.Provider, fixture.ExternalId, MatchStatisticsParser.ParseEvents(json, fixture));
+                    imported++;
+                }
+                catch { /* One unavailable match must not cancel the rest of the import. */ }
+            }
+            return imported;
         }
     }
 }
