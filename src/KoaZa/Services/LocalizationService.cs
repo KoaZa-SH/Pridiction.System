@@ -78,10 +78,8 @@ namespace KoaZa.Services
         }
         private static void ApplyTo(DependencyObject parent)
         {
-            foreach (object item in LogicalTreeHelper.GetChildren(parent).Cast<object>().ToList())
+            foreach (DependencyObject child in GetLogicalChildren(parent))
             {
-                var child = item as DependencyObject;
-                if (child == null) continue;
                 var tb = child as TextBlock; if (tb != null) tb.Text = Translate(tb.Text);
                 var button = child as Button; if (button != null && button.Content is string) button.Content = Translate((string)button.Content);
                 var label = child as Label; if (label != null && label.Content is string) label.Content = Translate((string)label.Content);
@@ -93,6 +91,16 @@ namespace KoaZa.Services
                         if (gridColumn.Header is string) gridColumn.Header = Translate((string)gridColumn.Header);
                 ApplyTo(child);
             }
+        }
+
+        private static IEnumerable<DependencyObject> GetLogicalChildren(DependencyObject parent)
+        {
+            try
+            {
+                var children = LogicalTreeHelper.GetChildren(parent);
+                return children == null ? Enumerable.Empty<DependencyObject>() : children.OfType<DependencyObject>().ToList();
+            }
+            catch { return Enumerable.Empty<DependencyObject>(); }
         }
 
         public static string League(string name)
