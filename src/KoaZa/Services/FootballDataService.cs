@@ -614,7 +614,7 @@ namespace KoaZa.Services
             }
             if (choice.Id != "OpenLigaDB" && key.Length == 0)
             {
-                MessageBox.Show(this, "This provider requires an API key/token.", "API settings", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(this, LocalizationService.T("This provider requires an API key/token.", "این سرویس به کلید API یا توکن نیاز دارد."), LocalizationService.T("API settings", "تنظیمات API"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             if (_providers.Any(p => p.Provider == providerId && p.Key == key))
@@ -651,7 +651,7 @@ namespace KoaZa.Services
                 ApiProviderStore.Save(_providers);
                 _status.Text = LocalizationService.T("Saved ", "ذخیره شد: ") + _providers.Count + LocalizationService.T(" provider configuration(s), encrypted for this Windows user.", " سرویس؛ اطلاعات برای کاربر ویندوز رمزگذاری شد.");
             }
-            catch (Exception ex) { _status.Text = "Save failed: " + ex.Message; }
+            catch (Exception ex) { _status.Text = LocalizationService.T("Save failed: ", "ذخیره ناموفق بود: ") + ex.Message; }
         }
         private void RefreshList()
         {
@@ -750,7 +750,7 @@ namespace KoaZa.Services
             int season;
             if (choice == null || !int.TryParse(_seasonBox.Text.Trim(), out season) || season < 2000 || season > 2100)
             {
-                MessageBox.Show(this, "Enter a valid season year.", "Fixture import", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(this, LocalizationService.T("Enter a valid season year.", "سال فصل معتبر وارد کن."), LocalizationService.T("Fixture import", "دریافت مسابقات"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             try
