@@ -173,10 +173,8 @@ namespace KoaZa.Services
                 {
                     // One bounded date-range request replaces dozens of daily calls. API-Football
                     // returns fixtures and completed scores across the competitions covered by this key.
-                    string json = Request("https://v3.football.api-sports.io/fixtures?from=" + from + "&to=" + to + "&timezone=UTC", "x-apisports-key", config.Key);
-                    var root = Parse(json);
-                    if (HasErrors(root)) throw new InvalidOperationException("API-SPORTS returned an API or quota error for " + from + " through " + to + ".");
-                    combined.AddRange(ParseApiFootballFixtures(root));
+                    combined.AddRange(FetchApiFootballPaged(
+                        "/fixtures?from=" + from + "&to=" + to + "&timezone=UTC", config.Key));
                     if (combined.Count > 0) break;
                 }
                 catch (Exception ex) { errors.Add("API-SPORTS: " + ex.Message); }
@@ -260,13 +258,33 @@ namespace KoaZa.Services
             {
                 try
                 {
-                    var root = Parse(Request("https://v3.football.api-sports.io" + path, "x-apisports-key", config.Key));
-                    if (HasErrors(root)) { last = new InvalidOperationException("API-Football returned an API or quota error."); continue; }
-                    return ParseApiFootballFixtures(root);
+                    return FetchApiFootballPaged(path, config.Key);
                 }
                 catch (Exception ex) { last = ex; }
             }
             throw new InvalidOperationException("All enabled API-Football keys failed for the requested date range. Check league ID, key and quota.", last);
+        }
+
+        private static List<FixtureRecord> FetchApiFootballPaged(string path, string apiKey)
+        {
+            var output = new List<FixtureRecord>();
+            int page = 1;
+            int totalPages = 1;
+            do
+            {
+                string separator = path.IndexOf('?') >= 0 ? "&" : "?";
+                var root = Parse(Request("https://v3.football.api-sports.io" + path + separator + "page=" + page, "x-apisports-key", apiKey));
+                if (HasErrors(root))
+                    throw new InvalidOperationException("API-SPORTS returned an API/quota error while reading page " + page + ". If the requested history is large, narrow the date range or continue after the daily quota resets.");
+                output.AddRange(ParseApiFootballFixtures(root));
+                var paging = GetMap(root, "paging");
+                int parsedTotal;
+                if (int.TryParse(GetString(paging, "total", "1"), NumberStyles.Integer, CultureInfo.InvariantCulture, out parsedTotal))
+                    totalPages = Math.Max(1, parsedTotal);
+                page++;
+            }
+            while (page <= totalPages);
+            return output;
         }
 
         private static string FixtureDeduplicationKey(FixtureRecord fixture)
