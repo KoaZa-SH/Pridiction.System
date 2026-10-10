@@ -71,7 +71,7 @@ namespace KoaZa.Services
                 {"Home win","برد میزبان"},{"Draw","مساوی"},{"Away win","برد میهمان"},{"Yes","بله"},{"No","خیر"},
                 {"Over 0.5","بیشتر از ۰٫۵"},{"Under 0.5","کمتر از ۰٫۵"},{"Over 1.5","بیشتر از ۱٫۵"},{"Under 1.5","کمتر از ۱٫۵"},
                 {"Over 2.5","بیشتر از ۲٫۵"},{"Under 2.5","کمتر از ۲٫۵"},{"Over 3.5","بیشتر از ۳٫۵"},{"Under 3.5","کمتر از ۳٫۵"},
-                {"Exactly 0","دقیقاً ۰ گل"},{"Exactly 1","دقیقاً ۱ گل"},{"Exactly 2","دقیقاً ۲ گل"},{"Exactly 3","دقیقاً ۳ گل"},{"4 or more","۴ گل یا بیشتر"},{"Over 2.5","بیشتر از ۲٫۵"}
+                {"Exactly 0","دقیقاً ۰ گل"},{"Exactly 1","دقیقاً ۱ گل"},{"Exactly 2","دقیقاً ۲ گل"},{"Exactly 3","دقیقاً ۳ گل"},{"4 or more","۴ گل یا بیشتر"}
             };
             string m, o;
             return (markets.TryGetValue(market, out m) ? m : market) + " — " +
