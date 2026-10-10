@@ -247,6 +247,22 @@ namespace KoaZa.Services
                 homeRate = 0.8 * homeRate + 0.2 * h2hHome;
                 awayRate = 0.8 * awayRate + 0.2 * h2hAway;
             }
+            // Event data gently adjusts goal rates when a team has enough prior observations.
+            // The adjustment is deliberately capped: raw shots/corners are not treated as goals.
+            double leagueSot = MeanPerTeam(statsHistory, s => s.HomeShotsOnTarget, s => s.AwayShotsOnTarget);
+            double leagueCorners = MeanPerTeam(statsHistory, s => s.HomeCorners, s => s.AwayCorners);
+            double homeSot = TeamAverage(statsHistory, fixture.HomeTeam, true, s => s.HomeShotsOnTarget, s => s.AwayShotsOnTarget, fixture.KickoffUtc);
+            double homeSotConceded = TeamAverage(statsHistory, fixture.HomeTeam, false, s => s.HomeShotsOnTarget, s => s.AwayShotsOnTarget, fixture.KickoffUtc);
+            double awaySot = TeamAverage(statsHistory, fixture.AwayTeam, true, s => s.HomeShotsOnTarget, s => s.AwayShotsOnTarget, fixture.KickoffUtc);
+            double awaySotConceded = TeamAverage(statsHistory, fixture.AwayTeam, false, s => s.HomeShotsOnTarget, s => s.AwayShotsOnTarget, fixture.KickoffUtc);
+            if (leagueSot > 0 && homeSot > 0 && awaySotConceded > 0)
+                homeRate *= Clamp(0.85 + 0.075 * (homeSot / leagueSot + awaySotConceded / leagueSot), 0.85, 1.15);
+            if (leagueSot > 0 && awaySot > 0 && homeSotConceded > 0)
+                awayRate *= Clamp(0.85 + 0.075 * (awaySot / leagueSot + homeSotConceded / leagueSot), 0.85, 1.15);
+            double homeCornerAvg = TeamAverage(statsHistory, fixture.HomeTeam, true, s => s.HomeCorners, s => s.AwayCorners, fixture.KickoffUtc);
+            double awayCornerAvg = TeamAverage(statsHistory, fixture.AwayTeam, true, s => s.HomeCorners, s => s.AwayCorners, fixture.KickoffUtc);
+            if (leagueCorners > 0 && homeCornerAvg > 0) homeRate *= Clamp(1 + 0.025 * (homeCornerAvg / leagueCorners - 1), 0.97, 1.03);
+            if (leagueCorners > 0 && awayCornerAvg > 0) awayRate *= Clamp(1 + 0.025 * (awayCornerAvg / leagueCorners - 1), 0.97, 1.03);
             homeRate = Clamp(homeRate, 0.05, 5); awayRate = Clamp(awayRate, 0.05, 5);
             var output = new MultiMarketPrediction { ExpectedHomeGoals=homeRate, ExpectedAwayGoals=awayRate,
                 HomeGoalSamples=homeGoals.Count, AwayGoalSamples=awayGoals.Count, Markets=new List<MarketEstimate>() };
@@ -306,6 +322,24 @@ namespace KoaZa.Services
                 SampleSize=prior.Count, HasSufficientData=true, Explanation="Empirical historical mean "+mean.ToString("0.00",CultureInfo.InvariantCulture)+"; Poisson approximation" });
             output.Markets.Add(new MarketEstimate { Market=market, Outcome=underLabel, Probability=Clamp(1-pOver,0,1),
                 SampleSize=prior.Count, HasSufficientData=true, Explanation="Complement of over probability; Poisson approximation" });
+        }
+        private static double MeanPerTeam(IList<MatchStatisticsRecord> rows, Func<MatchStatisticsRecord,int?> home, Func<MatchStatisticsRecord,int?> away)
+        {
+            var values = (rows ?? new List<MatchStatisticsRecord>()).SelectMany(s => new[] { home(s), away(s) })
+                .Where(v => v.HasValue).Select(v => (double)v.Value).ToList();
+            return values.Count < 10 ? 0 : values.Average();
+        }
+        private static double TeamAverage(IList<MatchStatisticsRecord> rows, string team, bool own,
+            Func<MatchStatisticsRecord,int?> homeValue, Func<MatchStatisticsRecord,int?> awayValue, string before)
+        {
+            var values = (rows ?? new List<MatchStatisticsRecord>())
+                .Where(s => DateTimeOrder(s.KickoffUtc, before) < 0 &&
+                    (Same(s.HomeTeam,team) || Same(s.AwayTeam,team)))
+                .OrderByDescending(s => s.KickoffUtc)
+                .Take(12)
+                .Select(s => Same(s.HomeTeam,team) == own ? homeValue(s) : awayValue(s))
+                .Where(v => v.HasValue).Select(v => (double)v.Value).ToList();
+            return values.Count < 5 ? 0 : values.Average();
         }
         private static int? Sum(int? a,int? b) { return a.HasValue && b.HasValue ? (int?)(a.Value+b.Value) : null; }
         private static int DateTimeOrder(string a,string b) { return string.Compare(a??"",b??"",StringComparison.Ordinal); }
