@@ -17,13 +17,17 @@ namespace KoaZa.Services
         public string Provider { get; set; }
         public string Key { get; set; }
         public bool Enabled { get; set; }
+        public string BaseUrl { get; set; }
+        public string HeaderName { get; set; }
         public string DisplayName
         {
             get
             {
-                string label = Provider == "ApiFootball" ? "API-Football" :
+                string label = Provider == "ApiFootball" || Provider == "ApiSports" ? "API-SPORTS" :
                     Provider == "FootballData" ? "football-data.org" :
-                    Provider == "OpenLigaDB" ? "OpenLigaDB (no key)" : Provider;
+                    Provider == "OpenLigaDB" ? "OpenLigaDB (no key)" :
+                    Provider == "OddsPapi" ? "OddsPapi" : Provider == "Floodlight" ? "Floodlight" :
+                    Provider == "SportsOpenData" ? "Sports Open Data" : Provider == "SportsAPI360" ? "SportsAPI360" : Provider;
                 return label + (string.IsNullOrEmpty(Key) ? "" : " • " + Mask(Key)) +
                     (Enabled ? " • enabled" : " • disabled");
             }
@@ -53,14 +57,16 @@ namespace KoaZa.Services
                 foreach (string line in lines)
                 {
                     string[] parts = line.Split('|');
-                    if (parts.Length != 3) continue;
+                    if (parts.Length != 3 && parts.Length != 5) continue;
                     try
                     {
                         result.Add(new ApiProviderConfig
                         {
                             Provider = Decode(parts[0]),
                             Key = Decode(parts[1]),
-                            Enabled = Decode(parts[2]) == "1"
+                            Enabled = Decode(parts[2]) == "1",
+                            BaseUrl = parts.Length >= 5 ? Decode(parts[3]) : "",
+                            HeaderName = parts.Length >= 5 ? Decode(parts[4]) : ""
                         });
                     }
                     catch { }
@@ -72,7 +78,7 @@ namespace KoaZa.Services
 
         public static void Save(IEnumerable<ApiProviderConfig> providers)
         {
-            var lines = providers.Select(p => Encode(p.Provider) + "|" + Encode(p.Key ?? "") + "|" + Encode(p.Enabled ? "1" : "0"));
+            var lines = providers.Select(p => Encode(p.Provider) + "|" + Encode(p.Key ?? "") + "|" + Encode(p.Enabled ? "1" : "0") + "|" + Encode(p.BaseUrl ?? "") + "|" + Encode(p.HeaderName ?? ""));
             Directory.CreateDirectory(Folder);
             byte[] clearBytes = Encoding.UTF8.GetBytes(string.Join(Environment.NewLine, lines));
             byte[] protectedBytes = ProtectedData.Protect(clearBytes, null, DataProtectionScope.CurrentUser);
@@ -104,7 +110,7 @@ namespace KoaZa.Services
         public static List<FixtureRecord> Fetch(string provider, string league, int season)
         {
             if (provider == "Auto") return FetchAuto(league, season);
-            if (provider == "ApiFootball") return FetchApiFootball(league, season);
+            if (provider == "ApiFootball" || provider == "ApiSports") return FetchApiFootball(league, season);
             if (provider == "FootballData") return FetchFootballData(league, season);
             if (provider == "OpenLigaDB") return FetchOpenLiga(league, season);
             throw new InvalidOperationException("Select a supported data provider.");
