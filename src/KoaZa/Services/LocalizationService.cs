@@ -156,4 +156,134 @@ namespace KoaZa.Services
             return v;
         }
     }
+    public static class ThemeService
+    {
+        private static readonly string ThemePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KoaZa", "theme.txt");
+        public static string Mode { get; private set; } = "System";
+
+        public static void Load()
+        {
+            try
+            {
+                if (File.Exists(ThemePath))
+                {
+                    string value = File.ReadAllText(ThemePath).Trim();
+                    if (value == "Light" || value == "Dark" || value == "System") Mode = value;
+                }
+            }
+            catch { Mode = "System"; }
+        }
+
+        public static void SetMode(string mode)
+        {
+            Mode = mode == "Light" || mode == "Dark" ? mode : "System";
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(ThemePath));
+                File.WriteAllText(ThemePath, Mode);
+            }
+            catch { }
+        }
+
+        private static bool IsDark()
+        {
+            if (Mode == "Dark") return true;
+            if (Mode == "Light") return false;
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"))
+                {
+                    object value = key == null ? null : key.GetValue("AppsUseLightTheme");
+                    if (value != null) return Convert.ToInt32(value) == 0;
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        public static void Apply(Window window)
+        {
+            if (window == null) return;
+            bool dark = IsDark();
+            Color background = dark ? Color.FromRgb(24, 30, 28) : Color.FromRgb(244, 247, 245);
+            window.Background = new SolidColorBrush(background);
+            ApplyTo(window, dark);
+        }
+
+        private static void ApplyTo(DependencyObject parent, bool dark)
+        {
+            foreach (DependencyObject child in GetChildren(parent))
+            {
+                var element = child as FrameworkElement;
+                if (element != null && element.Name != "MarketChartFrame" && element.Name != "MarketRowCard")
+                {
+                    var border = element as Border;
+                    if (border != null && IsLightSurface(border.Background))
+                        border.Background = new SolidColorBrush(dark ? Color.FromRgb(34, 42, 39) : Color.FromRgb(255, 255, 255));
+
+                    var text = element as TextBlock;
+                    if (text != null && IsDefaultTextColor(text.Foreground))
+                        text.Foreground = new SolidColorBrush(dark ? Color.FromRgb(226, 233, 229) : Color.FromRgb(36, 52, 44));
+
+                    var grid = element as DataGrid;
+                    if (grid != null)
+                    {
+                        grid.Background = new SolidColorBrush(dark ? Color.FromRgb(34, 42, 39) : Colors.White);
+                        grid.Foreground = new SolidColorBrush(dark ? Color.FromRgb(226, 233, 229) : Color.FromRgb(36, 52, 44));
+                        grid.GridLinesVisibility = DataGridGridLinesVisibility.Horizontal;
+                        grid.HorizontalGridLinesBrush = new SolidColorBrush(dark ? Color.FromRgb(64, 76, 70) : Color.FromRgb(228, 235, 230));
+                    }
+
+                    var combo = element as ComboBox;
+                    if (combo != null)
+                    {
+                        combo.Background = new SolidColorBrush(dark ? Color.FromRgb(43, 52, 48) : Colors.White);
+                        combo.Foreground = new SolidColorBrush(dark ? Color.FromRgb(238, 242, 239) : Color.FromRgb(36, 52, 44));
+                    }
+                    var input = element as TextBox;
+                    if (input != null)
+                    {
+                        input.Background = new SolidColorBrush(dark ? Color.FromRgb(43, 52, 48) : Colors.White);
+                        input.Foreground = new SolidColorBrush(dark ? Color.FromRgb(238, 242, 239) : Color.FromRgb(36, 52, 44));
+                        input.CaretBrush = input.Foreground;
+                    }
+                    var list = element as ListBox;
+                    if (list != null)
+                    {
+                        list.Background = new SolidColorBrush(dark ? Color.FromRgb(34, 42, 39) : Colors.White);
+                        list.Foreground = new SolidColorBrush(dark ? Color.FromRgb(226, 233, 229) : Color.FromRgb(36, 52, 44));
+                    }
+                }
+                ApplyTo(child, dark);
+            }
+        }
+
+        private static bool IsLightSurface(Brush brush)
+        {
+            var solid = brush as SolidColorBrush;
+            if (solid == null) return false;
+            return solid.Color == Colors.White || solid.Color == Color.FromRgb(244, 247, 245) ||
+                   solid.Color == Color.FromRgb(255, 255, 255);
+        }
+
+        private static bool IsDefaultTextColor(Brush brush)
+        {
+            var solid = brush as SolidColorBrush;
+            if (solid == null) return false;
+            return solid.Color == Color.FromRgb(22, 59, 43) || solid.Color == Color.FromRgb(94, 110, 101) ||
+                   solid.Color == Color.FromRgb(64, 84, 73) || solid.Color == Color.FromRgb(122, 137, 128) ||
+                   solid.Color == Color.FromRgb(36, 52, 44);
+        }
+
+        private static IEnumerable<DependencyObject> GetChildren(DependencyObject parent)
+        {
+            try
+            {
+                var children = LogicalTreeHelper.GetChildren(parent);
+                return children == null ? Enumerable.Empty<DependencyObject>() : children.OfType<DependencyObject>().ToList();
+            }
+            catch { return Enumerable.Empty<DependencyObject>(); }
+        }
+    }
 }
