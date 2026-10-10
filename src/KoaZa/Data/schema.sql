@@ -1,0 +1,17 @@
+PRAGMA foreign_keys = ON;
+CREATE TABLE IF NOT EXISTS Predictions (
+  Id INTEGER PRIMARY KEY AUTOINCREMENT,
+  CreatedUtc TEXT NOT NULL,
+  HomeTeam TEXT NOT NULL,
+  AwayTeam TEXT NOT NULL,
+  HomeGoalRate REAL NOT NULL CHECK(HomeGoalRate >= 0),
+  AwayGoalRate REAL NOT NULL CHECK(AwayGoalRate >= 0),
+  HomeWin REAL NOT NULL CHECK(HomeWin BETWEEN 0 AND 1),
+  DrawProbability REAL NOT NULL CHECK(DrawProbability BETWEEN 0 AND 1),
+  AwayWin REAL NOT NULL CHECK(AwayWin BETWEEN 0 AND 1),
+  Over25 REAL NOT NULL CHECK(Over25 BETWEEN 0 AND 1),
+  Under25 REAL NOT NULL CHECK(Under25 BETWEEN 0 AND 1),
+  BothTeamsScore REAL NOT NULL CHECK(BothTeamsScore BETWEEN 0 AND 1),
+  ModelVersion TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS IX_Predictions_CreatedUtc ON Predictions(CreatedUtc);
