@@ -59,6 +59,17 @@
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
           <TextBlock Text="Upcoming fixtures / بازی‌های پیش رو" FontSize="17" FontWeight="Bold" Foreground="#163B2B" Margin="0,0,0,10"/>
           <DataGrid x:Name="FixturesGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" SelectionMode="Single" SelectionChanged="FixturesGrid_SelectionChanged" HeadersVisibility="Column" GridLinesVisibility="Horizontal">
+            <DataGrid.RowStyle>
+              <Style TargetType="{x:Type DataGridRow}">
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding IsLive}" Value="True">
+                    <Setter Property="Background" Value="#FFFFE7C2"/>
+                    <Setter Property="Foreground" Value="#8A3D00"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </DataGrid.RowStyle>
             <DataGrid.Columns>
               <DataGridTextColumn Header="Date / ساعت" Binding="{Binding KickoffDisplay}" Width="1.15*"/>
               <DataGridTextColumn Header="League / لیگ" Binding="{Binding League}" Width="1.1*"/>
@@ -94,7 +105,7 @@
                           <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="2.2*"/><ColumnDefinition Width="2.3*"/><ColumnDefinition Width="1.5*"/></Grid.ColumnDefinitions>
                             <TextBlock x:Name="MarketLabelText" Text="{Binding Label}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,8,0" FontSize="12"/>
-                            <ProgressBar x:Name="MarketProgress" Grid.Column="1" Value="{Binding Percent}" Maximum="100" Height="13" VerticalAlignment="Center" Foreground="#16865B" Background="#E5ECE7" BorderThickness="0"/>
+                            <ProgressBar x:Name="MarketProgress" Grid.Column="1" Value="{Binding Percent}" Maximum="100" Height="13" VerticalAlignment="Center" Foreground="{Binding BarBrush}" Background="#E5ECE7" BorderThickness="0"/>
                             <TextBlock x:Name="MarketPercentText" Grid.Column="2" Text="{Binding PercentLabel}" VerticalAlignment="Center" HorizontalAlignment="Right" TextAlignment="Right" TextWrapping="Wrap" FontWeight="SemiBold" FontSize="11" Margin="5,0,0,0"/>
                           </Grid>
                         </Border>
