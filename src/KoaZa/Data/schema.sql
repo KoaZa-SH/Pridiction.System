@@ -76,3 +76,71 @@ CREATE TABLE IF NOT EXISTS FixtureHistory (
   VarReviews INTEGER NULL,
   UNIQUE(Provider, ExternalId, HomeGoals, AwayGoals, Status, KickoffUtc)
 );
+
+-- Normalized historical event statistics; NULL means unavailable, never zero.
+CREATE TABLE IF NOT EXISTS MatchStatistics (
+  Id INTEGER PRIMARY KEY AUTOINCREMENT,
+  Provider TEXT NOT NULL,
+  ExternalId TEXT NOT NULL,
+  League TEXT,
+  KickoffUtc TEXT,
+  HomeTeam TEXT NOT NULL,
+  AwayTeam TEXT NOT NULL,
+  HomeGoals INTEGER,
+  AwayGoals INTEGER,
+  Referee TEXT,
+  HomeShots INTEGER,
+  AwayShots INTEGER,
+  HomeShotsOnTarget INTEGER,
+  AwayShotsOnTarget INTEGER,
+  HomeCorners INTEGER,
+  AwayCorners INTEGER,
+  HomeYellowCards INTEGER,
+  AwayYellowCards INTEGER,
+  HomeRedCards INTEGER,
+  AwayRedCards INTEGER,
+  HomeFouls INTEGER,
+  AwayFouls INTEGER,
+  HomePossession REAL,
+  AwayPossession REAL,
+  DataSource TEXT,
+  UpdatedUtc TEXT NOT NULL,
+  UNIQUE(Provider, ExternalId)
+);
+CREATE INDEX IF NOT EXISTS IX_MatchStatistics_TeamsKickoff ON MatchStatistics(HomeTeam, AwayTeam, KickoffUtc);
+CREATE INDEX IF NOT EXISTS IX_MatchStatistics_RefereeKickoff ON MatchStatistics(Referee, KickoffUtc);
+
+CREATE TABLE IF NOT EXISTS MatchEvents (
+  Id INTEGER PRIMARY KEY AUTOINCREMENT,
+  Provider TEXT NOT NULL,
+  ExternalId TEXT NOT NULL,
+  EventIndex INTEGER NOT NULL,
+  Minute INTEGER,
+  Team TEXT,
+  Player TEXT,
+  Assist TEXT,
+  Type TEXT,
+  Detail TEXT,
+  UNIQUE(Provider, ExternalId, EventIndex)
+);
+
+CREATE TABLE IF NOT EXISTS MarketPredictions (
+  Id INTEGER PRIMARY KEY AUTOINCREMENT,
+  RunId TEXT NOT NULL,
+  CreatedUtc TEXT NOT NULL,
+  Provider TEXT,
+  ExternalId TEXT,
+  League TEXT,
+  KickoffUtc TEXT,
+  HomeTeam TEXT NOT NULL,
+  AwayTeam TEXT NOT NULL,
+  Market TEXT NOT NULL,
+  Outcome TEXT NOT NULL,
+  Probability REAL,
+  SampleSize INTEGER NOT NULL,
+  HasSufficientData INTEGER NOT NULL,
+  Explanation TEXT,
+  ModelVersion TEXT NOT NULL,
+  UNIQUE(RunId, Market, Outcome)
+);
+CREATE INDEX IF NOT EXISTS IX_MarketPredictions_FixtureCreated ON MarketPredictions(HomeTeam, AwayTeam, CreatedUtc);
