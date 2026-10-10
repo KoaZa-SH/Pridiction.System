@@ -167,8 +167,10 @@ namespace KoaZa.Services
             return value.Contains("rate limit") || value.Contains("requests limit") ||
                    value.Contains("request limit") || value.Contains("quota") ||
                    value.Contains("too many requests") || value.Contains("limit reached") ||
-                   value.Contains("invalid api key") || value.Contains("unauthorized") ||
-                   value.Contains("token is invalid") || value.Contains("access denied");
+                   value.Contains("invalid api key") || value.Contains("invalid key") || value.Contains("unauthorized") ||
+                   value.Contains("token is invalid") || value.Contains("invalid token") ||
+                   value.Contains("missing application key") || value.Contains("authentication") ||
+                   value.Contains("access denied");
         }
     }
 
@@ -243,7 +245,7 @@ namespace KoaZa.Services
             Grid.SetRow(_status, 3);
 
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            _testButton = new Button { Content = "Test first key", Padding = new Thickness(14, 8, 14, 8), Margin = new Thickness(0, 0, 8, 0) };
+            _testButton = new Button { Content = "Test keys / rotation", Padding = new Thickness(14, 8, 14, 8), Margin = new Thickness(0, 0, 8, 0) };
             _testButton.Click += TestButton_Click;
             _saveButton = new Button
             {
@@ -294,12 +296,15 @@ namespace KoaZa.Services
 
             _testButton.IsEnabled = false;
             _saveButton.IsEnabled = false;
-            _status.Text = "Testing the first key against the API-Football /status endpoint...";
+            _status.Text = "Saving keys and testing API-Football /status. If a key is limited, the next saved key will be tried...";
             try
             {
-                string body = ApiFootballClient.TestKey(keys[0]);
                 ApiKeyStore.Save(keys);
-                _status.Text = "Connection successful. The first key received a response from API-Football. Saved " + keys.Count + " key(s).";
+                string body = ApiFootballClient.Get("/status");
+                if (body.IndexOf("\"errors\":{", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    body.IndexOf("\"response\":[]", StringComparison.OrdinalIgnoreCase) >= 0)
+                    throw new InvalidOperationException("API returned an error. Check key validity and account status.");
+                _status.Text = "API-Football responded successfully. Saved " + keys.Count + " key(s); rotation is active when an API auth/quota/rate-limit error is detected.";
             }
             catch (Exception ex)
             {
