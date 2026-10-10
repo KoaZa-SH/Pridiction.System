@@ -10,6 +10,7 @@ using System.Web.Script.Serialization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using KoaZa.Data;
 
 namespace KoaZa.Services
 {
@@ -131,6 +132,7 @@ namespace KoaZa.Services
         public string Url { get; set; }
         public string Summary { get; set; }
         public string Published { get; set; }
+        public string Source { get; set; }
     }
 
     public sealed class FixtureRecord
@@ -406,25 +408,65 @@ namespace KoaZa.Services
 
         public static List<NewsItem> FetchMatchNews(string homeTeam, string awayTeam, string league)
         {
+            var result = new List<NewsItem>();
+            // Varzesh3 is preferred for Persian football coverage; the public RSS feed is used
+            // without scraping article pages or bypassing site controls.
+            try { result.AddRange(FetchVarzesh3News(homeTeam, awayTeam, league)); } catch { }
             string query = "\"" + (homeTeam ?? "").Trim() + "\" OR \"" + (awayTeam ?? "").Trim() + "\" football";
             if (!string.IsNullOrWhiteSpace(league)) query += " \"" + league.Trim() + "\"";
-            // Ask Google News for Persian-language results when Persian is selected.
             string locale = LocalizationService.IsPersian ? "&hl=fa&gl=IR&ceid=IR:fa" : "&hl=en-US&gl=US&ceid=US:en";
             string url = "https://news.google.com/rss/search?q=" + Uri.EscapeDataString(query) + locale;
-            var doc = new System.Xml.XmlDocument();
-            doc.LoadXml(Request(url, null, null));
-            var result = new List<NewsItem>();
-            var nodes = doc.SelectNodes("//item");
-            if (nodes == null) return result;
-            foreach (System.Xml.XmlNode node in nodes)
+            try
             {
-                string title = node["title"] == null ? "" : System.Net.WebUtility.HtmlDecode(node["title"].InnerText);
-                string link = node["link"] == null ? "" : node["link"].InnerText;
-                string description = node["description"] == null ? "" : System.Net.WebUtility.HtmlDecode(node["description"].InnerText);
-                string pubDate = node["pubDate"] == null ? "" : node["pubDate"].InnerText;
-                if (title.Length == 0 || link.Length == 0) continue;
-                result.Add(new NewsItem { Title = title, Url = link, Summary = (string.IsNullOrWhiteSpace(pubDate) ? "" : pubDate + " — ") + StripHtml(description), Published = pubDate });
-                if (result.Count >= 8) break;
+                var doc = new System.Xml.XmlDocument();
+                doc.LoadXml(Request(url, null, null));
+                var nodes = doc.SelectNodes("//item");
+                if (nodes != null)
+                {
+                    foreach (System.Xml.XmlNode node in nodes)
+                    {
+                        string title = node["title"] == null ? "" : System.Net.WebUtility.HtmlDecode(node["title"].InnerText);
+                        string link = node["link"] == null ? "" : node["link"].InnerText;
+                        string description = node["description"] == null ? "" : System.Net.WebUtility.HtmlDecode(node["description"].InnerText);
+                        string pubDate = node["pubDate"] == null ? "" : node["pubDate"].InnerText;
+                        if (title.Length == 0 || link.Length == 0 || result.Any(n => n.Url == link)) continue;
+                        result.Add(new NewsItem { Title = title, Url = link, Summary = (string.IsNullOrWhiteSpace(pubDate) ? "" : pubDate + " — ") + StripHtml(description), Published = pubDate, Source = "Google News" });
+                        if (result.Count >= 8) break;
+                    }
+                }
+            }
+            catch { if (result.Count == 0) throw; }
+            return result.Take(8).ToList();
+        }
+
+        private static List<NewsItem> FetchVarzesh3News(string homeTeam, string awayTeam, string league)
+        {
+            var result = new List<NewsItem>();
+            var terms = ((homeTeam ?? "") + " " + (awayTeam ?? "") + " " + (league ?? ""))
+                .Split(new[] { ' ', '-', '_', '/', '\\t' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(t => t.Length >= 3).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            foreach (string feed in new[] { "https://www.varzesh3.com/rss/all", "https://www.varzesh3.com/rss/foreignFootball" })
+            {
+                try
+                {
+                    var doc = new System.Xml.XmlDocument();
+                    doc.LoadXml(Request(feed, null, null));
+                    var nodes = doc.SelectNodes("//item");
+                    if (nodes == null) continue;
+                    foreach (System.Xml.XmlNode node in nodes)
+                    {
+                        string title = node["title"] == null ? "" : System.Net.WebUtility.HtmlDecode(node["title"].InnerText);
+                        string link = node["link"] == null ? "" : node["link"].InnerText;
+                        string description = node["description"] == null ? "" : System.Net.WebUtility.HtmlDecode(node["description"].InnerText);
+                        string pubDate = node["pubDate"] == null ? "" : node["pubDate"].InnerText;
+                        string haystack = (title + " " + StripHtml(description)).ToLowerInvariant();
+                        bool relevant = terms.Any(term => haystack.Contains(term.ToLowerInvariant()));
+                        if (!relevant || title.Length == 0 || link.Length == 0 || result.Any(n => n.Url == link)) continue;
+                        result.Add(new NewsItem { Title = title, Url = link, Summary = (string.IsNullOrWhiteSpace(pubDate) ? "" : pubDate + " — ") + StripHtml(description), Published = pubDate, Source = "Varzesh3 / ورزش سه" });
+                        if (result.Count >= 4) return result;
+                    }
+                }
+                catch { }
             }
             return result;
         }
