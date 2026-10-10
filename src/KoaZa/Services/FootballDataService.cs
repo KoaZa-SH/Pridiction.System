@@ -408,7 +408,7 @@ namespace KoaZa.Services
                     }
 
                     // Injuries are a separate API resource; attach them when available without failing the fixture details request.
-                    if (!live)
+                    if (!live && !completed)
                     {
                         try
                         {
