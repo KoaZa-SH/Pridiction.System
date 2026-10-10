@@ -404,6 +404,12 @@ namespace KoaZa
         {
             string fixtureId = fixture.ExternalId;
             StatsText.Text = LocalizationService.T("Loading match statistics...", "در حال دریافت آمار مسابقه...");
+            bool apiSports = fixture.Provider == "API-Football" || fixture.Provider == "ApiFootball" || fixture.Provider == "ApiSports";
+            if (!apiSports)
+            {
+                StatsText.Text = SummarizeStoredFixtureStatistics(fixture);
+                return;
+            }
             try
             {
                 bool live = IsLiveFixture(fixture.Status);
