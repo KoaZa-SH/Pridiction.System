@@ -147,6 +147,36 @@ namespace KoaZa.Data
             return rows;
         }
 
+        public void SaveMatchEvents(IEnumerable<MatchEventRecord> events)
+        {
+            var rows = (events ?? Enumerable.Empty<MatchEventRecord>()).ToList();
+            if (rows.Count == 0) return;
+            using (var con = new SQLiteConnection(_connectionString))
+            {
+                con.Open();
+                using (var tx = con.BeginTransaction())
+                {
+                    foreach (var e in rows)
+                    {
+                        using (var cmd = new SQLiteCommand("INSERT OR REPLACE INTO MatchEvents (Provider,ExternalId,EventIndex,Minute,Team,Player,Assist,Type,Detail) VALUES (@p,@id,@i,@m,@t,@player,@assist,@type,@detail);", con, tx))
+                        {
+                            cmd.Parameters.AddWithValue("@p", e.Provider ?? "");
+                            cmd.Parameters.AddWithValue("@id", e.ExternalId ?? "");
+                            cmd.Parameters.AddWithValue("@i", e.EventIndex);
+                            cmd.Parameters.AddWithValue("@m", e.Minute.HasValue ? (object)e.Minute.Value : DBNull.Value);
+                            cmd.Parameters.AddWithValue("@t", (object)e.Team ?? DBNull.Value);
+                            cmd.Parameters.AddWithValue("@player", (object)e.Player ?? DBNull.Value);
+                            cmd.Parameters.AddWithValue("@assist", (object)e.Assist ?? DBNull.Value);
+                            cmd.Parameters.AddWithValue("@type", (object)e.Type ?? DBNull.Value);
+                            cmd.Parameters.AddWithValue("@detail", (object)e.Detail ?? DBNull.Value);
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                    tx.Commit();
+                }
+            }
+        }
+
         public List<MatchStatisticsRecord> GetRecentMatchStatistics(string league, int limit)
         {
             var rows = new List<MatchStatisticsRecord>();
