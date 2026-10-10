@@ -16,20 +16,26 @@ namespace KoaZa
         private DatabaseService _database;
         private List<FixtureRecord> _fixtures = new List<FixtureRecord>();
         private bool _loadingFilters;
+        private bool _settingLanguage;
 
         public MainWindow()
         {
+            LocalizationService.Load();
             InitializeComponent();
+            _settingLanguage = true;
+            LanguageBox.SelectedIndex = LocalizationService.IsPersian ? 0 : 1;
+            _settingLanguage = false;
             TrySetIcon();
             try
             {
                 _database = new DatabaseService();
                 ConfigureDateFilters();
                 LoadFixtureList();
+                LocalizationService.Apply(this);
             }
             catch (Exception ex)
             {
-                FixtureStatusText.Text = "Database initialization failed / خطا در پایگاه داده: " + ex.Message;
+                FixtureStatusText.Text = LocalizationService.T("Database initialization failed: ", "خطا در پایگاه داده: ") + ex.Message;
             }
         }
 
@@ -47,13 +53,13 @@ namespace KoaZa
         {
             _loadingFilters = true;
             DateFilterBox.Items.Clear();
-            DateFilterBox.Items.Add(new DateFilterOption { Label = "All next 7 days / ۷ روز آینده", Date = null });
+            DateFilterBox.Items.Add(new DateFilterOption { Label = LocalizationService.T("All next 7 days", "تمام ۷ روز آینده"), Date = null });
             for (int i = 0; i < 7; i++)
             {
                 DateTime day = DateTime.Today.AddDays(i);
                 DateFilterBox.Items.Add(new DateFilterOption
                 {
-                    Label = day.ToString("ddd, dd MMM", CultureInfo.CurrentCulture),
+                    Label = LocalizationService.IsPersian ? day.ToString("yyyy/MM/dd", CultureInfo.GetCultureInfo("fa-IR")) : day.ToString("ddd, dd MMM", CultureInfo.GetCultureInfo("en-US")),
                     Date = day
                 });
             }
@@ -72,7 +78,7 @@ namespace KoaZa
                 var previousLeague = (LeagueFilterBox.SelectedItem as string);
                 _loadingFilters = true;
                 LeagueFilterBox.Items.Clear();
-                LeagueFilterBox.Items.Add("All competitions / همه لیگ‌ها");
+                LeagueFilterBox.Items.Add(LocalizationService.T("All competitions", "همه رقابت‌ها"));
                 foreach (string league in _database.GetKnownLeagues())
                     LeagueFilterBox.Items.Add(league);
                 int selectedIndex = 0;
@@ -86,12 +92,12 @@ namespace KoaZa
                 _loadingFilters = false;
                 ApplyFilters();
                 FixtureStatusText.Text = _fixtures.Count == 0
-                    ? "No upcoming fixtures found in the local database. Use Import fixtures to fetch schedules. / مسابقه‌ای در پایگاه داده نیست؛ ابتدا دریافت مسابقات را اجرا کن."
-                    : "Fixture list uses data already saved locally. Refresh after importing new schedules.";
+                    ? LocalizationService.T("No upcoming fixtures in local database. Import fixtures first.", "مسابقه‌ای در پایگاه داده نیست؛ ابتدا مسابقات را دریافت کن.")
+                    : LocalizationService.T("Using locally saved fixtures. Refresh after import.", "فهرست از داده‌های ذخیره‌شده استفاده می‌کند؛ پس از دریافت، نوسازی کن.");
             }
             catch (Exception ex)
             {
-                FixtureStatusText.Text = "Could not load fixtures: " + ex.Message;
+                FixtureStatusText.Text = LocalizationService.T("Could not load fixtures: ", "بارگذاری مسابقات ناموفق بود: ") + ex.Message;
             }
         }
 
@@ -107,9 +113,9 @@ namespace KoaZa
                 filtered = filtered.Where(f => string.Equals(f.League, league, StringComparison.OrdinalIgnoreCase));
             var rows = filtered.OrderBy(GetLocalKickoff).Select(f => new FixtureRow(f)).ToList();
             FixturesGrid.ItemsSource = rows;
-            FixtureCountText.Text = rows.Count + " matches / مسابقه";
+            FixtureCountText.Text = LocalizationService.IsPersian ? rows.Count + " مسابقه" : rows.Count + " matches";
             MarketsList.ItemsSource = null;
-            MatchTitleText.Text = "Select a match from the list / یک مسابقه انتخاب کن";
+            MatchTitleText.Text = LocalizationService.T("Select a match from the list", "یک مسابقه را انتخاب کن");
             ModelStatusText.Text = "Predictions use saved completed matches. No manual xG entry is required.";
         }
 
@@ -131,6 +137,17 @@ namespace KoaZa
             window.ShowDialog();
         }
 
+        private void LanguageBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_settingLanguage || LanguageBox.SelectedItem == null) return;
+            var item = LanguageBox.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            LocalizationService.SetLanguage(Convert.ToString(item.Tag));
+            LocalizationService.Apply(this);
+            ConfigureDateFilters();
+            LoadFixtureList();
+        }
+
         private void OpenFixtures_Click(object sender, RoutedEventArgs e)
         {
             var window = new FixturesWindow { Owner = this };
@@ -147,7 +164,9 @@ namespace KoaZa
 
         private void AnalyzeFixture(FixtureRecord fixture)
         {
-            MatchTitleText.Text = fixture.HomeTeam + " vs " + fixture.AwayTeam;
+            MatchTitleText.Text = LocalizationService.Team(fixture.HomeTeam) + " vs " + LocalizationService.Team(fixture.AwayTeam);
+            HomeChartTeamText.Text = LocalizationService.T("HOME: ", "میزبان: ") + LocalizationService.Team(fixture.HomeTeam);
+            AwayChartTeamText.Text = LocalizationService.T("AWAY: ", "میهمان: ") + LocalizationService.Team(fixture.AwayTeam);
             MarketsList.ItemsSource = null;
             try
             {
@@ -225,9 +244,9 @@ namespace KoaZa
         private sealed class FixtureRow
         {
             public FixtureRecord Fixture { get; private set; }
-            public string League { get { return Fixture.League; } }
-            public string HomeTeam { get { return Fixture.HomeTeam; } }
-            public string AwayTeam { get { return Fixture.AwayTeam; } }
+            public string League { get { return LocalizationService.League(Fixture.League); } }
+            public string HomeTeam { get { return LocalizationService.Team(Fixture.HomeTeam); } }
+            public string AwayTeam { get { return LocalizationService.Team(Fixture.AwayTeam); } }
             public string KickoffDisplay { get { return GetLocalKickoff(Fixture).ToString("dd MMM HH:mm", CultureInfo.CurrentCulture); } }
             public FixtureRow(FixtureRecord fixture) { Fixture = fixture; }
         }
