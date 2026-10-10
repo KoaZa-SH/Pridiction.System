@@ -141,29 +141,23 @@ namespace KoaZa.Services
                     string liveJson = Request("https://v3.football.api-sports.io/fixtures?live=all", "x-apisports-key", config.Key);
                     var liveRoot = Parse(liveJson);
                     if (!HasErrors(liveRoot)) combined.AddRange(ParseApiFootballFixtures(liveRoot));
-                    break;
+                    if (combined.Count > 0) break;
                 }
                 catch (Exception ex) { errors.Add("API-SPORTS: " + ex.Message); }
             }
 
-            // SportsAPI360 supports a schedule query across all tournaments for the next seven days.
-            if (combined.Count == 0)
+            // Merge any other enabled global schedule feed when configured; competition IDs are provider-specific.
+            foreach (var config in providers.Where(p => p.Provider == "SportsAPI360" && !string.IsNullOrWhiteSpace(p.Key)))
             {
-                foreach (var config in providers.Where(p => p.Provider == "SportsAPI360" && !string.IsNullOrWhiteSpace(p.Key)))
-                {
-                    try { combined.AddRange(FetchSportsApi360("all")); break; }
-                    catch (Exception ex) { errors.Add("SportsAPI360: " + ex.Message); }
-                }
+                try { combined.AddRange(FetchSportsApi360("all")); }
+                catch (Exception ex) { errors.Add("SportsAPI360: " + ex.Message); }
             }
 
             // Custom endpoints are treated as provider-defined normalized fixture feeds.
-            if (combined.Count == 0)
+            foreach (var config in providers.Where(p => !string.IsNullOrWhiteSpace(p.BaseUrl)))
             {
-                foreach (var config in providers.Where(p => !string.IsNullOrWhiteSpace(p.BaseUrl)))
-                {
-                    try { combined.AddRange(FetchCustom(config)); }
-                    catch (Exception ex) { errors.Add(config.Provider + ": " + ex.Message); }
-                }
+                try { combined.AddRange(FetchCustom(config)); }
+                catch (Exception ex) { errors.Add(config.Provider + ": " + ex.Message); }
             }
 
             if (combined.Count == 0)
