@@ -4,6 +4,8 @@ using System.Data.SQLite;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Web.Script.Serialization;
 using KoaZa.Services;
 
@@ -162,7 +164,7 @@ namespace KoaZa.Data
                     {
                         if (f == null || string.IsNullOrWhiteSpace(f.HomeTeam) || string.IsNullOrWhiteSpace(f.AwayTeam)) continue;
                         string provider = f.Provider ?? "";
-                        string external = string.IsNullOrWhiteSpace(f.ExternalId) ? Guid.NewGuid().ToString("N") : f.ExternalId.Trim();
+                        string external = string.IsNullOrWhiteSpace(f.ExternalId) ? CreateStableFixtureId(provider, f) : f.ExternalId.Trim();
                         f.ExternalId = external;
                         string now = DateTime.UtcNow.ToString("o");
                         using (var archive = new SQLiteCommand("INSERT OR IGNORE INTO FixtureHistory (Provider, League, KickoffUtc, HomeTeam, AwayTeam, HomeGoals, AwayGoals, Status, ExternalId, UpdatedUtc, ArchivedUtc, HomeCorners, AwayCorners, HomeShotsOnTarget, AwayShotsOnTarget, HomeYellowCards, AwayYellowCards, Referee, VarReviews) SELECT Provider, League, KickoffUtc, HomeTeam, AwayTeam, HomeGoals, AwayGoals, Status, ExternalId, UpdatedUtc, @archived, HomeCorners, AwayCorners, HomeShotsOnTarget, AwayShotsOnTarget, HomeYellowCards, AwayYellowCards, Referee, VarReviews FROM Fixtures WHERE Provider=@provider AND ExternalId=@external AND HomeGoals IS NOT NULL AND AwayGoals IS NOT NULL;", con, transaction))
@@ -186,6 +188,14 @@ namespace KoaZa.Data
                     transaction.Commit();
                 }
             }
+        }
+
+        private static string CreateStableFixtureId(string provider, FixtureRecord fixture)
+        {
+            string identity = (provider ?? "") + "|" + (fixture.League ?? "") + "|" + (fixture.KickoffUtc ?? "") + "|" +
+                (fixture.HomeTeam ?? "").Trim().ToUpperInvariant() + "|" + (fixture.AwayTeam ?? "").Trim().ToUpperInvariant();
+            using (var sha = SHA256.Create())
+                return "generated-" + BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(identity))).Replace("-", "");
         }
 
         private static void AddFixtureParameters(SQLiteCommand cmd, FixtureRecord f, string provider, string external, string now)
