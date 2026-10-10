@@ -299,7 +299,7 @@ namespace KoaZa.Services
         private static List<FixtureRecord> FetchApiFootball(string league, int season)
         {
             string path = "/fixtures?league=" + Uri.EscapeDataString(league) + "&season=" + season;
-            var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "ApiFootball" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && (p.Provider == "ApiFootball" || p.Provider == "ApiSports") && !string.IsNullOrWhiteSpace(p.Key)).ToList();
             if (configs.Count == 0) throw new InvalidOperationException("No enabled API-Football key is saved. Open API Settings.");
             Exception last = null;
             foreach (var config in configs)
@@ -595,11 +595,12 @@ namespace KoaZa.Services
             string providerId = choice.Id;
             string baseUrl = (_baseUrlBox.Text ?? "").Trim();
             if (choice.Id == "Custom")
-            {
                 providerId = (_customNameBox.Text ?? "").Trim();
-                if (providerId.Length == 0 || baseUrl.Length == 0 || !baseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            if (choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData")
+            {
+                if ((choice.Id == "Custom" && providerId.Length == 0) || baseUrl.Length == 0 || !baseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                 {
-                    _status.Text = LocalizationService.T("For a custom provider, enter a name and an HTTPS endpoint.", "برای سرویس دستی، نام و نشانی HTTPS وارد کن.");
+                    _status.Text = LocalizationService.T("Enter a provider name (for custom) and a valid HTTPS fixtures endpoint.", "برای سرویس دستی نام و برای این سرویس‌ها نشانی معتبر HTTPS وارد کن.");
                     return;
                 }
             }
@@ -685,10 +686,16 @@ namespace KoaZa.Services
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.7, GridUnitType.Star) });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             _providerBox = new ComboBox { Padding = new Thickness(6), Margin = new Thickness(0, 0, 8, 0) };
-            _providerBox.Items.Add(new ProviderChoice("Auto", "Auto fallback (recommended)"));
-            _providerBox.Items.Add(new ProviderChoice("ApiFootball", "API-Football"));
-            _providerBox.Items.Add(new ProviderChoice("FootballData", "football-data.org"));
+            _providerBox.Items.Add(new ProviderChoice("Auto", LocalizationService.T("Auto fallback (recommended)", "انتخاب خودکار سرویس")));
+            _providerBox.Items.Add(new ProviderChoice("OddsPapi", "OddsPapi"));
+            _providerBox.Items.Add(new ProviderChoice("Floodlight", "Floodlight"));
+            _providerBox.Items.Add(new ProviderChoice("SportsOpenData", "Sports Open Data"));
             _providerBox.Items.Add(new ProviderChoice("OpenLigaDB", "OpenLigaDB"));
+            _providerBox.Items.Add(new ProviderChoice("ApiSports", "API-SPORTS"));
+            _providerBox.Items.Add(new ProviderChoice("SportsAPI360", "SportsAPI360"));
+            _providerBox.Items.Add(new ProviderChoice("FootballData", "football-data.org"));
+            foreach (var configured in ApiProviderStore.Load().Where(p => p.Enabled && p.Provider != "ApiFootball" && p.Provider != "ApiSports" && p.Provider != "FootballData" && p.Provider != "OpenLigaDB" && p.Provider != "OddsPapi" && p.Provider != "Floodlight" && p.Provider != "SportsOpenData" && p.Provider != "SportsAPI360"))
+                _providerBox.Items.Add(new ProviderChoice(configured.Provider, configured.Provider));
             _providerBox.SelectedIndex = 0;
             _providerBox.SelectionChanged += ProviderChanged;
             Grid.SetColumn(_providerBox, 0); top.Children.Add(_providerBox);
@@ -713,11 +720,14 @@ namespace KoaZa.Services
         {
             var choice = _providerBox.SelectedItem as ProviderChoice;
             if (choice == null) return;
-            _leagueBox.Text = choice.Id == "Auto" ? "EPL" : choice.Id == "ApiFootball" ? "39" : choice.Id == "FootballData" ? "PL" : "bl1";
-            _leagueBox.ToolTip = choice.Id == "Auto" ? "Use standard code: EPL, LALIGA, BUNDESLIGA, SERIEA, LIGUE1, or IRAN. The app tries enabled providers in order." :
-                choice.Id == "ApiFootball" ? "Enter a numeric API-Football league ID (e.g. 39 Premier League; Iran coverage depends on your plan)." :
-                choice.Id == "FootballData" ? "Enter competition code (e.g. PL, PD, BL1, SA, FL1). Free plan has limited competitions." :
-                "Enter OpenLigaDB league shortcut (e.g. bl1 for Bundesliga, bl2 for 2. Bundesliga).";
+            _leagueBox.Text = choice.Id == "Auto" ? "EPL" : choice.Id == "ApiFootball" || choice.Id == "ApiSports" ? "39" : choice.Id == "FootballData" ? "PL" : choice.Id == "OpenLigaDB" ? "bl1" : "all";
+            _leagueBox.ToolTip = choice.Id == "Auto" ? "Use standard code: EPL, LALIGA, BUNDESLIGA, SERIEA, LIGUE1, or IRAN. The app tries compatible enabled providers." :
+                choice.Id == "ApiFootball" || choice.Id == "ApiSports" ? "Enter an API-Sports numeric league ID (e.g. 39 for Premier League)." :
+                choice.Id == "FootballData" ? "Enter competition code (e.g. PL, PD, BL1, SA, FL1)." :
+                choice.Id == "OpenLigaDB" ? "Enter OpenLigaDB league shortcut (e.g. bl1)." :
+                choice.Id == "OddsPapi" ? "Enter the OddsPapi tournamentId (not the API-Sports league ID)." :
+                choice.Id == "SportsAPI360" ? "Enter tournamentId, tournament name, or 'all' for the next 7 days." :
+                "For Floodlight, Sports Open Data or custom providers, configure the HTTPS fixtures endpoint in API Settings.";
         }
 
         private void Fetch_Click(object sender, RoutedEventArgs e)
