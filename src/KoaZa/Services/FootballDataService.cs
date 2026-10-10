@@ -103,10 +103,64 @@ namespace KoaZa.Services
     {
         public static List<FixtureRecord> Fetch(string provider, string league, int season)
         {
+            if (provider == "Auto") return FetchAuto(league, season);
             if (provider == "ApiFootball") return FetchApiFootball(league, season);
             if (provider == "FootballData") return FetchFootballData(league, season);
             if (provider == "OpenLigaDB") return FetchOpenLiga(league, season);
             throw new InvalidOperationException("Select a supported data provider.");
+        }
+
+
+        public static List<FixtureRecord> FetchAuto(string competition, int season)
+        {
+            string canonical = (competition ?? "").Trim().ToUpperInvariant();
+            var configured = ApiProviderStore.Load().Where(p => p.Enabled)
+                .Select(p => p.Provider).Distinct().ToList();
+            if (configured.Count == 0)
+                throw new InvalidOperationException("No enabled data providers are saved. Open API Settings and enable at least one provider.");
+
+            var errors = new List<string>();
+            foreach (string provider in configured)
+            {
+                string providerLeague = MapLeague(provider, canonical);
+                if (providerLeague == null) continue;
+                try
+                {
+                    List<FixtureRecord> rows = Fetch(provider, providerLeague, season);
+                    if (rows != null && rows.Count > 0) return rows;
+                    errors.Add(provider + ": returned no fixtures for this competition/season.");
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(provider + ": " + ex.Message);
+                }
+            }
+            throw new InvalidOperationException("No enabled provider could return fixtures for " + canonical + ". " +
+                "For automatic fallback, use one of these codes: EPL, LALIGA, BUNDESLIGA, SERIEA, LIGUE1, IRAN. " +
+                string.Join(" | ", errors));
+        }
+
+        private static string MapLeague(string provider, string competition)
+        {
+            if (provider == "ApiFootball")
+            {
+                if (competition == "EPL" || competition == "PL") return "39";
+                if (competition == "LALIGA" || competition == "PD") return "140";
+                if (competition == "BUNDESLIGA" || competition == "BL1") return "78";
+                if (competition == "SERIEA" || competition == "SA") return "135";
+                if (competition == "LIGUE1" || competition == "FL1") return "61";
+                if (competition == "IRAN" || competition == "IRANPL") return "290";
+            }
+            if (provider == "FootballData")
+            {
+                if (competition == "EPL" || competition == "PL") return "PL";
+                if (competition == "LALIGA" || competition == "PD") return "PD";
+                if (competition == "BUNDESLIGA" || competition == "BL1") return "BL1";
+                if (competition == "SERIEA" || competition == "SA") return "SA";
+                if (competition == "LIGUE1" || competition == "FL1") return "FL1";
+            }
+            if (provider == "OpenLigaDB" && (competition == "BUNDESLIGA" || competition == "BL1")) return "bl1";
+            return null;
         }
 
         private static List<FixtureRecord> FetchApiFootball(string league, int season)
@@ -467,6 +521,7 @@ namespace KoaZa.Services
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.7, GridUnitType.Star) });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             _providerBox = new ComboBox { Padding = new Thickness(6), Margin = new Thickness(0, 0, 8, 0) };
+            _providerBox.Items.Add(new ProviderChoice("Auto", "Auto fallback (recommended)"));
             _providerBox.Items.Add(new ProviderChoice("ApiFootball", "API-Football"));
             _providerBox.Items.Add(new ProviderChoice("FootballData", "football-data.org"));
             _providerBox.Items.Add(new ProviderChoice("OpenLigaDB", "OpenLigaDB"));
@@ -493,10 +548,11 @@ namespace KoaZa.Services
         {
             var choice = _providerBox.SelectedItem as ProviderChoice;
             if (choice == null) return;
-            _leagueBox.Text = choice.Id == "ApiFootball" ? "39" : choice.Id == "FootballData" ? "PL" : "bl1";
-            _leagueBox.ToolTip = choice.Id == "ApiFootball" ? "Enter a numeric API-Football league ID (e.g. 39 Premier League; Iran coverage depends on your plan)." :
+            _leagueBox.Text = choice.Id == "Auto" ? "EPL" : choice.Id == "ApiFootball" ? "39" : choice.Id == "FootballData" ? "PL" : "bl1";
+            _leagueBox.ToolTip = choice.Id == "Auto" ? "Use standard code: EPL, LALIGA, BUNDESLIGA, SERIEA, LIGUE1, or IRAN. The app tries enabled providers in order." :
+                choice.Id == "ApiFootball" ? "Enter a numeric API-Football league ID (e.g. 39 Premier League; Iran coverage depends on your plan)." :
                 choice.Id == "FootballData" ? "Enter competition code (e.g. PL, PD, BL1, SA, FL1). Free plan has limited competitions." :
-                "Enter OpenLigaDB league shortcut (e.g. bl1 for Bundesliga, bl2 for 2. Bundesliga).";
+                "Enter OpenLigaDB league shortcut (e.g. bl1 for Bundesliga, bl2 for 2. Bundesliga)."
         }
 
         private void Fetch_Click(object sender, RoutedEventArgs e)
