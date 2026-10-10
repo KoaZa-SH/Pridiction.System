@@ -236,7 +236,8 @@ namespace KoaZa
 
             try
             {
-                string json = _database.GetFixtureDetails(fixture.Provider, fixture.ExternalId);
+                bool live = IsLiveFixture(fixture.Status);
+                string json = live ? null : _database.GetFixtureDetails(fixture.Provider, fixture.ExternalId);
                 if (string.IsNullOrWhiteSpace(json))
                 {
                     json = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchFixtureDetails(fixture));
@@ -267,6 +268,14 @@ namespace KoaZa
                 if (!IsCurrentFixture(fixtureId)) return;
                 NewsStatusText.Text = LocalizationService.T("News feed unavailable: ", "خبرخوان در دسترس نیست: ") + ex.Message;
             }
+        }
+
+        private static bool IsLiveFixture(string status)
+        {
+            string value = (status ?? "").Trim().ToUpperInvariant();
+            return value == "LIVE" || value == "1H" || value == "HT" || value == "2H" ||
+                   value == "ET" || value == "P" || value == "BT" || value == "INT" ||
+                   value == "INPLAY" || value == "IN PROGRESS" || value == "INPROGRESS";
         }
 
         private bool IsCurrentFixture(string externalId)
