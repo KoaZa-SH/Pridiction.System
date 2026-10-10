@@ -262,7 +262,11 @@ namespace KoaZa
                     dataWarning = LocalizationService.T(
                         "Limited historical data. Orange chart: estimates use available team results and/or competition averages; confidence is low.",
                         "داده تاریخی محدود است. نمودار نارنجی: تخمین‌ها از نتایج موجود تیم‌ها و/یا میانگین رقابت استفاده می‌کنند؛ اطمینان پایین است.");
-                SetMarketRows(probabilities, hasReliableHistory, dataWarning);
+                if (string.IsNullOrEmpty(dataWarning))
+                    dataWarning = LocalizationService.T(
+                        "Goal estimates use saved match results, but historical corner/card statistics are not available. The whole chart is orange because some requested markets cannot be calculated yet.",
+                        "تخمین گل‌ها از نتایج ذخیره‌شده استفاده می‌کند، اما آمار تاریخی کرنر و کارت موجود نیست. چون بخشی از بازارها هنوز قابل محاسبه نیستند، کل نمودار نارنجی نمایش داده می‌شود.");
+                SetMarketRows(probabilities, false, dataWarning);
 
                 _database.SavePrediction(fixture.HomeTeam, fixture.AwayTeam, homeRate, awayRate, probabilities);
                 bool usedFallback = homeLeagueMatches.Count < 3 || awayLeagueMatches.Count < 3;
@@ -358,16 +362,6 @@ namespace KoaZa
 
         private void SetMarketRows(MatchProbabilities probabilities, bool hasSufficientData, string reason)
         {
-            MarketsList.ItemsSource = probabilities.Markets.Select(m => new MarketRow
-            {
-                Label = LocalizationService.Market(m.Market, m.Outcome),
-                Percent = Math.Round(m.Probability * 100, 1),
-                PercentLabel = hasSufficientData
-                    ? (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%"
-                    : (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% • " + LocalizationService.T("low confidence", "اطمینان پایین"),
-                HasData = hasSufficientData,
-                Reason = reason
-            }).ToList();
             var rows = probabilities.Markets.Select(m => new MarketRow
             {
                 Label = LocalizationService.Market(m.Market, m.Outcome),
@@ -378,7 +372,7 @@ namespace KoaZa
                 Reason = reason
             }).ToList();
             string unavailable = LocalizationService.T("Not calculated: historical corner/card statistics are unavailable.", "محاسبه نشده: آمار تاریخی کرنر و کارت در دسترس نیست.");
-            rows.Add(new MarketRow { Label = LocalizationService.Market("Corners", "Total over 8.5"), Percent = 0, PercentLabel = "—", HasData = false, Reason = unavailable });
+            rows.Add(new MarketRow { Label = LocalizationService.Market("Corners", "Total over 8.5"), Percent = 0, PercentLabel = LocalizationService.T("Stats unavailable", "آمار موجود نیست"), HasData = false, Reason = unavailable });
             rows.Add(new MarketRow { Label = LocalizationService.Market("Corners", "Total under 8.5"), Percent = 0, PercentLabel = "—", HasData = false, Reason = unavailable });
             rows.Add(new MarketRow { Label = LocalizationService.Market("Yellow cards", "Total over 3.5"), Percent = 0, PercentLabel = "—", HasData = false, Reason = unavailable });
             rows.Add(new MarketRow { Label = LocalizationService.Market("Yellow cards", "Total under 3.5"), Percent = 0, PercentLabel = "—", HasData = false, Reason = unavailable });
