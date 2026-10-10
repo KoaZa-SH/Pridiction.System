@@ -81,10 +81,8 @@ namespace KoaZa.Services
             {
                 M("Match result", "Home win", hw), M("Match result", "Draw", draw), M("Match result", "Away win", aw),
                 M("Double chance", "1X", hw + draw), M("Double chance", "X2", draw + aw), M("Double chance", "12", hw + aw),
-                M("Both teams to score", "Yes", btts), M("Both teams to score", "No", 1 - btts),
+                M("Both teams to score", "Yes", btts),
                 M("Total goals", "Over 0.5", over05), M("Total goals", "Under 0.5", 1 - over05),
-                M("Total goals", "Exactly 0", exactTotalGoals[0]), M("Total goals", "Exactly 1", exactTotalGoals[1]),
-                M("Total goals", "Exactly 2", exactTotalGoals[2]), M("Total goals", "Exactly 3", exactTotalGoals[3]), M("Total goals", "4 or more", exactTotalGoals[4]),
                 M("Total goals", "Over 1.5", over15), M("Total goals", "Under 1.5", 1 - over15),
                 M("Total goals", "Over 2.5", over25), M("Total goals", "Under 2.5", 1 - over25),
                 M("Total goals", "Over 3.5", over35), M("Total goals", "Under 3.5", 1 - over35),
