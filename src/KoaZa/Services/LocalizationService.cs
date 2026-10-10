@@ -22,7 +22,7 @@ namespace KoaZa.Services
             {"Date / روز:","روز:"},{"Competition / لیگ:","رقابت:"},{"Upcoming fixtures / بازی‌های پیش رو","مسابقات پیش رو"},
             {"Date / ساعت","تاریخ / ساعت"},{"League / لیگ","رقابت"},{"Home / میزبان","میزبان"},{"Away / میهمان","میهمان"},
             {"Match analysis / تحلیل مسابقه","تحلیل مسابقه"},{"Select a match from the list / یک مسابقه انتخاب کن","یک مسابقه را انتخاب کن"},
-            {"Market probabilities / احتمال بازارها","احتمال بازارها"},{"Probabilities are estimates, not guarantees. / احتمال‌ها تخمینی هستند، نه تضمین نتیجه.","احتمال‌ها تخمینی هستند، نه تضمین نتیجه."},
+            {"Market probabilities / احتمال بازارها","احتمال بازارها"},{"Home team / میزبان","تیم میزبان"},{"Away team / میهمان","تیم میهمان"},{"Probabilities are estimates, not guarantees. / احتمال‌ها تخمینی هستند، نه تضمین نتیجه.","احتمال‌ها تخمینی هستند، نه تضمین نتیجه."},
             {"KoaZa • Local SQLite • Historical Poisson baseline","KoaZa • پایگاه داده محلی • مدل پواسون تاریخی"},
             {"API Providers / مدیریت سرویس‌های داده","مدیریت سرویس‌های داده"},{"Add provider","افزودن سرویس"},{"Enable / disable","فعال / غیرفعال"},
             {"Remove selected","حذف مورد انتخابی"},{"Save securely","ذخیره امن"},{"Fetch & save fixtures","دریافت و ذخیره مسابقات"},
@@ -30,7 +30,6 @@ namespace KoaZa.Services
             {"OpenLigaDB (no key; German leagues)","OpenLigaDB (بدون کلید؛ لیگ‌های آلمان)"},
             {"No upcoming fixtures found in the local database. Use Import fixtures to fetch schedules. / مسابقه‌ای در پایگاه داده نیست؛ ابتدا دریافت مسابقات را اجرا کن.","مسابقه‌ای در پایگاه داده نیست؛ ابتدا مسابقات را دریافت کن."},
             {"Fixture list uses data already saved locally. Refresh after importing new schedules.","فهرست از داده‌های ذخیره‌شده استفاده می‌کند. پس از دریافت، نوسازی کن."},
-            {"Select a match from the list / یک مسابقه انتخاب کن","یک مسابقه را انتخاب کن"},
             {"Probabilities will be calculated from saved historical results.","احتمال‌ها از نتایج تاریخی ذخیره‌شده محاسبه می‌شوند."},
             {"No enabled data providers are saved. Open API Settings and enable at least one provider.","هیچ سرویس فعالی ذخیره نشده است. از تنظیمات API یک سرویس را فعال کن."}
         };
