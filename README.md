@@ -2,7 +2,7 @@
 
 **A bilingual (Persian/English) Windows desktop application for football fixture collection and statistical analysis.**
 
-> **Project status: In development.** Fixture import and provider configuration are being implemented. Historical-data-driven predictions, validation/backtesting, and a polished release workflow are not yet complete. Predictions should not be treated as guaranteed outcomes.
+> **Project status: in development.** Fixture import, multi-provider configuration, local history storage, a Poisson goal baseline, and historical-frequency estimates for selected statistical markets are implemented. Automated backtesting, probability calibration, a comprehensive automated test suite, and production-grade release validation remain outstanding. Predictions are estimates, not guarantees.
 
 [فارسی](#راهنمای-فارسی) · [Features](#features) · [Requirements](#requirements) · [Build-and-run](#build-and-run) · [Data-providers](#data-providers) · [Security](#security) · [Roadmap](#roadmap)
 
@@ -12,8 +12,8 @@
 - Targets **.NET Framework 4.8**.
 - Local **SQLite** database for storing imported fixtures.
 - A persistent **Persian / English language setting** for the interface, fixture labels, market names, dates, and team names. Known club and national-team names use curated Persian names; unknown Latin-script names are transliterated as a fallback.
-- Provider settings include **OddsPapi**, **Floodlight**, **Sports Open Data**, **OpenLigaDB**, **API-SPORTS**, and **SportsAPI360**, plus a manual provider option.
-- Built-in fixture adapters: **API-SPORTS** (API key; bulk date queries can return all competitions covered by the account), **OpenLigaDB** (no key; supported competitions), **OddsPapi** (API key; enter its own tournament ID), and **SportsAPI360** (API key; schedule endpoint covers the next seven days).
+- Provider settings include **API-SPORTS**, **football-data.org**, **OpenLigaDB**, **SportsAPI360**, **5DollarFootballAPI**, **Football-Charts**, **OddsPapi**, **Floodlight**, **Sports Open Data**, and a manual provider option. Coverage and authentication vary by provider.
+- Built-in fixture adapters include **API-SPORTS** (date-range fixture queries across competitions covered by the account), **OpenLigaDB** (no key for supported competitions), **OddsPapi** (provider-specific tournament ID), **SportsAPI360**, **5DollarFootballAPI**, and **Football-Charts**. Actual competition coverage, endpoint access and quota depend on the provider account and configuration.
 - When a fixture is selected, the app can fetch and cache the provider's fixture details (statistics, events, lineups and player data when available) in SQLite. Live fixtures with scores are not filtered out just because goals are already recorded.
 - A match-specific news panel searches Google News RSS for both teams and the competition; it requires an internet connection but no separate API key. News headlines are context, not verified causal impact or a sentiment-based prediction.
 - **Floodlight**, **Sports Open Data**, and manually added providers use an HTTPS fixtures endpoint that returns a normalized JSON array/object (schema below). Their provider-specific authentication and JSON schemas may need adaptation to the vendor's documentation.
@@ -77,10 +77,10 @@ Provider coverage, API limits, competition identifiers, and historical availabil
 - [x] Provider settings UI and local protected credential storage (implementation in progress)
 - [x] Bulk fixture refresh for the next seven days and live matches, with compatible feed merging/deduplication
 - [x] Match statistics/events cache and team-specific Google News RSS panel
-- [ ] Verify clean CI build and publish a successful portable artifact
-- [ ] Read completed matches from SQLite and calculate team form and home/away scoring rates
-- [ ] Connect historical statistics to the Poisson prediction model
-- [ ] Add backtesting, calibration metrics, and clear confidence/uncertainty reporting
+- [x] Verify a clean CI build and publish a portable artifact from a successful workflow run
+- [x] Read completed results from SQLite and estimate team scoring/conceding rates with home/away context
+- [x] Refine the Poisson goal baseline with historical head-to-head, shots-on-target and a small corners signal when available; estimate selected corners/cards/shots/VAR markets from historical frequencies
+- [ ] Add chronological walk-forward backtesting, calibration metrics (Brier score/log loss), and clear confidence/uncertainty reporting
 - [ ] Improve bilingual localization, validation, and user-facing error messages
 
 ## Match news and detailed statistics
