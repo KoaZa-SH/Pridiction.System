@@ -481,7 +481,7 @@ namespace KoaZa.Data
                     }
                 }
             }
-            return matches;
+            return DeduplicateFixtures(matches).Take(Math.Max(1, limit)).ToList();
         }
 
 
