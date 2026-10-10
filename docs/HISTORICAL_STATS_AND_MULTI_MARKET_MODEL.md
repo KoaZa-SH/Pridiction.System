@@ -4,7 +4,7 @@
 
 - Fixtures and FixtureHistory continue to store fixture/result records.
 - FixtureDetails preserves the raw provider response for traceability and reparsing.
-- MatchStatistics stores one normalized record per provider/fixture with completion status and nullable fields for total shots, shots on target, corners, cards, fouls, possession and referee.
+- MatchStatistics stores one normalized record per provider/fixture with completion status and nullable fields for total shots, shots on target, corners, yellow/red cards, fouls, possession and referee.
 - MatchEvents stores the normalized event timeline. Refreshes replace a fixture's event list atomically when the provider supplies a valid event payload.
 - MarketPredictions stores versioned event-market outputs, sample sizes, explanations and a data-sufficiency flag. Missing probabilities are SQL NULL, not fake 0%.
 - The existing Predictions table and goal-model markets are retained for compatibility.
