@@ -7,7 +7,7 @@
         <ComboBox x:Name="LanguageBox" Width="105" Margin="0,0,8,0" Padding="6" SelectionChanged="LanguageBox_SelectionChanged"><ComboBoxItem Content="فارسی" Tag="fa"/><ComboBoxItem Content="English" Tag="en"/></ComboBox>
         <Button Content="Refresh list / نوسازی" Click="Refresh_Click" Padding="12,7" Margin="0,0,8,0"/>
         <Button Content="Import fixtures / دریافت بازی‌ها" Click="OpenFixtures_Click" Padding="12,7" Margin="0,0,8,0" Background="#163B2B" Foreground="White" BorderThickness="0"/>
-        <Button Content="API Settings / تنظیمات API" Click="OpenApiSettings_Click" Padding="12,7" Background="#16865B" Foreground="White" BorderThickness="0"/>
+        <Button Content="Settings / تنظیمات" Click="OpenApiSettings_Click" Padding="12,7" Background="#16865B" Foreground="White" BorderThickness="0"/>
       </StackPanel>
       <StackPanel>
         <TextBlock Text="KoaZa Football Analytics" FontSize="27" FontWeight="Bold" Foreground="#163B2B"/>
@@ -55,18 +55,34 @@
           <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
             <StackPanel>
               <TextBlock Text="Market probabilities / احتمال بازارها" FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
-              <ItemsControl x:Name="MarketsList">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Grid Margin="0,3,0,7">
-                      <Grid.ColumnDefinitions><ColumnDefinition Width="2.2*"/><ColumnDefinition Width="3*"/><ColumnDefinition Width="62"/></Grid.ColumnDefinitions>
-                      <TextBlock Text="{Binding Label}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,8,0" FontSize="12"/>
-                      <ProgressBar Grid.Column="1" Value="{Binding Percent}" Maximum="100" Height="13" VerticalAlignment="Center" Foreground="#16865B" Background="#E5ECE7" BorderThickness="0"/>
-                      <TextBlock Grid.Column="2" Text="{Binding PercentLabel}" VerticalAlignment="Center" HorizontalAlignment="Right" FontWeight="SemiBold" FontSize="12"/>
-                    </Grid>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
+              <Border x:Name="MarketChartFrame" Background="White" CornerRadius="8" Padding="8" BorderBrush="#E3EAE5" BorderThickness="1">
+                <StackPanel>
+                  <TextBlock x:Name="MarketChartReasonText" Visibility="Collapsed" TextWrapping="Wrap" Foreground="White" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                  <ItemsControl x:Name="MarketsList">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border x:Name="MarketRowCard" Background="Transparent" CornerRadius="5" Padding="5" Margin="0,2,0,3">
+                          <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="2.2*"/><ColumnDefinition Width="2.3*"/><ColumnDefinition Width="1.5*"/></Grid.ColumnDefinitions>
+                            <TextBlock x:Name="MarketLabelText" Text="{Binding Label}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,8,0" FontSize="12"/>
+                            <ProgressBar x:Name="MarketProgress" Grid.Column="1" Value="{Binding Percent}" Maximum="100" Height="13" VerticalAlignment="Center" Foreground="#16865B" Background="#E5ECE7" BorderThickness="0"/>
+                            <TextBlock x:Name="MarketPercentText" Grid.Column="2" Text="{Binding PercentLabel}" VerticalAlignment="Center" HorizontalAlignment="Right" TextAlignment="Right" TextWrapping="Wrap" FontWeight="SemiBold" FontSize="11" Margin="5,0,0,0"/>
+                          </Grid>
+                        </Border>
+                        <DataTemplate.Triggers>
+                          <DataTrigger Binding="{Binding HasData}" Value="False">
+                            <Setter TargetName="MarketRowCard" Property="Background" Value="#DD772A"/>
+                            <Setter TargetName="MarketLabelText" Property="Foreground" Value="White"/>
+                            <Setter TargetName="MarketPercentText" Property="Foreground" Value="White"/>
+                            <Setter TargetName="MarketProgress" Property="Foreground" Value="#F8C28D"/>
+                            <Setter TargetName="MarketProgress" Property="Background" Value="#B85D1C"/>
+                          </DataTrigger>
+                        </DataTemplate.Triggers>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
               <TextBlock Text="Corner and card probabilities require historical match statistics; this model currently calculates goal markets." TextWrapping="Wrap" Foreground="#7A8980" FontSize="11" Margin="0,2,0,6"/>
               <Separator Margin="0,8"/>
               <TextBlock Text="Match statistics &amp; events / آمار و رویدادهای مسابقه" FontSize="14" FontWeight="Bold" Margin="0,4,0,6"/>
