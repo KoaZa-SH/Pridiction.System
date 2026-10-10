@@ -183,7 +183,8 @@ namespace KoaZa
             LoadFixtureInsights(fixture);
             HomeChartTeamText.Text = LocalizationService.T("HOME: ", "میزبان: ") + LocalizationService.Team(fixture.HomeTeam);
             AwayChartTeamText.Text = LocalizationService.T("AWAY: ", "میهمان: ") + LocalizationService.Team(fixture.AwayTeam);
-            MarketsList.ItemsSource = null;
+            MarketsList.ItemsSource = BuildUnavailableMarketRows(LocalizationService.T("Calculating markets...", "در حال محاسبه بازارها..."));
+            SetMarketChartState(false, LocalizationService.T("Calculating market probabilities...", "در حال محاسبه احتمال بازارها..."));
             try
             {
                 var homeLeagueMatches = _database.GetCompletedMatches(fixture.League, fixture.HomeTeam, 12);
@@ -206,11 +207,20 @@ namespace KoaZa
 
                 var baselineMatches = _database.GetRecentCompletedMatches(fixture.League, 100);
                 if (baselineMatches.Count < 10) baselineMatches = _database.GetRecentCompletedMatches(null, 100);
+                bool hasReliableHistory = homeMatches.Count >= 3 && awayMatches.Count >= 3 && baselineMatches.Count >= 10;
+                string dataWarning = "";
                 if (homeMatches.Count == 0 && awayMatches.Count == 0 && baselineMatches.Count == 0)
                 {
-                    ModelStatusText.Text = LocalizationService.IsPersian
-                        ? "برای محاسبه احتمال‌ها هنوز نتیجهٔ تاریخی ذخیره نشده است. ابتدا مسابقات گذشته را از سرویس داده دریافت و ذخیره کن."
-                        : "No completed historical results are saved yet. Import past match results before calculating probabilities.";
+                    // Keep the chart visible, but use neutral prior rates and clearly mark them as
+                    // placeholders rather than pretending that team-specific data was available.
+                    homeRate = 1.35;
+                    awayRate = 1.10;
+                    dataWarning = LocalizationService.T(
+                        "No historical results are saved. Orange chart: neutral baseline only, not a team-specific prediction. Import past results to improve it.",
+                        "نتیجه تاریخی ذخیره نشده است. نمودار نارنجی: فقط میانگین پایه و نه پیش‌بینی اختصاصی این دو تیم. برای بهبود، نتایج بازی‌های گذشته را دریافت و ذخیره کن.");
+                    var priorProbabilities = PoissonModel.Analyze(homeRate, awayRate);
+                    SetMarketRows(priorProbabilities, false, dataWarning);
+                    ModelStatusText.Text = dataWarning;
                     return;
                 }
 
@@ -245,12 +255,11 @@ namespace KoaZa
                         : Clamp(MeanAwayGoals(baselineMatches));
                 }
                 var probabilities = PoissonModel.Analyze(homeRate, awayRate);
-                MarketsList.ItemsSource = probabilities.Markets.Select(m => new MarketRow
-                {
-                    Label = LocalizationService.Market(m.Market, m.Outcome),
-                    Percent = Math.Round(m.Probability * 100, 1),
-                    PercentLabel = (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%"
-                }).ToList();
+                if (!hasReliableHistory)
+                    dataWarning = LocalizationService.T(
+                        "Limited historical data. Orange chart: estimates use available team results and/or competition averages; confidence is low.",
+                        "داده تاریخی محدود است. نمودار نارنجی: تخمین‌ها از نتایج موجود تیم‌ها و/یا میانگین رقابت استفاده می‌کنند؛ اطمینان پایین است.");
+                SetMarketRows(probabilities, hasReliableHistory, dataWarning);
 
                 _database.SavePrediction(fixture.HomeTeam, fixture.AwayTeam, homeRate, awayRate, probabilities);
                 bool usedFallback = homeLeagueMatches.Count < 3 || awayLeagueMatches.Count < 3;
@@ -263,10 +272,17 @@ namespace KoaZa
                       ". Data: " + homeMatches.Count + " home-team matches and " + awayMatches.Count + " away-team matches. " +
                       (usedFallback ? "Because same-competition history is limited, other competitions or available scoring averages were used. " : "Same-competition history was used. ") +
                       "Baseline Poisson estimates; not guarantees.";
+                if (!string.IsNullOrEmpty(dataWarning))
+                    ModelStatusText.Text += " " + dataWarning;
             }
             catch (Exception ex)
             {
-                ModelStatusText.Text = LocalizationService.IsPersian ? "تحلیل احتمال‌ها ناموفق بود. نتایج تاریخی، امتیازهای ثبت‌شده و تنظیمات سرویس داده را بررسی کن." : "Analysis failed: " + ex.Message;
+                string reason = LocalizationService.IsPersian
+                    ? "محاسبه بازارها ناموفق بود: " + ex.Message + "؛ نمودار نارنجی است چون داده کافی یا قابل‌خواندن در دسترس نیست."
+                    : "Market calculation failed: " + ex.Message + ". Orange chart means data is missing or could not be read.";
+                MarketsList.ItemsSource = BuildUnavailableMarketRows(reason);
+                SetMarketChartState(false, reason);
+                ModelStatusText.Text = reason;
             }
         }
 
@@ -336,6 +352,47 @@ namespace KoaZa
             catch (Exception ex) { MessageBox.Show(this, LocalizationService.IsPersian ? "باز کردن پیوند خبر ناموفق بود. اتصال اینترنت و مرورگر پیش‌فرض را بررسی کن." : ex.Message, LocalizationService.T("Could not open news link", "باز کردن خبر ناموفق بود"), MessageBoxButton.OK, MessageBoxImage.Information); }
         }
 
+
+        private void SetMarketRows(MatchProbabilities probabilities, bool hasSufficientData, string reason)
+        {
+            MarketsList.ItemsSource = probabilities.Markets.Select(m => new MarketRow
+            {
+                Label = LocalizationService.Market(m.Market, m.Outcome),
+                Percent = Math.Round(m.Probability * 100, 1),
+                PercentLabel = hasSufficientData
+                    ? (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%"
+                    : (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% • " + LocalizationService.T("low confidence", "اطمینان پایین"),
+                HasData = hasSufficientData,
+                Reason = reason
+            }).ToList();
+            SetMarketChartState(hasSufficientData, reason);
+        }
+
+        private void SetMarketChartState(bool hasSufficientData, string reason)
+        {
+            MarketChartFrame.Background = new System.Windows.Media.SolidColorBrush(
+                hasSufficientData ? System.Windows.Media.Color.FromRgb(255, 255, 255) : System.Windows.Media.Color.FromRgb(221, 119, 42));
+            MarketChartReasonText.Text = hasSufficientData ? "" : reason;
+            MarketChartReasonText.Visibility = hasSufficientData ? Visibility.Collapsed : Visibility.Visible;
+            MarketChartReasonText.Foreground = System.Windows.Media.Brushes.White;
+        }
+
+        private List<MarketRow> BuildUnavailableMarketRows(string reason)
+        {
+            var labels = new[]
+            {
+                LocalizationService.Market("Match result", "Home win"), LocalizationService.Market("Match result", "Draw"),
+                LocalizationService.Market("Match result", "Away win"), LocalizationService.Market("Total goals", "Over 0.5"),
+                LocalizationService.Market("Total goals", "Over 1.5"), LocalizationService.Market("Total goals", "Over 2.5"),
+                LocalizationService.Market("Total goals", "Over 3.5"), LocalizationService.Market("Both teams to score", "Yes"),
+                LocalizationService.Market("Home team goals", "Over 0.5"), LocalizationService.Market("Home team goals", "Over 1.5"),
+                LocalizationService.Market("Away team goals", "Over 0.5"), LocalizationService.Market("Away team goals", "Over 1.5"),
+                LocalizationService.Market("Corners", "Total over 8.5"), LocalizationService.Market("Yellow cards", "Total over 3.5")
+            };
+            SetMarketChartState(false, reason);
+            return labels.Select(label => new MarketRow { Label = label, Percent = 0, PercentLabel = "—", HasData = false, Reason = reason }).ToList();
+        }
+
         private static double Average(List<FixtureRecord> matches, string team, bool scored, bool? homeVenue)
         {
             var values = new List<int>();
@@ -396,6 +453,8 @@ namespace KoaZa
             public string Label { get; set; }
             public double Percent { get; set; }
             public string PercentLabel { get; set; }
+            public bool HasData { get; set; }
+            public string Reason { get; set; }
         }
     }
 }
