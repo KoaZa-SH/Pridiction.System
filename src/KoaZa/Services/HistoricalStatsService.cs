@@ -301,6 +301,8 @@ namespace KoaZa.Services
                 s => Sum(s.HomeCorners,s.AwayCorners), 8.5, 5);
             AddCountMarket(output, statsHistory, fixture, "Yellow cards", "Total over 3.5", "Total under 3.5",
                 s => Sum(s.HomeYellowCards,s.AwayYellowCards), 3.5, 5);
+            AddCountMarket(output, statsHistory, fixture, "Red cards", "Total over 0.5", "Total under 0.5",
+                s => Sum(s.HomeRedCards,s.AwayRedCards), 0.5, 5);
             AddCountMarket(output, statsHistory, fixture, "Shots on target", "Total over 8.5", "Total under 8.5",
                 s => Sum(s.HomeShotsOnTarget,s.AwayShotsOnTarget), 8.5, 5);
             AddCountMarket(output, statsHistory, fixture, "Total shots", "Total over 22.5", "Total under 22.5",
