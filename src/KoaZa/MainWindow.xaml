@@ -2,7 +2,10 @@
   <Grid Margin="20">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <StackPanel Grid.Row="0" Margin="0,0,0,18">
-      <Button Content="API Settings / تنظیمات API" Click="OpenApiSettings_Click" HorizontalAlignment="Right" Padding="14,7" Margin="0,0,0,8" Background="#16865B" Foreground="White" BorderThickness="0" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,8">
+        <Button Content="Fetch Fixtures / دریافت مسابقات" Click="OpenFixtures_Click" Padding="14,7" Margin="0,0,8,0" Background="#163B2B" Foreground="White" BorderThickness="0" />
+        <Button Content="API Settings / تنظیمات API" Click="OpenApiSettings_Click" Padding="14,7" Background="#16865B" Foreground="White" BorderThickness="0" />
+      </StackPanel>
       <TextBlock Text="KoaZa Football Analytics" FontSize="28" FontWeight="Bold" Foreground="#163B2B" />
       <TextBlock Text="MVP • Poisson model • Local SQLite database" FontSize="13" Foreground="#5E6E65" Margin="0,5,0,0" />
     </StackPanel>
