@@ -468,6 +468,7 @@ namespace KoaZa.Services
             if (item == null) return LocalizationService.T("No detailed statistics are available for this match yet.", "هنوز آمار تفصیلی برای این مسابقه منتشر نشده است.");
             var sb = new StringBuilder();
             var stats = GetList(item, "statistics");
+            if (stats.Count == 0) stats = GetList(GetMap(root, "statisticsPayload"), "response");
             if (stats.Count > 0)
             {
                 sb.AppendLine("MATCH STATISTICS");
@@ -484,6 +485,7 @@ namespace KoaZa.Services
                 }
             }
             var events = GetList(item, "events");
+            if (events.Count == 0) events = GetList(GetMap(root, "eventsPayload"), "response");
             if (events.Count > 0)
             {
                 sb.AppendLine();
