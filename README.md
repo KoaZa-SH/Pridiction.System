@@ -1,0 +1,163 @@
+# KoaZa Football Analytics
+
+**A bilingual (Persian/English) Windows desktop application for football fixture collection and statistical analysis.**
+
+> **Project status: In development.** Fixture import and provider configuration are being implemented. Historical-data-driven predictions, validation/backtesting, and a polished release workflow are not yet complete. Predictions should not be treated as guaranteed outcomes.
+
+[فارسی](#راهنمای-فارسی) · [Features](#features) · [Requirements](#requirements) · [Build-and-run](#build-and-run) · [Data-providers](#data-providers) · [Security](#security) · [Roadmap](#roadmap)
+
+## Features
+
+- Windows desktop UI built with **C# / WPF**.
+- Targets **.NET Framework 4.8**.
+- Local **SQLite** database for storing imported fixtures.
+- Fixture-provider integrations currently being developed:
+  - **API-Football** — requires an API key; competition coverage depends on the account/plan.
+  - **football-data.org** — requires a token; free-tier competition coverage and rate limits apply.
+  - **OpenLigaDB** — no API key for supported competitions; particularly useful for German leagues.
+- An **Auto** provider mode attempts enabled providers until one returns fixture data.
+- Multiple keys can be configured for supported providers; credentials are stored locally using Windows DPAPI.
+- GitHub Actions workflow builds the Windows application and can publish a portable build artifact when the build succeeds.
+
+## Requirements
+
+- Windows with .NET Framework 4.8 available.
+- Internet connection for live provider requests.
+- API credentials for providers that require them.
+- No local Visual Studio installation is required to download a published build artifact; contributors can use Visual Studio/MSBuild to develop locally.
+
+## Build and run
+
+### Download a build
+
+1. Open the repository's [Actions](../../actions) page.
+2. Open the latest successful **Build KoaZa WPF app** workflow run.
+3. In **Artifacts**, download `KoaZa-Windows-Build`.
+4. Extract the archive and launch the application executable.
+
+Only use a run with a **successful** status. If the workflow is failing or no artifact is published, a usable build is not available from that run.
+
+### Build from source
+
+Open `src/KoaZa/KoaZa.sln` in Visual Studio with .NET desktop development tools, or build with MSBuild on a compatible Windows environment. Restore NuGet packages before compiling.
+
+The GitHub Actions workflow is defined in `.github/workflows/build-windows.yml`.
+
+## Data providers
+
+Open **API Settings / تنظیمات API** in the app to add, enable, disable, or remove provider credentials. Then open **Fetch Fixtures / دریافت مسابقات** to select a provider, competition, and season and import matches into the local database.
+
+### Provider and competition examples
+
+| Competition | Auto code | Notes |
+|---|---|---|
+| English Premier League | `EPL` | Supported through providers configured with access to this competition |
+| Spanish La Liga | `LALIGA` | Supported through configured providers |
+| German Bundesliga | `BUNDESLIGA` | OpenLigaDB may be an option |
+| Italian Serie A | `SERIEA` | Coverage depends on provider |
+| French Ligue 1 | `LIGUE1` | Coverage depends on provider |
+| Iranian Pro League | `IRAN` | Currently mapped to API-Football; availability depends on its coverage and your plan |
+
+Provider coverage, API limits, competition identifiers, and historical availability can change. Check the provider's own documentation and account dashboard. Auto mode returns the first successful non-empty result; it does **not** combine or deduplicate data from every provider.
+
+## Local data and credentials
+
+- Fixture records are stored in a local SQLite database managed by the application.
+- Provider keys are stored under the current Windows user's local application data directory and protected with **Windows DPAPI**.
+- DPAPI-protected credentials are tied to the Windows user/machine context and should not be copied between user accounts as a backup strategy.
+- **Never commit API keys, tokens, or other secrets to the repository.** If a key has been exposed, revoke or rotate it with the provider.
+
+## Roadmap
+
+- [x] WPF application foundation and SQLite integration
+- [x] Provider settings UI and local protected credential storage (implementation in progress)
+- [x] Fixture import adapters and cross-provider fallback (implementation in progress)
+- [ ] Verify clean CI build and publish a successful portable artifact
+- [ ] Read completed matches from SQLite and calculate team form and home/away scoring rates
+- [ ] Connect historical statistics to the Poisson prediction model
+- [ ] Add backtesting, calibration metrics, and clear confidence/uncertainty reporting
+- [ ] Improve bilingual localization, validation, and user-facing error messages
+
+## Limitations and responsible use
+
+Football matches are uncertain. Statistical outputs are estimates, not guarantees or financial advice. Do not assume that an API returning no matches means the competition has no fixtures; access restrictions, competition IDs, seasons, quotas, or provider outages may be responsible.
+
+## Contributing
+
+Bug reports and focused pull requests are welcome. Please include the operating system, provider name (never the API key), competition code, season, and the relevant error message when reporting an import problem.
+
+---
+
+# راهنمای فارسی
+
+**KoaZa یک نرم‌افزار ویندوزی برای دریافت اطلاعات مسابقات فوتبال و تحلیل آماری آن‌هاست.**
+
+> **وضعیت پروژه: در حال توسعه.** بخش دریافت و ذخیره‌سازی مسابقات در حال پیاده‌سازی است. پیش‌بینی مبتنی بر تاریخچه، آزمون مدل و انتشار نسخه پایدار هنوز کامل نشده‌اند؛ بنابراین خروجی‌ها را نتیجه قطعی مسابقات تلقی نکنید.
+
+## امکانات فعلی و در حال توسعه
+
+- رابط دسکتاپ با **C# و WPF**.
+- هدف‌گذاری برای **.NET Framework 4.8**.
+- ذخیره اطلاعات مسابقات در پایگاه داده محلی **SQLite**.
+- اتصال در حال توسعه به سه منبع داده:
+  - **API-Football**: نیازمند کلید API؛ پوشش لیگ‌ها به حساب و طرح اشتراک بستگی دارد.
+  - **football-data.org**: نیازمند توکن؛ محدودیت تعداد درخواست و لیگ‌های طرح رایگان اعمال می‌شود.
+  - **OpenLigaDB**: برای لیگ‌های پشتیبانی‌شده، بدون نیاز به کلید؛ به‌ویژه برای مسابقات آلمان کاربرد دارد.
+- حالت **Auto** برای امتحان‌کردن منابع فعال تا زمان دریافت اطلاعات مسابقه.
+- امکان ثبت چند کلید برای منابع پشتیبانی‌شده؛ کلیدها با Windows DPAPI به‌صورت محلی محافظت می‌شوند.
+- ساخت برنامه ویندوز از طریق GitHub Actions؛ فایل قابل‌دریافت فقط پس از موفقیت ساخت منتشر می‌شود.
+
+## دریافت نسخه آماده
+
+1. وارد بخش [GitHub Actions](../../actions) شوید.
+2. آخرین اجرای موفق با نام **Build KoaZa WPF app** را باز کنید.
+3. از قسمت **Artifacts** فایل `KoaZa-Windows-Build` را دریافت کنید.
+4. فایل فشرده را استخراج و فایل اجرایی برنامه را اجرا کنید.
+
+**فقط از اجرای موفق استفاده کنید.** اگر ساخت ناموفق باشد یا Artifact منتشر نشده باشد، آن اجرا نسخه آماده‌ای برای دریافت ندارد.
+
+## روش دریافت مسابقات
+
+1. برنامه را اجرا کنید.
+2. وارد **API Settings / تنظیمات API** شوید و منبع داده و کلیدهای لازم را اضافه کنید.
+3. از **Fetch Fixtures / دریافت مسابقات** منبع، کد لیگ و فصل را انتخاب کنید.
+4. مسابقات دریافت‌شده در پایگاه داده محلی SQLite ذخیره می‌شوند.
+
+نمونه کدهای حالت Auto:
+
+| لیگ | کد |
+|---|---|
+| لیگ برتر انگلیس | `EPL` |
+| لالیگا اسپانیا | `LALIGA` |
+| بوندس‌لیگا آلمان | `BUNDESLIGA` |
+| سری آ ایتالیا | `SERIEA` |
+| لیگ یک فرانسه | `LIGUE1` |
+| لیگ برتر ایران | `IRAN` |
+
+پوشش واقعی هر لیگ به منبع داده، مجوز حساب، فصل درخواستی و سهمیه API بستگی دارد. در حالت Auto، برنامه از اولین منبعی که اطلاعات غیرخالی برگرداند استفاده می‌کند؛ داده‌های چند منبع را با هم ادغام نمی‌کند.
+
+## امنیت کلیدهای API
+
+- کلیدها و توکن‌ها را در کد یا مخزن GitHub قرار ندهید.
+- اطلاعات ورود در پوشه محلی کاربر ویندوز نگهداری و با DPAPI محافظت می‌شود.
+- اگر کلیدی افشا شد، آن را از پنل ارائه‌دهنده باطل و جایگزین کنید.
+- کلید محافظت‌شده با DPAPI برای انتقال ساده به حساب ویندوز یا دستگاه دیگر طراحی نشده است.
+
+## نقشه راه
+
+- [x] پایه برنامه WPF و اتصال SQLite
+- [x] رابط تنظیمات منابع و ذخیره محلی کلیدها (در حال تکمیل و بررسی)
+- [x] اتصال منابع دریافت مسابقات و تلاش جایگزین بین منابع (در حال تکمیل و بررسی)
+- [ ] تأیید ساخت موفق در GitHub Actions و انتشار نسخه قابل‌حمل
+- [ ] محاسبه فرم تیم‌ها و نرخ گل‌زنی/گل‌خوردن از مسابقات گذشته
+- [ ] اتصال آمار تاریخی به مدل پیش‌بینی پواسون
+- [ ] افزودن ارزیابی گذشته‌نگر، سنجش دقت و نمایش عدم‌قطعیت
+- [ ] تکمیل ترجمه فارسی/انگلیسی و بهبود پیام‌های خطا
+
+## هشدار
+
+فوتبال ذاتاً غیرقطعی است. پیش‌بینی آماری تضمین نتیجه نیست و نباید به‌عنوان توصیه مالی تلقی شود. خالی‌بودن پاسخ API لزوماً به معنی نبود مسابقه نیست؛ محدودیت دسترسی، شناسه لیگ، فصل، سهمیه درخواست یا قطعی سرویس هم می‌تواند علت باشد.
+
+## مشارکت در پروژه
+
+برای گزارش خطا، سیستم‌عامل، نام ارائه‌دهنده (بدون کلید API)، کد لیگ، فصل و متن خطا را ارسال کنید. هرگز کلید یا توکن محرمانه را در گزارش عمومی قرار ندهید.
