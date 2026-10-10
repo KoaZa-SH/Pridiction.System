@@ -13,9 +13,11 @@
 - Local **SQLite** database for storing imported fixtures.
 - A persistent **Persian / English language setting** for the interface, fixture labels, market names, dates, and team names. Known club and national-team names use curated Persian names; unknown Latin-script names are transliterated as a fallback.
 - Provider settings include **OddsPapi**, **Floodlight**, **Sports Open Data**, **OpenLigaDB**, **API-SPORTS**, and **SportsAPI360**, plus a manual provider option.
-- Built-in fixture adapters: **API-SPORTS** (API key; league IDs and plan coverage apply), **OpenLigaDB** (no key; supported competitions), **OddsPapi** (API key; enter its own tournament ID), and **SportsAPI360** (API key; schedule endpoint covers the next seven days).
+- Built-in fixture adapters: **API-SPORTS** (API key; bulk date queries can return all competitions covered by the account), **OpenLigaDB** (no key; supported competitions), **OddsPapi** (API key; enter its own tournament ID), and **SportsAPI360** (API key; schedule endpoint covers the next seven days).
+- When a fixture is selected, the app can fetch and cache the provider's fixture details (statistics, events, lineups and player data when available) in SQLite. Live fixtures with scores are not filtered out just because goals are already recorded.
+- A match-specific news panel searches Google News RSS for both teams and the competition; it requires an internet connection but no separate API key. News headlines are context, not verified causal impact or a sentiment-based prediction.
 - **Floodlight**, **Sports Open Data**, and manually added providers use an HTTPS fixtures endpoint that returns a normalized JSON array/object (schema below). Their provider-specific authentication and JSON schemas may need adaptation to the vendor's documentation.
-- The **Auto** provider mode tries compatible configured providers; it does not merge results across providers.
+- The **Auto** fixture refresh queries API-SPORTS across each of the next seven UTC dates and live fixtures, then merges/deduplicates compatible enabled SportsAPI360 and custom feeds. It is not restricted to the English Premier League: it can include leagues, domestic cups, continental club competitions, national-team tournaments and Olympics fixtures when the provider covers them.
 - Credentials are stored locally using Windows DPAPI.
 - GitHub Actions workflow builds the Windows application and can publish a portable build artifact when the build succeeds.
 
@@ -45,7 +47,7 @@ The GitHub Actions workflow is defined in `.github/workflows/build-windows.yml`.
 
 ## Data providers
 
-Change the global language from the selector at the top of the main window; the preference is saved for the current Windows user. Open **API Settings / تنظیمات API** to add, enable, disable, or remove providers. For **Floodlight**, **Sports Open Data**, or a manual provider, enter an HTTPS fixtures endpoint. Then open **Import Fixtures / دریافت مسابقات** and select a provider and its provider-specific competition/tournament identifier.
+Change the global language from the selector at the top of the main window; the preference is saved for the current Windows user. Open **API Settings / تنظیمات API** to add, enable, disable, or remove providers. For **Floodlight**, **Sports Open Data**, or a manual provider, enter an HTTPS fixtures endpoint. Then open **Import Fixtures / دریافت مسابقات**. Choose **Auto fallback** to refresh the next seven days of fixtures across competitions covered by API-SPORTS and other compatible enabled feeds. Selecting an individual provider still uses that provider's own competition/tournament identifier.
 
 ### Provider and competition examples
 
@@ -60,7 +62,7 @@ Change the global language from the selector at the top of the main window; the 
 
 For manual endpoints, the response should be a JSON array or an object containing a `response`, `matches`, `fixtures`, or `data` array. Each row should include `homeTeam` and `awayTeam` (strings or objects with a `name`), plus a date field such as `date`, `kickoff`, or `utcDate`; optional fields are `league`, `homeGoals`, `awayGoals`, `status`, and `id`. The app sends the configured key in the authentication header (default `x-api-key`); the header name can be changed in API Settings.
 
-Provider coverage, API limits, competition identifiers, and historical availability can change. Check the provider's own documentation and account dashboard. Auto mode returns the first successful non-empty result; it does **not** combine or deduplicate data from every provider.
+Provider coverage, API limits, competition identifiers, and historical availability can change. Check the provider's own documentation and account dashboard. Global refresh does not guarantee every league or every cup worldwide; it can only import fixtures visible to the configured provider, subscription and API quota. API-SPORTS statistics may include shots, fouls, corners, possession, yellow/red cards, events and lineups, but availability varies by competition and match.
 
 ## Local data and credentials
 
@@ -73,12 +75,19 @@ Provider coverage, API limits, competition identifiers, and historical availabil
 
 - [x] WPF application foundation and SQLite integration
 - [x] Provider settings UI and local protected credential storage (implementation in progress)
-- [x] Fixture import adapters and cross-provider fallback (implementation in progress)
+- [x] Bulk fixture refresh for the next seven days and live matches, with compatible feed merging/deduplication
+- [x] Match statistics/events cache and team-specific Google News RSS panel
 - [ ] Verify clean CI build and publish a successful portable artifact
 - [ ] Read completed matches from SQLite and calculate team form and home/away scoring rates
 - [ ] Connect historical statistics to the Poisson prediction model
 - [ ] Add backtesting, calibration metrics, and clear confidence/uncertainty reporting
 - [ ] Improve bilingual localization, validation, and user-facing error messages
+
+## Match news and detailed statistics
+
+The news panel uses the Google News RSS search endpoint, so there is no required news API key. It searches for the selected home/away teams and competition, and opens the original publisher's article. RSS availability and relevance depend on the network and news index. It does not claim that a headline caused a match outcome or automatically assign a verified impact score. If you later need structured news sentiment, injury/news classification or a commercial SLA, add a dedicated provider such as GNews or another licensed news API and review its current pricing, coverage and terms.
+
+Detailed match information is requested from API-SPORTS when a match is selected and cached locally. The API's `fixtures?id=...` response can contain match statistics, events, lineups and player data when covered. A missing statistic means unavailable, not zero. The amount of data depends on the competition and subscription.
 
 ## Limitations and responsible use
 
@@ -105,7 +114,7 @@ Bug reports and focused pull requests are welcome. Please include the operating 
 - تنظیمات منابع شامل **OddsPapi**، **Floodlight**، **Sports Open Data**، **OpenLigaDB**، **API-SPORTS** و **SportsAPI360** است؛ افزودن منبع دستی نیز وجود دارد.
 - اتصال آماده برای دریافت مسابقات: **API-SPORTS**، **OpenLigaDB**، **OddsPapi** و **SportsAPI360**. شناسه لیگ/رقابت و محدودیت طرح اشتراک هر سرویس را جداگانه بررسی کنید.
 - برای **Floodlight**، **Sports Open Data** و منابع دستی، نشانی HTTPS داده مسابقات لازم است و پاسخ باید با قالب JSON مشخص‌شده در بخش انگلیسی سازگار باشد.
-- حالت **Auto** منابع سازگار را امتحان می‌کند و داده‌ها را از چند منبع با هم ادغام نمی‌کند.
+- حالت **Auto** مسابقات هفت روز آینده را برای تمام رقابت‌هایی که API-SPORTS پوشش می‌دهد دریافت می‌کند، مسابقات زنده را نیز می‌گیرد و در صورت فعال بودن، منابع سازگار SportsAPI360 و منبع دستی را ادغام و تکراری‌ها را حذف می‌کند. این روش فقط به لیگ برتر انگلیس محدود نیست؛ جام‌های داخلی، رقابت‌های باشگاهی قاره‌ای، تورنمنت‌های ملی و مسابقات المپیک نیز در صورت پوشش منبع قابل دریافت‌اند.
 - کلیدها با Windows DPAPI به‌صورت محلی محافظت می‌شوند.
 - ساخت برنامه ویندوز از طریق GitHub Actions؛ فایل قابل‌دریافت فقط پس از موفقیت ساخت منتشر می‌شود.
 
@@ -123,8 +132,8 @@ Bug reports and focused pull requests are welcome. Please include the operating 
 1. برنامه را اجرا کنید و از انتخابگر بالای صفحه زبان **فارسی** یا **English** را انتخاب کنید.
 2. وارد **API Settings / تنظیمات API** شوید و سرویس و کلیدهای لازم را اضافه کنید.
 3. برای Floodlight، Sports Open Data یا سرویس دستی، نشانی HTTPS endpoint را وارد کنید.
-4. از **Import Fixtures / دریافت مسابقات** سرویس و شناسه رقابت مخصوص همان سرویس را انتخاب کنید.
-5. مسابقات دریافت‌شده در پایگاه داده محلی SQLite ذخیره می‌شوند.
+4. از **Import Fixtures / دریافت مسابقات** گزینه **Auto fallback** را انتخاب کنید تا تقویم هفت روز آینده و مسابقات زنده از منابع سازگار دریافت شود. انتخاب مستقیم یک سرویس همچنان از شناسه مخصوص همان سرویس استفاده می‌کند.
+5. مسابقات دریافت‌شده در پایگاه داده محلی SQLite ذخیره می‌شوند. هنگام انتخاب مسابقه، آمار و رویدادهای در دسترس از API-SPORTS دریافت و ذخیره می‌شود.
 
 نمونه کدهای حالت Auto:
 
@@ -137,7 +146,13 @@ Bug reports and focused pull requests are welcome. Please include the operating 
 | لیگ یک فرانسه | `LIGUE1` |
 | لیگ برتر ایران | `IRAN` |
 
-پوشش واقعی هر لیگ به منبع داده، مجوز حساب، فصل درخواستی و سهمیه API بستگی دارد. در حالت Auto، برنامه از اولین منبعی که اطلاعات غیرخالی برگرداند استفاده می‌کند؛ داده‌های چند منبع را با هم ادغام نمی‌کند.
+پوشش واقعی هر لیگ و جام به منبع داده، مجوز حساب و سهمیه API بستگی دارد. دریافت سراسری به معنی تضمین همه مسابقات جهان نیست؛ فقط رقابت‌هایی دریافت می‌شوند که منبع فعال پوشش می‌دهد. آمار تفصیلی ممکن است شامل شوت، خطا، کرنر، مالکیت توپ، کارت‌ها، رویدادها، ترکیب و اطلاعات بازیکنان باشد؛ داده ناموجود به‌معنی صفر نیست.
+
+## اخبار و آمار تفصیلی مسابقه
+
+بخش اخبار از Google News RSS استفاده می‌کند و به کلید API جداگانه نیاز ندارد؛ اتصال اینترنت لازم است. خبرها بر اساس نام هر دو تیم و رقابت جست‌وجو می‌شوند و با کلیک روی تیتر، منبع اصلی باز می‌شود. این بخش تضمین نمی‌کند خبر واقعاً علت تغییر نتیجه است یا میزان اثرگذاری آن را به‌طور قطعی محاسبه نمی‌کند. برای تحلیل ساختاریافته احساسات خبر، دسته‌بندی مصدومیت یا سرویس تجاری پایدار، می‌توان بعداً یک ارائه‌دهنده تخصصی خبر مانند GNews یا سرویس مجاز دیگری اضافه کرد؛ هزینه، پوشش و شرایط استفاده آن باید جداگانه بررسی شود.
+
+هنگام انتخاب مسابقه، جزئیات قابل‌دسترس از API-SPORTS دریافت و در SQLite ذخیره می‌شود. داده‌های آمار، رویدادها، ترکیب‌ها و بازیکنان به پوشش همان رقابت و طرح اشتراک وابسته‌اند.
 
 ## امنیت کلیدهای API
 
