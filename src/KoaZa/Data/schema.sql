@@ -62,3 +62,26 @@ CREATE TABLE IF NOT EXISTS MatchEvents (
   Detail TEXT,
   UNIQUE(Provider, ExternalId, EventIndex)
 );
+
+-- Every model run is preserved with its sample size and data sufficiency flag.
+-- Unavailable probabilities are NULL, not fake 0%.
+CREATE TABLE IF NOT EXISTS MarketPredictions (
+  Id INTEGER PRIMARY KEY AUTOINCREMENT,
+  RunId TEXT NOT NULL,
+  CreatedUtc TEXT NOT NULL,
+  Provider TEXT,
+  ExternalId TEXT,
+  League TEXT,
+  KickoffUtc TEXT,
+  HomeTeam TEXT NOT NULL,
+  AwayTeam TEXT NOT NULL,
+  Market TEXT NOT NULL,
+  Outcome TEXT NOT NULL,
+  Probability REAL,
+  SampleSize INTEGER NOT NULL,
+  HasSufficientData INTEGER NOT NULL,
+  Explanation TEXT,
+  ModelVersion TEXT NOT NULL,
+  UNIQUE(RunId, Market, Outcome)
+);
+CREATE INDEX IF NOT EXISTS IX_MarketPredictions_FixtureCreated ON MarketPredictions(HomeTeam, AwayTeam, CreatedUtc);
