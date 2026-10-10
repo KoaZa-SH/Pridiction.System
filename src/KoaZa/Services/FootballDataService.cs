@@ -2016,17 +2016,21 @@ namespace KoaZa.Services
                         normalized.HomeShotsOnTarget.HasValue || normalized.AwayShotsOnTarget.HasValue ||
                         normalized.HomeCorners.HasValue || normalized.AwayCorners.HasValue ||
                         normalized.HomeYellowCards.HasValue || normalized.AwayYellowCards.HasValue ||
-                        normalized.HomeRedCards.HasValue || normalized.AwayRedCards.HasValue;
-                    if (!hasStats) continue;
-                    db.SaveMatchStatistics(normalized);
-                    var legacy = FootballDataService.ExtractFixtureStatistics(json, fixture);
-                    legacy.HomeCorners = normalized.HomeCorners; legacy.AwayCorners = normalized.AwayCorners;
-                    legacy.HomeShotsOnTarget = normalized.HomeShotsOnTarget; legacy.AwayShotsOnTarget = normalized.AwayShotsOnTarget;
-                    legacy.HomeYellowCards = normalized.HomeYellowCards; legacy.AwayYellowCards = normalized.AwayYellowCards;
-                    legacy.Referee = normalized.Referee;
-                    db.SaveNormalizedFixtureStatistics(legacy);
-                    db.ReplaceMatchEvents(fixture.Provider, fixture.ExternalId, MatchStatisticsParser.ParseEvents(json, fixture));
-                    imported++;
+                        normalized.HomeRedCards.HasValue || normalized.AwayRedCards.HasValue ||
+                        !string.IsNullOrWhiteSpace(normalized.Referee);
+                    var events = MatchStatisticsParser.ParseEvents(json, fixture);
+                    if (hasStats)
+                    {
+                        db.SaveMatchStatistics(normalized);
+                        var legacy = FootballDataService.ExtractFixtureStatistics(json, fixture);
+                        legacy.HomeCorners = normalized.HomeCorners; legacy.AwayCorners = normalized.AwayCorners;
+                        legacy.HomeShotsOnTarget = normalized.HomeShotsOnTarget; legacy.AwayShotsOnTarget = normalized.AwayShotsOnTarget;
+                        legacy.HomeYellowCards = normalized.HomeYellowCards; legacy.AwayYellowCards = normalized.AwayYellowCards;
+                        legacy.Referee = normalized.Referee;
+                        db.SaveNormalizedFixtureStatistics(legacy);
+                    }
+                    db.ReplaceMatchEvents(fixture.Provider, fixture.ExternalId, events);
+                    if (hasStats || events.Count > 0) imported++;
                 }
                 catch { /* One unavailable match must not cancel the rest of the import. */ }
             }
