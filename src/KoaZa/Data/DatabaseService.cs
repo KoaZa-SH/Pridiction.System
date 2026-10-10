@@ -146,12 +146,14 @@ namespace KoaZa.Data
                         string raw = Convert.ToString(reader["KickoffUtc"]);
                         if (!DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out kickoff))
                             continue;
-                        DateTime local = kickoff.ToLocalTime();
-                        if (local < fromLocal || local >= toLocal) continue;
                         string status = Convert.ToString(reader["Status"]);
-                        // Live matches can already have a score. Keep them visible until they reach a completed status.
                         bool live = IsLiveStatus(status);
                         if (IsCompletedStatus(status) || (!live && (reader["HomeGoals"] != DBNull.Value || reader["AwayGoals"] != DBNull.Value))) continue;
+
+                        // Upcoming fixtures are limited to the requested local date range, but live matches
+                        // remain visible even if their kickoff was yesterday and the local date has changed.
+                        DateTime local = kickoff.ToLocalTime();
+                        if (!live && (local < fromLocal || local >= toLocal)) continue;
                         all.Add(new FixtureRecord
                         {
                             Provider = Convert.ToString(reader["Provider"]), League = Convert.ToString(reader["League"]),
