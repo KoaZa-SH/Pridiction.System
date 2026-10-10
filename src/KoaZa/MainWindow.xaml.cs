@@ -255,7 +255,7 @@ namespace KoaZa
             public string League { get { return LocalizationService.League(Fixture.League); } }
             public string HomeTeam { get { return LocalizationService.Team(Fixture.HomeTeam); } }
             public string AwayTeam { get { return LocalizationService.Team(Fixture.AwayTeam); } }
-            public string KickoffDisplay { get { return GetLocalKickoff(Fixture).ToString("dd MMM HH:mm", CultureInfo.CurrentCulture); } }
+            public string KickoffDisplay { get { return LocalizationService.IsPersian ? GetLocalKickoff(Fixture).ToString("yyyy/MM/dd HH:mm", CultureInfo.GetCultureInfo("fa-IR")) : GetLocalKickoff(Fixture).ToString("dd MMM HH:mm", CultureInfo.GetCultureInfo("en-US")); } }
             public FixtureRow(FixtureRecord fixture) { Fixture = fixture; }
         }
 
