@@ -1218,7 +1218,7 @@ namespace KoaZa.Services
                 Background = new SolidColorBrush(Color.FromRgb(22, 134, 91)), Foreground = Brushes.White,
                 BorderThickness = new Thickness(0)
             };
-            refresh.Click += (sender, args) => LoadCompetitionChecks();
+            refresh.Click += (sender, args) => RefreshCompetitionCatalogAsync();
             Grid.SetColumn(refresh, 1); toolbar.Children.Add(refresh);
             panel.Children.Add(toolbar); Grid.SetRow(toolbar, 1);
 
@@ -1242,6 +1242,28 @@ namespace KoaZa.Services
             panel.Children.Add(bottom); Grid.SetRow(bottom, 3);
             LoadCompetitionChecks();
             return panel;
+        }
+
+        private async void RefreshCompetitionCatalogAsync()
+        {
+            if (_competitionStatus != null)
+                _competitionStatus.Text = LocalizationService.T("Refreshing available competitions from enabled providers...", "در حال دریافت رقابت‌های در دسترس سرویس‌های فعال...");
+            try
+            {
+                int season = DateTime.UtcNow.Month >= 7 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
+                var fixtures = await System.Threading.Tasks.Task.Run(() =>
+                    FootballDataService.FetchAllUpcoming(season, DateTime.UtcNow.Date));
+                if (fixtures != null && fixtures.Count > 0)
+                    new KoaZa.Data.DatabaseService().SaveFixtures(fixtures);
+                LoadCompetitionChecks();
+                _competitionStatus.Text = LocalizationService.T("Catalog refreshed from enabled providers. Competitions with fixtures in the current date window are now available for selection. ", "فهرست از سرویس‌های فعال نوسازی شد. رقابت‌هایی که در بازه فعلی مسابقه دارند اکنون قابل انتخاب‌اند. ") +
+                    (fixtures == null ? 0 : fixtures.Count) + LocalizationService.T(" fixtures retrieved.", " مسابقه دریافت شد.");
+            }
+            catch (Exception ex)
+            {
+                LoadCompetitionChecks();
+                _competitionStatus.Text = LocalizationService.T("Provider refresh failed; showing all competitions already saved locally. ", "دریافت از سرویس ناموفق بود؛ همه رقابت‌های ذخیره‌شده محلی نمایش داده می‌شوند. ") + ex.Message;
+            }
         }
 
         private void LoadCompetitionChecks()
@@ -1441,11 +1463,26 @@ namespace KoaZa.Services
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var top = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            top.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            top.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.35, GridUnitType.Star) });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.95, GridUnitType.Star) });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.58, GridUnitType.Star) });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            string[] fieldLabels = {
+                LocalizationService.T("Provider / سرویس", "سرویس دریافت"),
+                LocalizationService.T("League or tournament ID", "شناسه لیگ یا تورنمنت"),
+                LocalizationService.T("Season / فصل", "فصل"),
+                LocalizationService.T("From date / از تاریخ", "از تاریخ"),
+                LocalizationService.T("Action / اجرا", "اجرا")
+            };
+            for (int i = 0; i < fieldLabels.Length; i++)
+            {
+                var label = new TextBlock { Text = fieldLabels[i], FontWeight = FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(22, 59, 43)), Margin = new Thickness(0, 0, 8, 4) };
+                Grid.SetColumn(label, i); Grid.SetRow(label, 0); top.Children.Add(label);
+            }
             _providerBox = new ComboBox { Padding = new Thickness(6), Margin = new Thickness(0, 0, 8, 0) };
             _providerBox.Items.Add(new ProviderChoice("Auto", LocalizationService.T("Auto fallback (recommended)", "انتخاب خودکار سرویس")));
             _providerBox.Items.Add(new ProviderChoice("OddsPapi", "OddsPapi"));
@@ -1459,15 +1496,16 @@ namespace KoaZa.Services
                 _providerBox.Items.Add(new ProviderChoice(configured.Provider, configured.Provider));
             _providerBox.SelectedIndex = 0;
             _providerBox.SelectionChanged += ProviderChanged;
-            Grid.SetColumn(_providerBox, 0); top.Children.Add(_providerBox);
-            _leagueBox = new TextBox { Text = "39", Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "API-Football: numeric league ID; football-data.org: competition code such as PL; OpenLigaDB: league shortcut such as bl1" };
-            Grid.SetColumn(_leagueBox, 1); top.Children.Add(_leagueBox);
+            Grid.SetColumn(_providerBox, 0); Grid.SetRow(_providerBox, 1); top.Children.Add(_providerBox);
+            _leagueBox = new TextBox { Text = "all", Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "API-SPORTS: enter 'all' for every competition covered by the key, or a numeric league ID; football-data.org: competition code such as PL; OpenLigaDB: shortcut such as bl1" };
+            Grid.SetColumn(_leagueBox, 1); Grid.SetRow(_leagueBox, 1); top.Children.Add(_leagueBox);
             _seasonBox = new TextBox { Text = DateTime.UtcNow.Month >= 7 ? DateTime.UtcNow.Year.ToString() : (DateTime.UtcNow.Year - 1).ToString(), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "Season year (for providers that require it)" };
-            Grid.SetColumn(_seasonBox, 2); top.Children.Add(_seasonBox);
-            _startDateBox = new TextBox { Text = DateTime.UtcNow.Date.AddDays(-30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "Start date, format yyyy-MM-dd. Imports this date through today, plus the next 7 days." };
-            Grid.SetColumn(_startDateBox, 3); top.Children.Add(_startDateBox);
+            Grid.SetColumn(_seasonBox, 2); Grid.SetRow(_seasonBox, 1); top.Children.Add(_seasonBox);
+            _startDateBox = new TextBox { Text = DateTime.UtcNow.Date.AddDays(-30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "From date, format yyyy-MM-dd. Imports this date through today, plus the next 7 days." };
+            Grid.SetColumn(_startDateBox, 3); Grid.SetRow(_startDateBox, 1); top.Children.Add(_startDateBox);
             var fetch = new Button { Content = "Fetch & save from date", Padding = new Thickness(14, 8, 14, 8), Background = new SolidColorBrush(Color.FromRgb(22, 134, 91)), Foreground = Brushes.White, BorderThickness = new Thickness(0), ToolTip = "Fetch fixtures/results from the selected start date and save them in the local database." };
-            fetch.Click += Fetch_Click; Grid.SetColumn(fetch, 4); top.Children.Add(fetch);
+            fetch.Content = LocalizationService.T("Fetch & save", "دریافت و ذخیره");
+            fetch.Click += Fetch_Click; Grid.SetColumn(fetch, 4); Grid.SetRow(fetch, 1); top.Children.Add(fetch);
             root.Children.Add(top); Grid.SetRow(top, 0);
 
             _grid = new DataGrid { IsReadOnly = true, AutoGenerateColumns = false, CanUserAddRows = false, Margin = new Thickness(0, 0, 0, 10) };
