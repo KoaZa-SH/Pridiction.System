@@ -1640,14 +1640,14 @@ namespace KoaZa.Services
         {
             var choice = _providerBox.SelectedItem as ProviderChoice;
             if (choice == null) return;
-            _keyBox.IsEnabled = choice.Id != "OpenLigaDB" && choice.Id != "FootballCharts";
+            _keyBox.IsEnabled = choice.Id != "OpenLigaDB";
             _keyBox.Text = "API key / token";
             _customNameBox.Text = "Custom name";
             _baseUrlBox.Text = "HTTPS endpoint";
             _headerBox.Text = "x-api-key";
             _customNameBox.IsEnabled = choice.Id == "Custom";
             _baseUrlBox.IsEnabled = choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData";
-            _keyBox.ToolTip = choice.Id == "OpenLigaDB" ? "This provider does not require a key." : "Paste the token/key from this provider's official account.";
+            _keyBox.ToolTip = choice.Id == "OpenLigaDB" ? "This provider does not require a key." : choice.Id == "FootballCharts" ? "Optional bearer key for the higher daily request limit; no key is required to start." : "Paste the token/key from this provider's official account.";
         }
 
         private void Add_Click(object sender, RoutedEventArgs e)
