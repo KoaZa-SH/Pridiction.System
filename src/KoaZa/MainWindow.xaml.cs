@@ -397,7 +397,7 @@ namespace KoaZa
                 bool completed = status == "FT" || status == "AET" || status == "PEN" || status == "FINISHED";
                 string json = live ? null : _database.GetFixtureDetails(fixture.Provider, fixture.ExternalId);
                 // Re-fetch legacy cached detail JSON once for completed matches so newly added stats/events can be normalized.
-                if (completed && !string.IsNullOrWhiteSpace(json) && json.IndexOf("\\"detailsVersion\\"", StringComparison.OrdinalIgnoreCase) < 0)
+                if (completed && !string.IsNullOrWhiteSpace(json) && json.IndexOf("\"detailsVersion\"", StringComparison.OrdinalIgnoreCase) < 0)
                     json = null;
                 if (string.IsNullOrWhiteSpace(json))
                 {
