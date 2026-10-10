@@ -100,12 +100,16 @@ namespace KoaZa.Data
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS MatchEvents (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, ExternalId TEXT NOT NULL, EventIndex INTEGER NOT NULL, Minute INTEGER, Team TEXT, Player TEXT, Assist TEXT, Type TEXT, Detail TEXT, UNIQUE(Provider, ExternalId, EventIndex));", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS MarketPredictions (Id INTEGER PRIMARY KEY AUTOINCREMENT, RunId TEXT NOT NULL, CreatedUtc TEXT NOT NULL, Provider TEXT, ExternalId TEXT, League TEXT, KickoffUtc TEXT, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, Market TEXT NOT NULL, Outcome TEXT NOT NULL, Probability REAL, SampleSize INTEGER NOT NULL, HasSufficientData INTEGER NOT NULL, Explanation TEXT, ModelVersion TEXT NOT NULL, UNIQUE(RunId, Market, Outcome));", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE INDEX IF NOT EXISTS IX_MarketPredictions_FixtureCreated ON MarketPredictions(HomeTeam, AwayTeam, CreatedUtc);", con)) cmd.ExecuteNonQuery();
-                // Repair legacy rows before enforcing the unique fixture key. Preserve completed duplicates in history first.
-                using (var cmd = new SQLiteCommand("INSERT OR IGNORE INTO FixtureHistory (Provider,League,KickoffUtc,HomeTeam,AwayTeam,HomeGoals,AwayGoals,Status,ExternalId,UpdatedUtc,ArchivedUtc) SELECT Provider,League,KickoffUtc,HomeTeam,AwayTeam,HomeGoals,AwayGoals,Status,ExternalId,UpdatedUtc,@archived FROM Fixtures WHERE HomeGoals IS NOT NULL AND AwayGoals IS NOT NULL;", con))
-                { cmd.Parameters.AddWithValue("@archived", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)); cmd.ExecuteNonQuery(); }
-                using (var cmd = new SQLiteCommand("UPDATE Fixtures SET ExternalId=lower(hex(randomblob(16))) WHERE ExternalId IS NULL OR TRIM(ExternalId)='';", con)) cmd.ExecuteNonQuery();
-                using (var cmd = new SQLiteCommand("DELETE FROM Fixtures WHERE Id NOT IN (SELECT MAX(Id) FROM Fixtures GROUP BY Provider,ExternalId);", con)) cmd.ExecuteNonQuery();
-                using (var cmd = new SQLiteCommand("CREATE UNIQUE INDEX IF NOT EXISTS UX_Fixtures_Provider_ExternalId ON Fixtures(Provider, ExternalId);", con)) cmd.ExecuteNonQuery();
+                // Repair legacy rows atomically before enforcing the unique fixture key.
+                using (var tx = con.BeginTransaction())
+                {
+                    using (var cmd = new SQLiteCommand("INSERT OR IGNORE INTO FixtureHistory (Provider,League,KickoffUtc,HomeTeam,AwayTeam,HomeGoals,AwayGoals,Status,ExternalId,UpdatedUtc,ArchivedUtc) SELECT Provider,League,KickoffUtc,HomeTeam,AwayTeam,HomeGoals,AwayGoals,Status,ExternalId,UpdatedUtc,@archived FROM Fixtures WHERE HomeGoals IS NOT NULL AND AwayGoals IS NOT NULL;", con, tx))
+                    { cmd.Parameters.AddWithValue("@archived", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)); cmd.ExecuteNonQuery(); }
+                    using (var cmd = new SQLiteCommand("UPDATE Fixtures SET ExternalId=lower(hex(randomblob(16))) WHERE ExternalId IS NULL OR TRIM(ExternalId)='';", con, tx)) cmd.ExecuteNonQuery();
+                    using (var cmd = new SQLiteCommand("DELETE FROM Fixtures WHERE Id NOT IN (SELECT MAX(Id) FROM Fixtures GROUP BY Provider,ExternalId);", con, tx)) cmd.ExecuteNonQuery();
+                    using (var cmd = new SQLiteCommand("CREATE UNIQUE INDEX IF NOT EXISTS UX_Fixtures_Provider_ExternalId ON Fixtures(Provider, ExternalId);", con, tx)) cmd.ExecuteNonQuery();
+                    tx.Commit();
+                }
                 using (var cmd = new SQLiteCommand("CREATE INDEX IF NOT EXISTS IX_Fixtures_Kickoff ON Fixtures(KickoffUtc);", con)) cmd.ExecuteNonQuery();
             }
         }
