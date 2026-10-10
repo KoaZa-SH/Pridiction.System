@@ -350,8 +350,20 @@ namespace KoaZa.Services
         public static string FetchFixtureDetails(FixtureRecord fixture)
         {
             if (fixture == null) throw new ArgumentNullException("fixture");
+            if (fixture.Provider == "FiveDollarFootball" || fixture.Provider == "5DollarFootballAPI")
+            {
+                var fiveDollarKeys = ApiProviderStore.Load().Where(p => p.Enabled && (p.Provider == "FiveDollarFootball" || p.Provider == "5DollarFootballAPI") && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+                if (fiveDollarKeys.Count == 0) throw new InvalidOperationException("Enable 5DollarFootballAPI and save its key first.");
+                Exception fiveDollarError = null;
+                foreach (var config in fiveDollarKeys)
+                {
+                    try { return Request("https://api.5dollarfootballapi.com/v1/fixtures/" + Uri.EscapeDataString(fixture.ExternalId) + "?include=events,stats", "Authorization", "Bearer " + config.Key); }
+                    catch (Exception ex) { fiveDollarError = ex; }
+                }
+                throw new InvalidOperationException("Could not retrieve 5DollarFootballAPI fixture details.", fiveDollarError);
+            }
             if (fixture.Provider != "API-Football" && fixture.Provider != "ApiFootball" && fixture.Provider != "ApiSports")
-                throw new InvalidOperationException("Detailed statistics are currently available through the API-SPORTS/API-Football adapter. Other providers may not expose a compatible fixture-details endpoint.");
+                throw new InvalidOperationException("Detailed event statistics are currently supported for API-SPORTS and 5DollarFootballAPI; Football-Charts provides results and goal-based model probabilities, not these event-stat fields.");
             int fixtureId;
             if (!int.TryParse(fixture.ExternalId, out fixtureId))
                 throw new InvalidOperationException("This match does not have a numeric API-SPORTS fixture ID.");
@@ -385,7 +397,7 @@ namespace KoaZa.Services
                         var eventsRoot = Parse(Request("https://v3.football.api-sports.io/fixtures/events?fixture=" + fixtureId, "x-apisports-key", config.Key));
                         if (!HasErrors(eventsRoot))
                         {
-                            var baseItem = GetList(root, "response").FirstOrDefault();
+                            var baseItem = GetList(root, "response").FirstOrDefault() as Dictionary<string, object>;
                             var eventRows = GetList(eventsRoot, "response");
                             if (baseItem != null) baseItem["events"] = eventRows;
                         }
