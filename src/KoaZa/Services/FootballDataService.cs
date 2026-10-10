@@ -29,7 +29,9 @@ namespace KoaZa.Services
                     Provider == "FootballData" ? "football-data.org" :
                     Provider == "OpenLigaDB" ? "OpenLigaDB (no key)" :
                     Provider == "OddsPapi" ? "OddsPapi" : Provider == "Floodlight" ? "Floodlight" :
-                    Provider == "SportsOpenData" ? "Sports Open Data" : Provider == "SportsAPI360" ? "SportsAPI360" : Provider;
+                    Provider == "SportsOpenData" ? "Sports Open Data" : Provider == "SportsAPI360" ? "SportsAPI360" :
+                    Provider == "FiveDollarFootball" || Provider == "5DollarFootballAPI" ? "5DollarFootballAPI" :
+                    Provider == "FootballCharts" || Provider == "Football-Charts" ? "Football-Charts" : Provider;
                 return label + (string.IsNullOrEmpty(Key) ? "" : " • " + Mask(Key)) +
                     (Enabled ? LocalizationService.T(" • enabled", " • فعال") : LocalizationService.T(" • disabled", " • غیرفعال"));
             }
@@ -1669,13 +1671,15 @@ namespace KoaZa.Services
         {
             var choice = _providerBox.SelectedItem as ProviderChoice;
             if (choice == null) return;
-            _leagueBox.Text = choice.Id == "Auto" ? "all" : choice.Id == "ApiFootball" || choice.Id == "ApiSports" ? "39" : choice.Id == "FootballData" ? "PL" : choice.Id == "OpenLigaDB" ? "bl1" : "all";
+            _leagueBox.Text = choice.Id == "Auto" ? "all" : choice.Id == "ApiFootball" || choice.Id == "ApiSports" ? "39" : choice.Id == "FootballData" ? "PL" : choice.Id == "OpenLigaDB" ? "bl1" : choice.Id == "FootballCharts" ? "premier" : choice.Id == "FiveDollarFootball" ? "" : "all";
             _leagueBox.ToolTip = choice.Id == "Auto" ? "Bulk refresh: all competitions available from enabled compatible feeds for the next 7 days plus live matches. The field is informational in Auto mode." :
                 choice.Id == "ApiFootball" || choice.Id == "ApiSports" ? "Enter an API-Sports numeric league ID (e.g. 39 for Premier League)." :
                 choice.Id == "FootballData" ? "Enter competition code (e.g. PL, PD, BL1, SA, FL1)." :
                 choice.Id == "OpenLigaDB" ? "Enter OpenLigaDB league shortcut (e.g. bl1)." :
                 choice.Id == "OddsPapi" ? "Enter the OddsPapi tournamentId (not the API-Sports league ID)." :
                 choice.Id == "SportsAPI360" ? "Enter tournamentId, tournament name, or 'all' for the next 7 days." :
+                choice.Id == "FiveDollarFootball" ? "Enter the numeric league ID used by 5DollarFootballAPI; IDs are provider-specific. This adapter requests that league's season fixtures with stats/events included." :
+                choice.Id == "FootballCharts" ? "Enter a Football-Charts league slug (e.g. premier). This source provides fixtures/results and its own goal-based probabilities, not shots/corners/cards." :
                 "For Floodlight, Sports Open Data or custom providers, configure the HTTPS fixtures endpoint in API Settings.";
         }
 
