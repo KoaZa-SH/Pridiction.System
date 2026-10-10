@@ -344,7 +344,14 @@ namespace KoaZa.Services
             return values.Count < 5 ? 0 : values.Average();
         }
         private static int? Sum(int? a,int? b) { return a.HasValue && b.HasValue ? (int?)(a.Value+b.Value) : null; }
-        private static int DateTimeOrder(string a,string b) { return string.Compare(a??"",b??"",StringComparison.Ordinal); }
+        private static int DateTimeOrder(string a,string b)
+        {
+            DateTime da, db;
+            bool pa = DateTime.TryParse(a, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out da);
+            bool pb = DateTime.TryParse(b, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out db);
+            if (pa && pb) return DateTime.Compare(da, db);
+            return string.Compare(a ?? "", b ?? "", StringComparison.Ordinal);
+        }
         private static double AverageGoals(List<FixtureRecord> rows,string team,bool scored) {
             return rows.Average(m => {
                 bool home=Same(m.HomeTeam,team);
