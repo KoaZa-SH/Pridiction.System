@@ -711,7 +711,13 @@ namespace KoaZa.Services
             fetch.Click += Fetch_Click; Grid.SetColumn(fetch, 3); top.Children.Add(fetch);
             root.Children.Add(top); Grid.SetRow(top, 0);
 
-            _grid = new DataGrid { IsReadOnly = true, AutoGenerateColumns = true, CanUserAddRows = false, Margin = new Thickness(0, 0, 0, 10) };
+            _grid = new DataGrid { IsReadOnly = true, AutoGenerateColumns = false, CanUserAddRows = false, Margin = new Thickness(0, 0, 0, 10) };
+            _grid.Columns.Add(new System.Windows.Controls.DataGridTextColumn { Header = LocalizationService.T("Competition", "رقابت"), Binding = new System.Windows.Data.Binding("League"), Width = new DataGridLength(1.2, DataGridLengthUnitType.Star) });
+            _grid.Columns.Add(new System.Windows.Controls.DataGridTextColumn { Header = LocalizationService.T("Kickoff", "زمان شروع"), Binding = new System.Windows.Data.Binding("Kickoff"), Width = new DataGridLength(1.3, DataGridLengthUnitType.Star) });
+            _grid.Columns.Add(new System.Windows.Controls.DataGridTextColumn { Header = LocalizationService.T("Home team", "میزبان"), Binding = new System.Windows.Data.Binding("HomeTeam"), Width = new DataGridLength(1.2, DataGridLengthUnitType.Star) });
+            _grid.Columns.Add(new System.Windows.Controls.DataGridTextColumn { Header = LocalizationService.T("Away team", "میهمان"), Binding = new System.Windows.Data.Binding("AwayTeam"), Width = new DataGridLength(1.2, DataGridLengthUnitType.Star) });
+            _grid.Columns.Add(new System.Windows.Controls.DataGridTextColumn { Header = LocalizationService.T("Home goals", "گل میزبان"), Binding = new System.Windows.Data.Binding("HomeGoals"), Width = new DataGridLength(0.7, DataGridLengthUnitType.Star) });
+            _grid.Columns.Add(new System.Windows.Controls.DataGridTextColumn { Header = LocalizationService.T("Away goals", "گل میهمان"), Binding = new System.Windows.Data.Binding("AwayGoals"), Width = new DataGridLength(0.7, DataGridLengthUnitType.Star) });
             root.Children.Add(_grid); Grid.SetRow(_grid, 1);
             _status = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromRgb(65, 84, 73)) };
             root.Children.Add(_status); Grid.SetRow(_status, 2);
@@ -745,13 +751,35 @@ namespace KoaZa.Services
             }
             try
             {
-                _status.Text = "Requesting fixture data. Please wait...";
+                _status.Text = LocalizationService.T("Requesting fixture data. Please wait...", "در حال دریافت مسابقات...");
                 var records = FootballDataService.Fetch(choice.Id, _leagueBox.Text.Trim(), season);
                 DatabaseServiceProxy.SaveFixtures(records);
-                _grid.ItemsSource = records;
-                _status.Text = "Received " + records.Count + " fixture(s) from " + choice.Label + " and saved them to the local SQLite database. Empty scores mean the match has not finished or the provider does not expose a score.";
+                _grid.ItemsSource = records.Select(r => new FixtureImportRow(r)).ToList();
+                _status.Text = LocalizationService.IsPersian
+                    ? records.Count + " مسابقه از " + choice.Label + " دریافت و در پایگاه داده محلی ذخیره شد. خالی بودن گل‌ها یعنی نتیجه هنوز ثبت نشده یا سرویس آن را ارائه نمی‌کند."
+                    : "Received " + records.Count + " fixture(s) from " + choice.Label + " and saved them to local SQLite. Empty scores mean the match has not finished or the provider does not expose scores.";
             }
-            catch (Exception ex) { _status.Text = "Import failed: " + ex.Message; }
+            catch (Exception ex) { _status.Text = LocalizationService.T("Import failed: ", "دریافت ناموفق بود: ") + ex.Message; }
+        }
+
+        private sealed class FixtureImportRow
+        {
+            public string League { get; private set; }
+            public string Kickoff { get; private set; }
+            public string HomeTeam { get; private set; }
+            public string AwayTeam { get; private set; }
+            public string HomeGoals { get; private set; }
+            public string AwayGoals { get; private set; }
+            public FixtureImportRow(FixtureRecord r)
+            {
+                League = LocalizationService.League(r.League);
+                DateTime dt;
+                Kickoff = DateTime.TryParse(r.KickoffUtc, out dt) ? dt.ToLocalTime().ToString(LocalizationService.IsPersian ? "yyyy/MM/dd HH:mm" : "dd MMM HH:mm", CultureInfo.CurrentCulture) : r.KickoffUtc;
+                HomeTeam = LocalizationService.Team(r.HomeTeam);
+                AwayTeam = LocalizationService.Team(r.AwayTeam);
+                HomeGoals = r.HomeGoals.HasValue ? r.HomeGoals.Value.ToString() : "—";
+                AwayGoals = r.AwayGoals.HasValue ? r.AwayGoals.Value.ToString() : "—";
+            }
         }
 
         private sealed class ProviderChoice
