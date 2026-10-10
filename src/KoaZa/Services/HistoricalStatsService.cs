@@ -138,6 +138,27 @@ namespace KoaZa.Services
             var homeCards = Map(Get(cards, "home")); var awayCards = Map(Get(cards, "away"));
             row.HomeYellowCards = Int(Get(homeCards, "yellow", null)); row.AwayYellowCards = Int(Get(awayCards, "yellow", null));
             row.HomeRedCards = Int(Get(homeCards, "red", null)); row.AwayRedCards = Int(Get(awayCards, "red", null));
+            var statRows = List(Get(item, "statistics"));
+            foreach (var teamStats in statRows)
+            {
+                string teamName = String(Get(Map(Get(teamStats, "team")), "name", ""));
+                bool isHome;
+                if (Same(teamName, fixture.HomeTeam)) isHome = true;
+                else if (Same(teamName, fixture.AwayTeam)) isHome = false;
+                else continue;
+                foreach (var stat in List(Get(teamStats, "statistics")))
+                {
+                    string name = String(Get(stat, "type", Get(stat, "name", ""))).Trim().ToLowerInvariant();
+                    object value = Get(stat, "value", null);
+                    if (name == "total shots" || name == "shots") { if (isHome) row.HomeShots = Int(value); else row.AwayShots = Int(value); }
+                    else if (name == "shots on goal" || name == "shots on target") { if (isHome) row.HomeShotsOnTarget = Int(value); else row.AwayShotsOnTarget = Int(value); }
+                    else if (name == "corner kicks" || name == "corners") { if (isHome) row.HomeCorners = Int(value); else row.AwayCorners = Int(value); }
+                    else if (name == "yellow cards") { if (isHome) row.HomeYellowCards = Int(value); else row.AwayYellowCards = Int(value); }
+                    else if (name == "red cards") { if (isHome) row.HomeRedCards = Int(value); else row.AwayRedCards = Int(value); }
+                    else if (name == "fouls") { if (isHome) row.HomeFouls = Int(value); else row.AwayFouls = Int(value); }
+                    else if (name == "ball possession") { if (isHome) row.HomePossession = Double(value); else row.AwayPossession = Double(value); }
+                }
+            }
             var stats = Map(Get(item, "stats"));
             var shots = Map(Get(stats, "shots"));
             row.HomeShots = Int(Get(shots, "home", null)); row.AwayShots = Int(Get(shots, "away", null));
