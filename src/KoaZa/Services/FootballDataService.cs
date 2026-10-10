@@ -187,6 +187,7 @@ namespace KoaZa.Services
                         "&language=" + (LocalizationService.IsPersian ? "fa" : "en") + "&apiKey=" + Uri.EscapeDataString(config.Key);
                     object root = new JavaScriptSerializer().DeserializeObject(Request(url, null, null));
                     var rows = root as System.Collections.ArrayList;
+                    if (rows == null && root is object[]) rows = new System.Collections.ArrayList((object[])root);
                     if (rows == null) throw new InvalidOperationException("OddsPapi returned an unexpected fixtures response.");
                     var output = new List<FixtureRecord>();
                     foreach (var item in rows)
@@ -275,12 +276,15 @@ namespace KoaZa.Services
                     rootMap.ContainsKey("data") ? rootMap["data"] : parsed;
             }
             var rows = rowsObject as System.Collections.ArrayList;
+            if (rows == null && rowsObject is object[]) rows = new System.Collections.ArrayList((object[])rowsObject);
             if (rows == null) throw new InvalidOperationException("Custom provider response must be a JSON array or contain response/matches/fixtures/data array.");
             var output = new List<FixtureRecord>();
             foreach (var item in rows)
             {
-                var home = GetString(item, "homeTeam", GetString(GetMap(item, "homeTeam"), "name", ""));
-                var away = GetString(item, "awayTeam", GetString(GetMap(item, "awayTeam"), "name", ""));
+                string home = GetString(item, "homeTeam", "");
+                string away = GetString(item, "awayTeam", "");
+                if (string.IsNullOrWhiteSpace(home) || home.IndexOf("Dictionary", StringComparison.OrdinalIgnoreCase) >= 0) home = GetString(GetMap(item, "homeTeam"), "name", "");
+                if (string.IsNullOrWhiteSpace(away) || away.IndexOf("Dictionary", StringComparison.OrdinalIgnoreCase) >= 0) away = GetString(GetMap(item, "awayTeam"), "name", "");
                 if (string.IsNullOrWhiteSpace(home) || string.IsNullOrWhiteSpace(away)) continue;
                 output.Add(new FixtureRecord {
                     Provider = config.Provider,
