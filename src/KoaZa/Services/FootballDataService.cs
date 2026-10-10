@@ -134,7 +134,13 @@ namespace KoaZa.Services
             foreach (string provider in configured)
             {
                 string providerLeague = MapLeague(provider, canonical);
-                if (providerLeague == null) continue;
+                if (providerLeague == null)
+                {
+                    var customConfig = ApiProviderStore.Load().FirstOrDefault(p => p.Enabled && p.Provider == provider && !string.IsNullOrWhiteSpace(p.BaseUrl));
+                    if (customConfig != null) providerLeague = canonical;
+                    else if (provider == "SportsAPI360") providerLeague = "all";
+                    else continue;
+                }
                 try
                 {
                     List<FixtureRecord> rows = Fetch(provider, providerLeague, season);
@@ -147,7 +153,7 @@ namespace KoaZa.Services
                 }
             }
             throw new InvalidOperationException("No enabled provider could return fixtures for " + canonical + ". " +
-                "For automatic fallback, use one of these codes: EPL, LALIGA, BUNDESLIGA, SERIEA, LIGUE1, IRAN. " +
+                "For automatic fallback, use a known competition code (EPL, LALIGA, BUNDESLIGA, SERIEA, LIGUE1, IRAN), configure a normalized HTTPS endpoint, or use a provider-specific tournament ID. " +
                 string.Join(" | ", errors));
         }
 
