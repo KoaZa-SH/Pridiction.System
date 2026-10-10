@@ -25,11 +25,11 @@ namespace KoaZa.Services
         {
             get
             {
-                string label = Provider == "ApiFootball" || Provider == "ApiSports" ? "API-SPORTS" :
-                    Provider == "FootballData" ? "football-data.org" :
+                string label = Provider == "ApiFootball" || Provider == "ApiSports" ? "API-Football (API-SPORTS)" :
+                    Provider == "FootballData" ? "Football-Data (football-data.org)" :
                     Provider == "OpenLigaDB" ? "OpenLigaDB (no key)" :
                     Provider == "OddsPapi" ? "OddsPapi" : Provider == "Floodlight" ? "Floodlight" :
-                    Provider == "SportsOpenData" ? "Sports Open Data" : Provider == "SportsAPI360" ? "SportsAPI360" : Provider == "FiveDollarFootballAPI" ? "5DollarFootballAPI" : Provider == "FootballCharts" ? "Football-Charts" : Provider;
+                    Provider == "SportsOpenData" ? "Sports Open Data" : Provider == "SportsAPI360" ? "SportsAPI360" : Provider == "FiveDollarFootballAPI" ? "5DollarFootballAPI" : Provider == "FootballCharts" ? "Football-Charts" : Provider == "Sportmonks" ? "Sportmonks" : Provider == "TheOddsAPI" ? "The Odds API" : Provider == "TheRundown" ? "TheRundown.io" : Provider;
                 return label + (string.IsNullOrEmpty(Key) ? "" : " • " + Mask(Key)) +
                     (Enabled ? LocalizationService.T(" • enabled", " • فعال") : LocalizationService.T(" • disabled", " • غیرفعال"));
             }
@@ -1432,7 +1432,10 @@ namespace KoaZa.Services
             _providerBox.Items.Add(new ProviderChoice("SportsAPI360", "SportsAPI360"));
             _providerBox.Items.Add(new ProviderChoice("FiveDollarFootballAPI", "5DollarFootballAPI"));
             _providerBox.Items.Add(new ProviderChoice("FootballCharts", "Football-Charts"));
-            _providerBox.Items.Add(new ProviderChoice("FootballData", "football-data.org"));
+            _providerBox.Items.Add(new ProviderChoice("FootballData", "Football-Data (football-data.org)"));
+            _providerBox.Items.Add(new ProviderChoice("Sportmonks", "Sportmonks"));
+            _providerBox.Items.Add(new ProviderChoice("TheOddsAPI", "The Odds API"));
+            _providerBox.Items.Add(new ProviderChoice("TheRundown", "TheRundown.io"));
             _providerBox.Items.Add(new ProviderChoice("Custom", LocalizationService.T("Add provider manually", "افزودن دستی")));
             _providerBox.SelectedIndex = 0;
             _providerBox.SelectionChanged += ProviderBox_SelectionChanged;
@@ -1711,7 +1714,7 @@ namespace KoaZa.Services
             _baseUrlBox.Text = "HTTPS endpoint";
             _headerBox.Text = "x-api-key";
             _customNameBox.IsEnabled = choice.Id == "Custom";
-            _baseUrlBox.IsEnabled = choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData";
+            _baseUrlBox.IsEnabled = choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData" || choice.Id == "Sportmonks" || choice.Id == "TheOddsAPI" || choice.Id == "TheRundown";
             _keyBox.ToolTip = choice.Id == "OpenLigaDB" ? "This provider does not require a key." : choice.Id == "FootballCharts" ? "Optional bearer key for the higher daily request limit; no key is required to start." : "Paste the token/key from this provider's official account.";
         }
 
@@ -1725,7 +1728,7 @@ namespace KoaZa.Services
             string headerName = string.IsNullOrWhiteSpace(_headerBox.Text) ? "x-api-key" : _headerBox.Text.Trim();
             if (choice.Id == "Custom")
                 providerId = (_customNameBox.Text == "Custom name" ? "" : (_customNameBox.Text ?? "").Trim());
-            if (choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData")
+            if (choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData" || choice.Id == "Sportmonks" || choice.Id == "TheOddsAPI" || choice.Id == "TheRundown")
             {
                 if ((choice.Id == "Custom" && providerId.Length == 0) || baseUrl.Length == 0 || !baseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                 {
@@ -1844,8 +1847,11 @@ namespace KoaZa.Services
             _providerBox.Items.Add(new ProviderChoice("SportsAPI360", "SportsAPI360"));
             _providerBox.Items.Add(new ProviderChoice("FiveDollarFootballAPI", "5DollarFootballAPI"));
             _providerBox.Items.Add(new ProviderChoice("FootballCharts", "Football-Charts"));
-            _providerBox.Items.Add(new ProviderChoice("FootballData", "football-data.org"));
-            foreach (var configured in ApiProviderStore.Load().Where(p => p.Enabled && p.Provider != "ApiFootball" && p.Provider != "ApiSports" && p.Provider != "FootballData" && p.Provider != "OpenLigaDB" && p.Provider != "OddsPapi" && p.Provider != "Floodlight" && p.Provider != "SportsOpenData" && p.Provider != "SportsAPI360" && p.Provider != "FiveDollarFootballAPI" && p.Provider != "FootballCharts"))
+            _providerBox.Items.Add(new ProviderChoice("FootballData", "Football-Data (football-data.org)"));
+            _providerBox.Items.Add(new ProviderChoice("Sportmonks", "Sportmonks"));
+            _providerBox.Items.Add(new ProviderChoice("TheOddsAPI", "The Odds API"));
+            _providerBox.Items.Add(new ProviderChoice("TheRundown", "TheRundown.io"));
+            foreach (var configured in ApiProviderStore.Load().Where(p => p.Enabled && p.Provider != "ApiFootball" && p.Provider != "ApiSports" && p.Provider != "FootballData" && p.Provider != "OpenLigaDB" && p.Provider != "OddsPapi" && p.Provider != "Floodlight" && p.Provider != "SportsOpenData" && p.Provider != "SportsAPI360" && p.Provider != "FiveDollarFootballAPI" && p.Provider != "FootballCharts" && p.Provider != "Sportmonks" && p.Provider != "TheOddsAPI" && p.Provider != "TheRundown"))
                 _providerBox.Items.Add(new ProviderChoice(configured.Provider, configured.Provider));
             _providerBox.SelectedIndex = 0;
             _providerBox.SelectionChanged += ProviderChanged;
@@ -1891,6 +1897,7 @@ namespace KoaZa.Services
                 choice.Id == "SportsAPI360" ? "Enter tournamentId, tournament name, or 'all' for the next 7 days." :
                 choice.Id == "FiveDollarFootballAPI" ? "Enter a numeric league ID or 'all'. Historical coverage depends on your plan." :
                 choice.Id == "FootballCharts" ? "Enter a Football-Charts league slug (e.g. premier, germany3). No key is required." :
+                choice.Id == "Sportmonks" || choice.Id == "TheOddsAPI" || choice.Id == "TheRundown" ? "Configure an HTTPS endpoint returning the normalized fixtures JSON format in API Settings; direct native API adapters are not yet built in." :
                 "For Floodlight, Sports Open Data or custom providers, configure the HTTPS fixtures endpoint in API Settings.";
         }
 
