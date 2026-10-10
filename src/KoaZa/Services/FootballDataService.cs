@@ -170,11 +170,24 @@ namespace KoaZa.Services
                     return !DateTime.TryParse(f.KickoffUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out kickoff)
                         || (kickoff >= from && kickoff < to);
                 })
-                .GroupBy(f => !string.IsNullOrWhiteSpace(f.ExternalId)
-                    ? (f.Provider ?? "") + "|" + f.ExternalId
-                    : (f.Provider ?? "") + "|" + (f.KickoffUtc ?? "") + "|" + (f.HomeTeam ?? "") + "|" + (f.AwayTeam ?? ""))
-                .Select(g => g.OrderByDescending(x => !string.IsNullOrWhiteSpace(x.League)).First())
+                .GroupBy(FixtureDeduplicationKey)
+                .Select(g => g.OrderByDescending(x => !string.IsNullOrWhiteSpace(x.League))
+                    .ThenByDescending(x => !string.IsNullOrWhiteSpace(x.ExternalId)).First())
                 .ToList();
+        }
+
+        private static string FixtureDeduplicationKey(FixtureRecord fixture)
+        {
+            DateTime kickoff;
+            string time = DateTime.TryParse(fixture.KickoffUtc, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out kickoff)
+                ? kickoff.ToUniversalTime().ToString("yyyyMMddHHmm", CultureInfo.InvariantCulture)
+                : (fixture.KickoffUtc ?? "").Trim().ToLowerInvariant();
+            string home = (fixture.HomeTeam ?? "").Trim().ToLowerInvariant();
+            string away = (fixture.AwayTeam ?? "").Trim().ToLowerInvariant();
+            if (time.Length == 0 && !string.IsNullOrWhiteSpace(fixture.ExternalId))
+                return (fixture.Provider ?? "") + "|" + fixture.ExternalId;
+            return time + "|" + home + "|" + away;
         }
 
         private static List<FixtureRecord> ParseApiFootballFixtures(Dictionary<string, object> root)
@@ -285,8 +298,8 @@ namespace KoaZa.Services
 
         public static List<NewsItem> FetchMatchNews(string homeTeam, string awayTeam, string league)
         {
-            string query = "\"" + (homeTeam ?? "").Trim() + "\" \"" + (awayTeam ?? "").Trim() + "\" football";
-            if (!string.IsNullOrWhiteSpace(league)) query += " " + league.Trim();
+            string query = "\"" + (homeTeam ?? "").Trim() + "\" OR \"" + (awayTeam ?? "").Trim() + "\" football";
+            if (!string.IsNullOrWhiteSpace(league)) query += " \"" + league.Trim() + "\"";
             string url = "https://news.google.com/rss/search?q=" + Uri.EscapeDataString(query) + "&hl=en-US&gl=US&ceid=US:en";
             var doc = new System.Xml.XmlDocument();
             doc.LoadXml(Request(url, null, null));
@@ -300,7 +313,7 @@ namespace KoaZa.Services
                 string description = node["description"] == null ? "" : System.Net.WebUtility.HtmlDecode(node["description"].InnerText);
                 string pubDate = node["pubDate"] == null ? "" : node["pubDate"].InnerText;
                 if (title.Length == 0 || link.Length == 0) continue;
-                result.Add(new NewsItem { Title = title, Url = link, Summary = StripHtml(description), Published = pubDate });
+                result.Add(new NewsItem { Title = title, Url = link, Summary = (string.IsNullOrWhiteSpace(pubDate) ? "" : pubDate + " — ") + StripHtml(description), Published = pubDate });
                 if (result.Count >= 8) break;
             }
             return result;
