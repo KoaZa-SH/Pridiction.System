@@ -801,8 +801,7 @@ namespace KoaZa.Services
             if (configs.Count == 0) throw new InvalidOperationException("Add an enabled 5DollarFootballAPI key in API Settings.");
             string leagueValue = (league ?? "").Trim();
             bool numericLeague = long.TryParse(leagueValue, out _);
-            if (!numericLeague && !leagueValue.Equals("all", StringComparison.OrdinalIgnoreCase) &&
-                (toDate.Date - fromDate.Date).TotalDays > 31)
+            if (!numericLeague && (toDate.Date - fromDate.Date).TotalDays > 31)
                 throw new InvalidOperationException("For date ranges longer than 31 days, enter the numeric league ID so the API can use its season/league endpoint without one request per day. 'all' across long history may exhaust the daily quota.");
 
             var output = new List<FixtureRecord>();
