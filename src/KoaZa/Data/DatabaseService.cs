@@ -94,10 +94,78 @@ namespace KoaZa.Data
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS Fixtures (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, League TEXT NOT NULL, KickoffUtc TEXT, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, HomeGoals INTEGER NULL, AwayGoals INTEGER NULL, Status TEXT, ExternalId TEXT, UpdatedUtc TEXT NOT NULL);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS FixtureDetails (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, ExternalId TEXT NOT NULL, RawJson TEXT NOT NULL, UpdatedUtc TEXT NOT NULL, UNIQUE(Provider, ExternalId));", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS FixtureHistory (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, League TEXT NOT NULL, KickoffUtc TEXT, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, HomeGoals INTEGER, AwayGoals INTEGER, Status TEXT, ExternalId TEXT, UpdatedUtc TEXT NOT NULL, ArchivedUtc TEXT NOT NULL, UNIQUE(Provider, ExternalId, HomeGoals, AwayGoals, Status, KickoffUtc));", con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS MatchStatistics (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, ExternalId TEXT NOT NULL, League TEXT, KickoffUtc TEXT, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, HomeGoals INTEGER, AwayGoals INTEGER, Referee TEXT, HomeShots INTEGER, AwayShots INTEGER, HomeShotsOnTarget INTEGER, AwayShotsOnTarget INTEGER, HomeCorners INTEGER, AwayCorners INTEGER, HomeYellowCards INTEGER, AwayYellowCards INTEGER, HomeRedCards INTEGER, AwayRedCards INTEGER, HomeFouls INTEGER, AwayFouls INTEGER, HomePossession REAL, AwayPossession REAL, DataSource TEXT, UpdatedUtc TEXT NOT NULL, UNIQUE(Provider, ExternalId));", con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("CREATE INDEX IF NOT EXISTS IX_MatchStatistics_TeamsKickoff ON MatchStatistics(HomeTeam, AwayTeam, KickoffUtc);", con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("CREATE INDEX IF NOT EXISTS IX_MatchStatistics_RefereeKickoff ON MatchStatistics(Referee, KickoffUtc);", con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS MatchEvents (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, ExternalId TEXT NOT NULL, EventIndex INTEGER NOT NULL, Minute INTEGER, Team TEXT, Player TEXT, Assist TEXT, Type TEXT, Detail TEXT, UNIQUE(Provider, ExternalId, EventIndex));", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE UNIQUE INDEX IF NOT EXISTS UX_Fixtures_Provider_ExternalId ON Fixtures(Provider, ExternalId);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE INDEX IF NOT EXISTS IX_Fixtures_Kickoff ON Fixtures(KickoffUtc);", con)) cmd.ExecuteNonQuery();
             }
         }
+
+        public void SaveMatchStatistics(MatchStatisticsRecord s)
+        {
+            if (s == null || string.IsNullOrWhiteSpace(s.Provider) || string.IsNullOrWhiteSpace(s.ExternalId)) return;
+            using (var con = new SQLiteConnection(_connectionString))
+            {
+                con.Open();
+                const string sql = "INSERT OR REPLACE INTO MatchStatistics (Provider,ExternalId,League,KickoffUtc,HomeTeam,AwayTeam,HomeGoals,AwayGoals,Referee,HomeShots,AwayShots,HomeShotsOnTarget,AwayShotsOnTarget,HomeCorners,AwayCorners,HomeYellowCards,AwayYellowCards,HomeRedCards,AwayRedCards,HomeFouls,AwayFouls,HomePossession,AwayPossession,DataSource,UpdatedUtc) VALUES (@p,@id,@l,@k,@h,@a,@hg,@ag,@r,@hs,@as,@hot,@aot,@hc,@ac,@hy,@ay,@hr,@ar,@hf,@af,@hp,@ap,@src,@u);";
+                using (var cmd = new SQLiteCommand(sql, con))
+                {
+                    cmd.Parameters.AddWithValue("@p", s.Provider); cmd.Parameters.AddWithValue("@id", s.ExternalId);
+                    cmd.Parameters.AddWithValue("@l", (object)s.League ?? DBNull.Value); cmd.Parameters.AddWithValue("@k", (object)s.KickoffUtc ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@h", s.HomeTeam ?? ""); cmd.Parameters.AddWithValue("@a", s.AwayTeam ?? "");
+                    AddNullable(cmd,"@hg",s.HomeGoals); AddNullable(cmd,"@ag",s.AwayGoals); cmd.Parameters.AddWithValue("@r",(object)s.Referee ?? DBNull.Value);
+                    AddNullable(cmd,"@hs",s.HomeShots); AddNullable(cmd,"@as",s.AwayShots); AddNullable(cmd,"@hot",s.HomeShotsOnTarget); AddNullable(cmd,"@aot",s.AwayShotsOnTarget);
+                    AddNullable(cmd,"@hc",s.HomeCorners); AddNullable(cmd,"@ac",s.AwayCorners); AddNullable(cmd,"@hy",s.HomeYellowCards); AddNullable(cmd,"@ay",s.AwayYellowCards);
+                    AddNullable(cmd,"@hr",s.HomeRedCards); AddNullable(cmd,"@ar",s.AwayRedCards); AddNullable(cmd,"@hf",s.HomeFouls); AddNullable(cmd,"@af",s.AwayFouls);
+                    AddNullable(cmd,"@hp",s.HomePossession); AddNullable(cmd,"@ap",s.AwayPossession);
+                    cmd.Parameters.AddWithValue("@src",(object)s.DataSource ?? s.Provider); cmd.Parameters.AddWithValue("@u",DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture));
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public List<MatchStatisticsRecord> GetHistoricalMatchStatistics(string league, string homeTeam, string awayTeam, int limit)
+        {
+            var rows = new List<MatchStatisticsRecord>();
+            using (var con = new SQLiteConnection(_connectionString))
+            {
+                con.Open();
+                string sql = "SELECT * FROM MatchStatistics WHERE KickoffUtc < @before AND (UPPER(HomeTeam)=UPPER(@home) OR UPPER(AwayTeam)=UPPER(@home) OR UPPER(HomeTeam)=UPPER(@away) OR UPPER(AwayTeam)=UPPER(@away)) ";
+                if (!string.IsNullOrWhiteSpace(league)) sql += "AND UPPER(League)=UPPER(@league) ";
+                sql += "ORDER BY KickoffUtc DESC LIMIT @limit;";
+                using (var cmd = new SQLiteCommand(sql, con))
+                {
+                    cmd.Parameters.AddWithValue("@before", DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture));
+                    cmd.Parameters.AddWithValue("@home", homeTeam ?? ""); cmd.Parameters.AddWithValue("@away", awayTeam ?? "");
+                    if (!string.IsNullOrWhiteSpace(league)) cmd.Parameters.AddWithValue("@league", league);
+                    cmd.Parameters.AddWithValue("@limit", Math.Max(1,limit));
+                    using (var rd = cmd.ExecuteReader()) while (rd.Read()) rows.Add(ReadStatistics(rd));
+                }
+            }
+            return rows;
+        }
+
+        private static MatchStatisticsRecord ReadStatistics(SQLiteDataReader r)
+        {
+            return new MatchStatisticsRecord {
+                Provider=Convert.ToString(r["Provider"]), ExternalId=Convert.ToString(r["ExternalId"]), League=Convert.ToString(r["League"]),
+                KickoffUtc=Convert.ToString(r["KickoffUtc"]), HomeTeam=Convert.ToString(r["HomeTeam"]), AwayTeam=Convert.ToString(r["AwayTeam"]),
+                HomeGoals=NullableInt(r["HomeGoals"]), AwayGoals=NullableInt(r["AwayGoals"]), Referee=Convert.ToString(r["Referee"]),
+                HomeShots=NullableInt(r["HomeShots"]), AwayShots=NullableInt(r["AwayShots"]), HomeShotsOnTarget=NullableInt(r["HomeShotsOnTarget"]),
+                AwayShotsOnTarget=NullableInt(r["AwayShotsOnTarget"]), HomeCorners=NullableInt(r["HomeCorners"]), AwayCorners=NullableInt(r["AwayCorners"]),
+                HomeYellowCards=NullableInt(r["HomeYellowCards"]), AwayYellowCards=NullableInt(r["AwayYellowCards"]), HomeRedCards=NullableInt(r["HomeRedCards"]),
+                AwayRedCards=NullableInt(r["AwayRedCards"]), HomeFouls=NullableInt(r["HomeFouls"]), AwayFouls=NullableInt(r["AwayFouls"]),
+                HomePossession=NullableDouble(r["HomePossession"]), AwayPossession=NullableDouble(r["AwayPossession"]), DataSource=Convert.ToString(r["DataSource"]),
+                UpdatedUtc=Convert.ToString(r["UpdatedUtc"])
+            };
+        }
+
+        private static int? NullableInt(object v) { return v == DBNull.Value ? (int?)null : Convert.ToInt32(v); }
+        private static double? NullableDouble(object v) { return v == DBNull.Value ? (double?)null : Convert.ToDouble(v); }
+        private static void AddNullable(SQLiteCommand cmd, string name, int? value) { cmd.Parameters.AddWithValue(name, value.HasValue ? (object)value.Value : DBNull.Value); }
+        private static void AddNullable(SQLiteCommand cmd, string name, double? value) { cmd.Parameters.AddWithValue(name, value.HasValue ? (object)value.Value : DBNull.Value); }
 
         public void SavePrediction(string home, string away, double homeRate, double awayRate, MatchProbabilities p)
         {
