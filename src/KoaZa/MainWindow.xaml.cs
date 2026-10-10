@@ -80,7 +80,7 @@ namespace KoaZa
                 LeagueFilterBox.Items.Clear();
                 LeagueFilterBox.Items.Add(LocalizationService.T("All competitions", "همه رقابت‌ها"));
                 foreach (string league in _database.GetKnownLeagues())
-                    LeagueFilterBox.Items.Add(league);
+                    LeagueFilterBox.Items.Add(LocalizationService.League(league));
                 int selectedIndex = 0;
                 if (!string.IsNullOrWhiteSpace(previousLeague))
                 {
@@ -110,7 +110,7 @@ namespace KoaZa
             if (dateOption != null && dateOption.Date.HasValue)
                 filtered = filtered.Where(f => GetLocalKickoff(f).Date == dateOption.Date.Value.Date);
             if (!string.IsNullOrWhiteSpace(league) && !league.StartsWith("All competitions", StringComparison.OrdinalIgnoreCase))
-                filtered = filtered.Where(f => string.Equals(f.League, league, StringComparison.OrdinalIgnoreCase));
+                filtered = filtered.Where(f => string.Equals(LocalizationService.League(f.League), league, StringComparison.OrdinalIgnoreCase));
             var rows = filtered.OrderBy(GetLocalKickoff).Select(f => new FixtureRow(f)).ToList();
             FixturesGrid.ItemsSource = rows;
             FixtureCountText.Text = LocalizationService.IsPersian ? rows.Count + " مسابقه" : rows.Count + " matches";
