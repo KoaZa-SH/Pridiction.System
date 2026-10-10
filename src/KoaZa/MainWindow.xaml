@@ -1,4 +1,4 @@
-<Window x:Class="KoaZa.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="KoaZa Football Analytics" Height="780" Width="1250" MinHeight="650" MinWidth="980" WindowStartupLocation="CenterScreen" Background="#F4F7F5">
+<Window x:Class="KoaZa.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="KoaZa Football Analytics" Height="780" Width="1250" MinHeight="650" MinWidth="980" WindowState="Maximized" WindowStartupLocation="CenterScreen" Background="#F4F7F5">
   <Window.Resources>
     <Style TargetType="{x:Type Button}">
       <Setter Property="Padding" Value="12,7"/>
@@ -51,6 +51,8 @@
       </StackPanel>
     </Border>
     <Grid Grid.Row="2">
+      <Grid.RowDefinitions><RowDefinition Height="1.55*"/><RowDefinition Height="1*"/></Grid.RowDefinitions>
+      <Grid Grid.Row="0">
       <Grid.ColumnDefinitions><ColumnDefinition Width="1.08*"/><ColumnDefinition Width="1.45*"/></Grid.ColumnDefinitions>
       <Border Grid.Column="0" Background="White" CornerRadius="10" Padding="12" Margin="0,0,12,0">
         <Grid>
@@ -114,23 +116,36 @@
               <Separator Margin="0,8"/>
               <TextBlock Text="Match statistics &amp; events / آمار و رویدادهای مسابقه" FontSize="14" FontWeight="Bold" Margin="0,4,0,6"/>
               <TextBlock x:Name="StatsText" Text="Select a match to load statistics, cards, fouls, corners and events." TextWrapping="Wrap" Foreground="#405449" FontSize="12"/>
-              <Separator Margin="0,8"/>
-              <TextBlock Text="Relevant match news / اخبار مرتبط با مسابقه" FontSize="14" FontWeight="Bold" Margin="0,4,0,6"/>
-              <TextBlock x:Name="NewsStatusText" Text="News will be searched when a match is selected." TextWrapping="Wrap" Foreground="#7A8980" FontSize="11" Margin="0,0,0,4"/>
-              <ItemsControl x:Name="NewsList">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <StackPanel Margin="0,4,0,8">
-                      <Button Tag="{Binding Url}" Click="NewsItem_Click" HorizontalContentAlignment="Left" Padding="0" BorderThickness="0" Background="Transparent" Foreground="#16734D" FontWeight="SemiBold"><TextBlock Text="{Binding Title}" TextWrapping="Wrap" Foreground="#16734D" FontWeight="SemiBold"/></Button>
-                      <TextBlock Text="{Binding Source}" TextWrapping="Wrap" Foreground="#16865B" FontSize="10" FontWeight="SemiBold" Margin="0,2,0,0"/>
-                      <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Foreground="#6A766E" FontSize="11" Margin="0,2,0,0"/>
-                    </StackPanel>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
             </StackPanel>
           </ScrollViewer>
           <TextBlock Grid.Row="3" x:Name="DisclaimerText" Text="Probabilities are estimates, not guarantees. / احتمال‌ها تخمینی هستند، نه تضمین نتیجه." TextWrapping="Wrap" Foreground="#7A8980" Margin="0,10,0,0"/>
+        </Grid>
+      </Border>
+      </Grid>
+      <Border Grid.Row="1" Background="White" CornerRadius="10" Padding="12" Margin="0,12,0,0">
+        <Grid>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+          <DockPanel Grid.Row="0" Margin="0,0,0,6">
+            <TextBlock Text="Football news / اخبار فوتبال" FontSize="17" FontWeight="Bold" Foreground="#163B2B" VerticalAlignment="Center"/>
+            <Button DockPanel.Dock="Right" Content="Refresh news / نوسازی اخبار" Click="RefreshNews_Click" Padding="10,5" Background="#16865B" Foreground="White" Margin="8,0,0,0"/>
+          </DockPanel>
+          <TextBlock x:Name="NewsStatusText" Grid.Row="1" Text="Loading latest football headlines / در حال دریافت آخرین اخبار فوتبال..." TextWrapping="Wrap" Foreground="#7A8980" FontSize="11" Margin="0,0,0,6"/>
+          <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="NewsList">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Width="390" Margin="0,0,12,8" Padding="10" Background="#F6F9F7" CornerRadius="8">
+                    <StackPanel>
+                      <Button Tag="{Binding Url}" Click="NewsItem_Click" HorizontalContentAlignment="Left" Padding="0" BorderThickness="0" Background="Transparent" Foreground="#16734D" FontWeight="SemiBold"><TextBlock Text="{Binding Title}" TextWrapping="Wrap" Foreground="#16734D" FontWeight="SemiBold"/></Button>
+                      <TextBlock Text="{Binding Source}" TextWrapping="Wrap" Foreground="#16865B" FontSize="10" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                      <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Foreground="#6A766E" FontSize="11" Margin="0,3,0,0"/>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
         </Grid>
       </Border>
     </Grid>
