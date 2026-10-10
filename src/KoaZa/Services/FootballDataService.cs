@@ -552,7 +552,7 @@ namespace KoaZa.Services
             _leagueBox.ToolTip = choice.Id == "Auto" ? "Use standard code: EPL, LALIGA, BUNDESLIGA, SERIEA, LIGUE1, or IRAN. The app tries enabled providers in order." :
                 choice.Id == "ApiFootball" ? "Enter a numeric API-Football league ID (e.g. 39 Premier League; Iran coverage depends on your plan)." :
                 choice.Id == "FootballData" ? "Enter competition code (e.g. PL, PD, BL1, SA, FL1). Free plan has limited competitions." :
-                "Enter OpenLigaDB league shortcut (e.g. bl1 for Bundesliga, bl2 for 2. Bundesliga)."
+                "Enter OpenLigaDB league shortcut (e.g. bl1 for Bundesliga, bl2 for 2. Bundesliga).";
         }
 
         private void Fetch_Click(object sender, RoutedEventArgs e)
