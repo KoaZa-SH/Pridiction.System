@@ -1978,10 +1978,12 @@ namespace KoaZa.Services
         public static int ImportHistoricalStatistics(List<FixtureRecord> fixtures)
         {
             if (fixtures == null) return 0;
-            var candidates = fixtures.Where(f => f.HomeGoals.HasValue && f.AwayGoals.HasValue &&
+            var completed = fixtures.Where(f => f.HomeGoals.HasValue && f.AwayGoals.HasValue &&
                 new[] { "FT", "AET", "PEN", "FINISHED", "MATCH FINISHED", "FULL TIME", "AFTER EXTRA TIME", "AFTER PENALTIES" }.Contains((f.Status ?? "").Trim().ToUpperInvariant()) &&
                 (f.Provider == "API-Football" || f.Provider == "ApiFootball" || f.Provider == "ApiSports" || f.Provider == "FiveDollarFootballAPI"))
-                .OrderByDescending(f => f.KickoffUtc).Take(10).ToList();
+                .OrderByDescending(f => f.KickoffUtc).ToList();
+            var candidates = completed.Where(f => f.Provider == "FiveDollarFootballAPI").Take(10)
+                .Concat(completed.Where(f => f.Provider != "FiveDollarFootballAPI").Take(5)).ToList();
             var db = new KoaZa.Data.DatabaseService();
             int imported = 0;
             foreach (var fixture in candidates)
