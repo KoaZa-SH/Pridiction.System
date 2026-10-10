@@ -98,6 +98,8 @@ namespace KoaZa.Data
                 using (var cmd = new SQLiteCommand("CREATE INDEX IF NOT EXISTS IX_MatchStatistics_TeamsKickoff ON MatchStatistics(HomeTeam, AwayTeam, KickoffUtc);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE INDEX IF NOT EXISTS IX_MatchStatistics_RefereeKickoff ON MatchStatistics(Referee, KickoffUtc);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS MatchEvents (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, ExternalId TEXT NOT NULL, EventIndex INTEGER NOT NULL, Minute INTEGER, Team TEXT, Player TEXT, Assist TEXT, Type TEXT, Detail TEXT, UNIQUE(Provider, ExternalId, EventIndex));", con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS MarketPredictions (Id INTEGER PRIMARY KEY AUTOINCREMENT, RunId TEXT NOT NULL, CreatedUtc TEXT NOT NULL, Provider TEXT, ExternalId TEXT, League TEXT, KickoffUtc TEXT, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, Market TEXT NOT NULL, Outcome TEXT NOT NULL, Probability REAL, SampleSize INTEGER NOT NULL, HasSufficientData INTEGER NOT NULL, Explanation TEXT, ModelVersion TEXT NOT NULL, UNIQUE(RunId, Market, Outcome));", con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("CREATE INDEX IF NOT EXISTS IX_MarketPredictions_FixtureCreated ON MarketPredictions(HomeTeam, AwayTeam, CreatedUtc);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE UNIQUE INDEX IF NOT EXISTS UX_Fixtures_Provider_ExternalId ON Fixtures(Provider, ExternalId);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE INDEX IF NOT EXISTS IX_Fixtures_Kickoff ON Fixtures(KickoffUtc);", con)) cmd.ExecuteNonQuery();
             }
@@ -250,6 +252,36 @@ namespace KoaZa.Data
         private static double? NullableDouble(object v) { return v == DBNull.Value ? (double?)null : Convert.ToDouble(v); }
         private static void AddNullable(SQLiteCommand cmd, string name, int? value) { cmd.Parameters.AddWithValue(name, value.HasValue ? (object)value.Value : DBNull.Value); }
         private static void AddNullable(SQLiteCommand cmd, string name, double? value) { cmd.Parameters.AddWithValue(name, value.HasValue ? (object)value.Value : DBNull.Value); }
+
+        public void SaveMarketPredictions(FixtureRecord fixture, MultiMarketPrediction prediction)
+        {
+            if (fixture == null || prediction == null || prediction.Markets == null || prediction.Markets.Count == 0) return;
+            string runId = Guid.NewGuid().ToString("N");
+            string created = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+            using (var con = new SQLiteConnection(_connectionString))
+            {
+                con.Open();
+                using (var tx = con.BeginTransaction())
+                {
+                    foreach (var m in prediction.Markets)
+                    {
+                        using (var cmd = new SQLiteCommand("INSERT OR REPLACE INTO MarketPredictions (RunId,CreatedUtc,Provider,ExternalId,League,KickoffUtc,HomeTeam,AwayTeam,Market,Outcome,Probability,SampleSize,HasSufficientData,Explanation,ModelVersion) VALUES (@run,@created,@provider,@id,@league,@kickoff,@home,@away,@market,@outcome,@prob,@samples,@enough,@explanation,@version);", con, tx))
+                        {
+                            cmd.Parameters.AddWithValue("@run", runId); cmd.Parameters.AddWithValue("@created", created);
+                            cmd.Parameters.AddWithValue("@provider", (object)fixture.Provider ?? DBNull.Value); cmd.Parameters.AddWithValue("@id", (object)fixture.ExternalId ?? DBNull.Value);
+                            cmd.Parameters.AddWithValue("@league", (object)fixture.League ?? DBNull.Value); cmd.Parameters.AddWithValue("@kickoff", (object)fixture.KickoffUtc ?? DBNull.Value);
+                            cmd.Parameters.AddWithValue("@home", fixture.HomeTeam ?? ""); cmd.Parameters.AddWithValue("@away", fixture.AwayTeam ?? "");
+                            cmd.Parameters.AddWithValue("@market", m.Market ?? ""); cmd.Parameters.AddWithValue("@outcome", m.Outcome ?? "");
+                            cmd.Parameters.AddWithValue("@prob", m.HasSufficientData ? (object)m.Probability : DBNull.Value);
+                            cmd.Parameters.AddWithValue("@samples", m.SampleSize); cmd.Parameters.AddWithValue("@enough", m.HasSufficientData ? 1 : 0);
+                            cmd.Parameters.AddWithValue("@explanation", m.Explanation ?? ""); cmd.Parameters.AddWithValue("@version", "multi-market-historical-0.1");
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                    tx.Commit();
+                }
+            }
+        }
 
         public void SavePrediction(string home, string away, double homeRate, double awayRate, MatchProbabilities p)
         {
