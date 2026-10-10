@@ -276,7 +276,7 @@ namespace KoaZa.Services
         {
             var root = Parse(json);
             var item = GetList(root, "response").FirstOrDefault();
-            if (item == null) return "No detailed statistics are available for this match yet.";
+            if (item == null) return LocalizationService.T("No detailed statistics are available for this match yet.", "هنوز آمار تفصیلی برای این مسابقه منتشر نشده است.");
             var sb = new StringBuilder();
             var stats = GetList(item, "statistics");
             if (stats.Count > 0)
@@ -339,7 +339,37 @@ namespace KoaZa.Services
                 sb.AppendLine("The provider returned the fixture but no statistics/events/lineups for this competition or match.");
             sb.AppendLine();
             sb.Append("Coverage depends on the competition and API plan; missing fields are not assumed to be zero.");
-            return sb.ToString();
+            string summary = sb.ToString();
+            return LocalizationService.IsPersian ? TranslateFixtureSummary(summary) : summary;
+        }
+
+        private static string TranslateFixtureSummary(string summary)
+        {
+            var phrases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                {"MATCH STATISTICS", "آمار مسابقه"}, {"MATCH EVENTS", "رویدادهای مسابقه"},
+                {"LINEUPS", "ترکیب تیم‌ها"}, {"INJURIES / AVAILABILITY", "مصدومان و وضعیت حضور"},
+                {"Player-level data is included in the saved API response.", "اطلاعات بازیکنان در دادهٔ ذخیره‌شدهٔ سرویس وجود دارد."},
+                {"The provider returned the fixture but no statistics/events/lineups for this competition or match.", "سرویس، مسابقه را برگرداند اما برای این رقابت یا مسابقه آمار، رویداد یا ترکیب ارائه نکرد."},
+                {"Coverage depends on the competition and API plan; missing fields are not assumed to be zero.", "پوشش اطلاعات به رقابت و سطح اشتراک سرویس بستگی دارد؛ فیلدهای خالی به معنی صفر نیستند."},
+                {"Shots on Goal", "شوت در چارچوب"}, {"Shots off Goal", "شوت خارج از چارچوب"},
+                {"Total Shots", "مجموع شوت‌ها"}, {"Blocked Shots", "شوت‌های بلوکه‌شده"},
+                {"Shots insidebox", "شوت داخل محوطه"}, {"Shots inside Box", "شوت داخل محوطه"},
+                {"Shots outsidebox", "شوت خارج محوطه"}, {"Shots outside Box", "شوت خارج محوطه"},
+                {"Fouls", "خطاها"}, {"Corner Kicks", "ضربات کرنر"}, {"Offsides", "آفساید"},
+                {"Ball Possession", "مالکیت توپ"}, {"Yellow Cards", "کارت زرد"}, {"Red Cards", "کارت قرمز"},
+                {"Goalkeeper Saves", "مهار دروازه‌بان"}, {"Total passes", "مجموع پاس‌ها"},
+                {"Passes accurate", "پاس صحیح"}, {"Passes %", "درصد پاس صحیح"}, {"Expected Goals", "گل مورد انتظار"},
+                {"Goal", "گل"}, {"Card", "کارت"}, {"subst", "تعویض"}, {"Penalty", "پنالتی"},
+                {"Missed Penalty", "پنالتی از دست‌رفته"}, {"Yellow Card", "کارت زرد"}, {"Red Card", "کارت قرمز"},
+                {"Substitution", "تعویض"}, {"Var", "بازبینی VAR"}, {"Team", "تیم"},
+                {"formation unavailable", "ترکیب‌بندی نامشخص"}, {"unknown", "نامشخص"}, {"Coach:", "سرمربی:"}
+            };
+            foreach (var phrase in phrases)
+                summary = System.Text.RegularExpressions.Regex.Replace(summary,
+                    System.Text.RegularExpressions.Regex.Escape(phrase.Key),
+                    phrase.Value, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return summary;
         }
 
         public static List<NewsItem> FetchMatchNews(string homeTeam, string awayTeam, string league)
