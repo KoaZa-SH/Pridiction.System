@@ -31,7 +31,7 @@ This milestone adds a provider-neutral fixture import flow. It does not yet calc
 4. Repeat to add other providers or multiple keys for the same provider.
 5. Click Save securely. Credentials are encrypted with Windows DPAPI for the current Windows user under %LOCALAPPDATA%\KoaZa; they are not stored in the repository.
 6. Click Fetch Fixtures / دریافت مسابقات on the main screen.
-7. Select the provider, enter its league/competition code and season year, then click Fetch & save fixtures.
+7. For automatic fallback, select Auto fallback and use a standard competition code: EPL, LALIGA, BUNDESLIGA, SERIEA, LIGUE1, or IRAN. The app tries enabled providers in the order they appear in API Settings and continues when a provider errors or returns no fixtures. Alternatively, select one provider and enter its native league/competition code. Then enter the season year and click Fetch & save fixtures.
 
 ## Key rotation and provider limits
 The app tries enabled credentials for the selected provider. It moves to the next credential on HTTP authentication/rate-limit errors or provider-reported API errors. A normal connection or server error is reported instead of cycling through all keys. Multiple keys only provide additional usable quota if the provider actually grants independent quota to those credentials; this feature does not bypass provider terms or limits.
@@ -39,6 +39,6 @@ The app tries enabled credentials for the selected provider. It moves to the nex
 ## Current limitations
 - Provider adapters currently cover fixtures/results only.
 - Iran league coverage is expected to rely on API-Football (if the selected plan exposes it); football-data.org's free competition set and OpenLigaDB's coverage are narrower.
-- The import window expects one provider-specific competition identifier at a time.
+- Automatic fallback currently maps the Premier League, La Liga, Bundesliga, Serie A and Ligue 1 across supported services. Iran's league relies on API-Football coverage; other providers may not cover it.
 - Imported fixtures are saved to SQLite and displayed for that import. The next milestone is to read completed fixture history from SQLite, compute team form/goal rates, and feed those data into the prediction model.
 - No bookmaker odds or guaranteed outcomes are provided.
