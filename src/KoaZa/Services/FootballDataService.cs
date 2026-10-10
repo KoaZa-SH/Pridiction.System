@@ -368,6 +368,28 @@ namespace KoaZa.Services
         public static string FetchFixtureDetails(FixtureRecord fixture)
         {
             if (fixture == null) throw new ArgumentNullException("fixture");
+            if (fixture.Provider == "FiveDollarFootballAPI")
+            {
+                var fiveDollarKeys = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "FiveDollarFootballAPI" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+                if (fiveDollarKeys.Count == 0) throw new InvalidOperationException("Enable 5DollarFootballAPI and save its bearer key first.");
+                Exception lastFiveDollarError = null;
+                foreach (var config in fiveDollarKeys)
+                {
+                    try
+                    {
+                        string url = "https://api.5dollarfootballapi.com/v1/fixtures/" + Uri.EscapeDataString(fixture.ExternalId) + "?include=stats,events";
+                        var request = (HttpWebRequest)WebRequest.Create(url);
+                        request.Method = "GET"; request.Accept = "application/json"; request.Timeout = 20000; request.ReadWriteTimeout = 20000;
+                        request.Headers[HttpRequestHeader.Authorization] = "Bearer " + config.Key;
+                        var root = Parse(ReadResponse(request));
+                        if (HasErrors(root)) throw new InvalidOperationException("5DollarFootballAPI returned an API/quota error.");
+                        root["detailsVersion"] = 2;
+                        return new JavaScriptSerializer().Serialize(root);
+                    }
+                    catch (Exception ex) { lastFiveDollarError = ex; }
+                }
+                throw new InvalidOperationException("Could not retrieve 5DollarFootballAPI fixture details.", lastFiveDollarError);
+            }
             if (fixture.Provider != "API-Football" && fixture.Provider != "ApiFootball" && fixture.Provider != "ApiSports")
                 throw new InvalidOperationException("Detailed statistics are currently available through the API-SPORTS/API-Football adapter. Other providers may not expose a compatible fixture-details endpoint.");
             int fixtureId;
