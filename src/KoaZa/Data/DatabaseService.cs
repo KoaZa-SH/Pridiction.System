@@ -227,6 +227,30 @@ namespace KoaZa.Data
             }
         }
 
+        public void SaveNormalizedFixtureStatistics(FixtureRecord stats)
+        {
+            if (stats == null || string.IsNullOrWhiteSpace(stats.Provider) || string.IsNullOrWhiteSpace(stats.ExternalId)) return;
+            using (var con = new SQLiteConnection(_connectionString))
+            {
+                con.Open();
+                using (var cmd = new SQLiteCommand("UPDATE Fixtures SET HomeCorners=COALESCE(@hc,HomeCorners), AwayCorners=COALESCE(@ac,AwayCorners), HomeShotsOnTarget=COALESCE(@hs,HomeShotsOnTarget), AwayShotsOnTarget=COALESCE(@as,AwayShotsOnTarget), HomeYellowCards=COALESCE(@hy,HomeYellowCards), AwayYellowCards=COALESCE(@ay,AwayYellowCards), Referee=CASE WHEN @referee<>'' THEN @referee ELSE Referee END, VarReviews=COALESCE(@var,VarReviews), UpdatedUtc=@updated WHERE Provider=@provider AND ExternalId=@external;", con))
+                {
+                    cmd.Parameters.AddWithValue("@hc", stats.HomeCorners.HasValue ? (object)stats.HomeCorners.Value : DBNull.Value);
+                    cmd.Parameters.AddWithValue("@ac", stats.AwayCorners.HasValue ? (object)stats.AwayCorners.Value : DBNull.Value);
+                    cmd.Parameters.AddWithValue("@hs", stats.HomeShotsOnTarget.HasValue ? (object)stats.HomeShotsOnTarget.Value : DBNull.Value);
+                    cmd.Parameters.AddWithValue("@as", stats.AwayShotsOnTarget.HasValue ? (object)stats.AwayShotsOnTarget.Value : DBNull.Value);
+                    cmd.Parameters.AddWithValue("@hy", stats.HomeYellowCards.HasValue ? (object)stats.HomeYellowCards.Value : DBNull.Value);
+                    cmd.Parameters.AddWithValue("@ay", stats.AwayYellowCards.HasValue ? (object)stats.AwayYellowCards.Value : DBNull.Value);
+                    cmd.Parameters.AddWithValue("@referee", stats.Referee ?? "");
+                    cmd.Parameters.AddWithValue("@var", stats.VarReviews.HasValue ? (object)stats.VarReviews.Value : DBNull.Value);
+                    cmd.Parameters.AddWithValue("@updated", DateTime.UtcNow.ToString("o"));
+                    cmd.Parameters.AddWithValue("@provider", stats.Provider);
+                    cmd.Parameters.AddWithValue("@external", stats.ExternalId);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
         public string GetFixtureDetails(string provider, string externalId)
         {
             using (var con = new SQLiteConnection(_connectionString))
