@@ -3,6 +3,8 @@
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <DockPanel Grid.Row="0" Margin="0,0,0,16">
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <TextBlock Text="Language / زبان" VerticalAlignment="Center" Margin="0,0,6,0"/>
+        <ComboBox x:Name="LanguageBox" Width="105" Margin="0,0,8,0" Padding="6" SelectionChanged="LanguageBox_SelectionChanged"><ComboBoxItem Content="فارسی" Tag="fa"/><ComboBoxItem Content="English" Tag="en"/></ComboBox>
         <Button Content="Refresh list / نوسازی" Click="Refresh_Click" Padding="12,7" Margin="0,0,8,0"/>
         <Button Content="Import fixtures / دریافت بازی‌ها" Click="OpenFixtures_Click" Padding="12,7" Margin="0,0,8,0" Background="#163B2B" Foreground="White" BorderThickness="0"/>
         <Button Content="API Settings / تنظیمات API" Click="OpenApiSettings_Click" Padding="12,7" Background="#16865B" Foreground="White" BorderThickness="0"/>
@@ -46,7 +48,10 @@
             <TextBlock x:Name="MatchTitleText" Text="Select a match from the list / یک مسابقه انتخاب کن" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,4" TextWrapping="Wrap"/>
             <TextBlock x:Name="ModelStatusText" Text="Probabilities will be calculated from saved historical results." TextWrapping="Wrap" Foreground="#5E6E65" Margin="0,0,0,12"/>
           </StackPanel>
-          <TextBlock Grid.Row="1" Text="Market probabilities / احتمال بازارها" FontSize="15" FontWeight="Bold" Margin="0,0,0,8"/>
+          <StackPanel Grid.Row="1" Margin="0,0,0,8">
+            <Grid Margin="0,0,0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock x:Name="HomeChartTeamText" Text="Home team / میزبان" FontWeight="SemiBold" Foreground="#16865B" TextWrapping="Wrap"/><TextBlock Grid.Column="1" Text="VS" Margin="12,0" Foreground="#7A8980" VerticalAlignment="Center"/><TextBlock x:Name="AwayChartTeamText" Grid.Column="2" Text="Away team / میهمان" FontWeight="SemiBold" Foreground="#D17A36" TextAlignment="Right" TextWrapping="Wrap"/></Grid>
+            <TextBlock x:Name="MarketHeadingText" Text="Market probabilities / احتمال بازارها" FontSize="15" FontWeight="Bold"/>
+          </StackPanel>
           <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
             <ItemsControl x:Name="MarketsList">
               <ItemsControl.ItemTemplate>
