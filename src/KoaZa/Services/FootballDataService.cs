@@ -250,8 +250,10 @@ namespace KoaZa.Services
             var configs = ApiProviderStore.Load().Where(p => p.Enabled &&
                 (p.Provider == "ApiFootball" || p.Provider == "ApiSports") && !string.IsNullOrWhiteSpace(p.Key)).ToList();
             if (configs.Count == 0) throw new InvalidOperationException("No enabled API-Football key is saved. Open API Settings.");
-            string path = "/fixtures?league=" + Uri.EscapeDataString(league) +
-                "&from=" + fromDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) +
+            string path = "/fixtures?" +
+                (string.IsNullOrWhiteSpace(league) || league.Trim().Equals("all", StringComparison.OrdinalIgnoreCase)
+                    ? "" : "league=" + Uri.EscapeDataString(league.Trim()) + "&") +
+                "from=" + fromDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) +
                 "&to=" + toDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "&timezone=UTC";
             Exception last = null;
             foreach (var config in configs)
@@ -464,6 +466,23 @@ namespace KoaZa.Services
                     System.Text.RegularExpressions.Regex.Escape(phrase.Key),
                     phrase.Value, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             return summary;
+        }
+
+        public static List<NewsItem> FetchLatestNews(string competition)
+        {
+            var result = new List<NewsItem>();
+            string target = (competition ?? "").Trim();
+            if (target.Length == 0) return result;
+
+            // Query each requested news source for the selected competition only. Do not mix
+            // generic football headlines into a competition-specific news panel.
+            string quoted = "\"" + target.Replace("\\", " ").Replace("\"", " ").Trim() + "\"";
+            string locale = LocalizationService.IsPersian ? " football OR فوتبال" : " football";
+            FetchSiteNews(result, "site:football360.ir " + quoted + locale, "Football360.ir / فوتبال ۳۶۰");
+            FetchSiteNews(result, "site:fbtv3.ir " + quoted + locale, "FBTV3.ir / فوتبال برتر");
+            FetchSiteNews(result, "site:varzesh3.com " + quoted + locale, "Varzesh3 / ورزش سه");
+            FetchSiteNews(result, quoted + locale, "Google News");
+            return result.OrderByDescending(n => ParseNewsDate(n.Published)).Take(18).ToList();
         }
 
         public static List<NewsItem> FetchLatestNews()
@@ -831,14 +850,12 @@ namespace KoaZa.Services
             if (configs.Count == 0) return new List<FixtureRecord>();
             string from = startDate.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             string to = DateTime.UtcNow.Date.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            string competitions = "PL,PD,BL1,SA,FL1,CL,EL,WC,EC";
             Exception last = null;
             foreach (var config in configs)
             {
                 try
                 {
-                    string url = "https://api.football-data.org/v4/matches?competitions=" + Uri.EscapeDataString(competitions) +
-                        "&dateFrom=" + from + "&dateTo=" + to;
+                    string url = "https://api.football-data.org/v4/matches?dateFrom=" + from + "&dateTo=" + to;
                     var root = Parse(Request(url, "X-Auth-Token", config.Key));
                     if (HasErrors(root)) throw new InvalidOperationException("The account may not have access to all requested competitions.");
                     var output = new List<FixtureRecord>();
@@ -865,7 +882,7 @@ namespace KoaZa.Services
                 }
                 catch (Exception ex) { last = ex; }
             }
-            throw new InvalidOperationException("Could not retrieve the configured major competitions.", last);
+            throw new InvalidOperationException("Could not retrieve matches available to this football-data.org token for the requested date range. Check the token, plan coverage, and request quota.", last);
         }
 
         private static List<FixtureRecord> FetchFootballData(string league, int season)
