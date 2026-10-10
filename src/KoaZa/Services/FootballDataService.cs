@@ -811,10 +811,12 @@ namespace KoaZa.Services
                         foreach (var item in rows)
                         {
                             var home = GetMap(item, "home"); var away = GetMap(item, "away");
-                            string hn = GetString(item, "home_team", GetString(home, "name", ""));
-                            string an = GetString(item, "away_team", GetString(away, "name", ""));
-                            if (hn.Length == 0) hn = GetString(item, "home", "");
-                            if (an.Length == 0) an = GetString(item, "away", "");
+                            object homeObject = item is Dictionary<string, object> && ((Dictionary<string, object>)item).ContainsKey("home_team") ? ((Dictionary<string, object>)item)["home_team"] : Get(item, "home", "");
+                            object awayObject = item is Dictionary<string, object> && ((Dictionary<string, object>)item).ContainsKey("away_team") ? ((Dictionary<string, object>)item)["away_team"] : Get(item, "away", "");
+                            string hn = homeObject is Dictionary<string, object> ? GetString(homeObject, "name", GetString(homeObject, "team", "")) : Convert.ToString(homeObject, CultureInfo.InvariantCulture);
+                            string an = awayObject is Dictionary<string, object> ? GetString(awayObject, "name", GetString(awayObject, "team", "")) : Convert.ToString(awayObject, CultureInfo.InvariantCulture);
+                            if (string.IsNullOrWhiteSpace(hn)) hn = GetString(home, "name", "");
+                            if (string.IsNullOrWhiteSpace(an)) an = GetString(away, "name", "");
                             if (hn.Length == 0 || an.Length == 0) continue;
                             var score = GetMap(item, "score"); var ft = GetMap(score, "ft");
                             output.Add(new FixtureRecord { Provider = "FootballCharts", League = GetString(item, "league", league), KickoffUtc = GetString(item, "kickoff", GetString(item, "date", GetString(item, "utc_date", ""))), HomeTeam = hn, AwayTeam = an, HomeGoals = GetNullableInt(item, "home_goals") ?? GetNullableInt(ft, "home"), AwayGoals = GetNullableInt(item, "away_goals") ?? GetNullableInt(ft, "away"), Status = kind == "results" ? "FINISHED" : "SCHEDULED", ExternalId = GetString(item, "id", GetString(item, "slug", "")) });
