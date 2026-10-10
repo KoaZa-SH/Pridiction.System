@@ -736,6 +736,82 @@ namespace KoaZa.Services
             return null;
         }
 
+        private static List<FixtureRecord> FetchFiveDollarFootball(string leagueId, int season)
+        {
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && (p.Provider == "FiveDollarFootball" || p.Provider == "5DollarFootballAPI") && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+            if (configs.Count == 0) throw new InvalidOperationException("Add an enabled 5DollarFootballAPI key in API Settings.");
+            if (string.IsNullOrWhiteSpace(leagueId) || leagueId.Equals("all", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("5DollarFootballAPI requires its own league ID from the provider league catalog.");
+            Exception last = null;
+            foreach (var config in configs)
+            {
+                try
+                {
+                    string url = "https://api.5dollarfootballapi.com/v1/leagues/" + Uri.EscapeDataString(leagueId) + "/fixtures?season=" + season.ToString(CultureInfo.InvariantCulture) + "&include=events,stats";
+                    var root = Parse(Request(url, "Authorization", "Bearer " + config.Key));
+                    if (HasErrors(root) || GetString(root, "success", "1") == "0") throw new InvalidOperationException("5DollarFootballAPI API/key/quota error.");
+                    var rows = GetList(root, "data");
+                    if (rows.Count == 0) rows = GetList(root, "fixtures");
+                    var output = new List<FixtureRecord>();
+                    foreach (var item in rows)
+                    {
+                        var teams = GetMap(item, "teams");
+                        var home = GetMap(teams, "home"); var away = GetMap(teams, "away");
+                        var goals = GetMap(item, "goals"); var score = GetMap(item, "score");
+                        if (home.Count == 0) home = GetMap(item, "home_team");
+                        if (away.Count == 0) away = GetMap(item, "away_team");
+                        if (goals.Count == 0) goals = GetMap(item, "full_time");
+                        string hn = GetString(home, "name", GetString(item, "home_name", ""));
+                        string an = GetString(away, "name", GetString(item, "away_name", ""));
+                        if (hn.Length == 0 || an.Length == 0) continue;
+                        output.Add(new FixtureRecord { Provider = "FiveDollarFootball", League = GetString(GetMap(item, "league"), "name", GetString(item, "league_name", leagueId)), KickoffUtc = GetString(item, "kickoff", GetString(item, "start_time", GetString(item, "date", ""))), HomeTeam = hn, AwayTeam = an, HomeGoals = GetNullableInt(goals, "home") ?? GetNullableInt(score, "home"), AwayGoals = GetNullableInt(goals, "away") ?? GetNullableInt(score, "away"), Status = GetString(item, "status", ""), ExternalId = GetString(item, "id", "") });
+                    }
+                    return output;
+                }
+                catch (Exception ex) { last = ex; }
+            }
+            throw new InvalidOperationException("5DollarFootballAPI request failed. Check league ID, key and plan.", last);
+        }
+
+        private static List<FixtureRecord> FetchFootballCharts(string league, int season)
+        {
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && (p.Provider == "FootballCharts" || p.Provider == "Football-Charts")).ToList();
+            if (configs.Count == 0) configs.Add(new ApiProviderConfig { Provider = "FootballCharts", Key = "" });
+            Exception last = null;
+            foreach (var config in configs)
+            {
+                try
+                {
+                    string slug = Uri.EscapeDataString(string.IsNullOrWhiteSpace(league) ? "premier" : league.Trim().ToLowerInvariant());
+                    string header = string.IsNullOrWhiteSpace(config.Key) ? null : "Authorization";
+                    string token = string.IsNullOrWhiteSpace(config.Key) ? null : "Bearer " + config.Key;
+                    var output = new List<FixtureRecord>();
+                    foreach (string kind in new[] { "results", "fixtures" })
+                    {
+                        string url = "https://footballcharts-backend.onrender.com/api/v1/leagues/" + slug + "/" + kind + "/?season=" + season.ToString(CultureInfo.InvariantCulture);
+                        var root = Parse(Request(url, header, token));
+                        var rows = GetList(root, "results");
+                        if (rows.Count == 0) rows = GetList(root, "fixtures");
+                        if (rows.Count == 0) rows = GetList(root, "data");
+                        foreach (var item in rows)
+                        {
+                            var home = GetMap(item, "home"); var away = GetMap(item, "away");
+                            string hn = GetString(item, "home_team", GetString(home, "name", ""));
+                            string an = GetString(item, "away_team", GetString(away, "name", ""));
+                            if (hn.Length == 0) hn = GetString(item, "home", "");
+                            if (an.Length == 0) an = GetString(item, "away", "");
+                            if (hn.Length == 0 || an.Length == 0) continue;
+                            var score = GetMap(item, "score"); var ft = GetMap(score, "ft");
+                            output.Add(new FixtureRecord { Provider = "FootballCharts", League = GetString(item, "league", league), KickoffUtc = GetString(item, "kickoff", GetString(item, "date", GetString(item, "utc_date", ""))), HomeTeam = hn, AwayTeam = an, HomeGoals = GetNullableInt(item, "home_goals") ?? GetNullableInt(ft, "home"), AwayGoals = GetNullableInt(item, "away_goals") ?? GetNullableInt(ft, "away"), Status = kind == "results" ? "FINISHED" : "SCHEDULED", ExternalId = GetString(item, "id", GetString(item, "slug", "")) });
+                        }
+                    }
+                    if (output.Count > 0) return output;
+                }
+                catch (Exception ex) { last = ex; }
+            }
+            throw new InvalidOperationException("Football-Charts returned no fixtures/results. Check league slug, season and API availability.", last);
+        }
+
         private static List<FixtureRecord> FetchOddsPapi(string tournamentId)
         {
             var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "OddsPapi" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
