@@ -1955,5 +1955,46 @@ namespace KoaZa.Services
         {
             new KoaZa.Data.DatabaseService().SaveFixtures(fixtures);
         }
+
+        public static int ImportHistoricalStatistics(List<FixtureRecord> fixtures)
+        {
+            if (fixtures == null) return 0;
+            var candidates = fixtures.Where(f => f.HomeGoals.HasValue && f.AwayGoals.HasValue &&
+                (f.Provider == "API-Football" || f.Provider == "ApiFootball" || f.Provider == "ApiSports" ||
+                 f.Provider == "FiveDollarFootballAPI"))
+                .OrderByDescending(f => f.KickoffUtc).Take(10).ToList();
+            var db = new KoaZa.Data.DatabaseService();
+            int imported = 0;
+            foreach (var fixture in candidates)
+            {
+                try
+                {
+                    string json = FootballDataService.FetchFixtureDetails(fixture);
+                    if (string.IsNullOrWhiteSpace(json)) continue;
+                    db.SaveFixtureDetails(fixture.Provider, fixture.ExternalId, json);
+                    var normalized = fixture.Provider == "FiveDollarFootballAPI"
+                        ? MatchStatisticsParser.ParseFiveDollarOrGeneric(json, fixture)
+                        : MatchStatisticsParser.ParseApiFootball(json, fixture);
+                    if (normalized == null) continue;
+                    bool hasStats = normalized.HomeShots.HasValue || normalized.AwayShots.HasValue ||
+                        normalized.HomeShotsOnTarget.HasValue || normalized.AwayShotsOnTarget.HasValue ||
+                        normalized.HomeCorners.HasValue || normalized.AwayCorners.HasValue ||
+                        normalized.HomeYellowCards.HasValue || normalized.AwayYellowCards.HasValue ||
+                        normalized.HomeRedCards.HasValue || normalized.AwayRedCards.HasValue;
+                    if (!hasStats) continue;
+                    db.SaveMatchStatistics(normalized);
+                    var legacy = FootballDataService.ExtractFixtureStatistics(json, fixture);
+                    legacy.HomeCorners = normalized.HomeCorners; legacy.AwayCorners = normalized.AwayCorners;
+                    legacy.HomeShotsOnTarget = normalized.HomeShotsOnTarget; legacy.AwayShotsOnTarget = normalized.AwayShotsOnTarget;
+                    legacy.HomeYellowCards = normalized.HomeYellowCards; legacy.AwayYellowCards = normalized.AwayYellowCards;
+                    legacy.Referee = normalized.Referee;
+                    db.SaveNormalizedFixtureStatistics(legacy);
+                    db.ReplaceMatchEvents(fixture.Provider, fixture.ExternalId, MatchStatisticsParser.ParseEvents(json, fixture));
+                    imported++;
+                }
+                catch { /* A single unavailable match must not cancel the rest of the import. */ }
+            }
+            return imported;
+        }
     }
 }
