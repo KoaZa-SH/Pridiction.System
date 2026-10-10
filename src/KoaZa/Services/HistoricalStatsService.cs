@@ -234,6 +234,39 @@ namespace KoaZa.Services
 
     public static class MultiMarketPredictionService
     {
+        public static MultiMarketPrediction AnalyzeEventMarkets(FixtureRecord fixture, IList<MatchStatisticsRecord> statsHistory)
+        {
+            statsHistory = statsHistory ?? new List<MatchStatisticsRecord>();
+            var output = new MultiMarketPrediction { Markets = new List<MarketEstimate>(), DataQuality = "Historical statistics rows: " + statsHistory.Count };
+            AddCountMarket(output, statsHistory, fixture, "Corners", "Total over 8.5", "Total under 8.5",
+                s => Sum(s.HomeCorners,s.AwayCorners), 8.5, 5);
+            AddCountMarket(output, statsHistory, fixture, "Yellow cards", "Total over 3.5", "Total under 3.5",
+                s => Sum(s.HomeYellowCards,s.AwayYellowCards), 3.5, 5);
+            AddCountMarket(output, statsHistory, fixture, "Shots on target", "Total over 8.5", "Total under 8.5",
+                s => Sum(s.HomeShotsOnTarget,s.AwayShotsOnTarget), 8.5, 5);
+            AddCountMarket(output, statsHistory, fixture, "Total shots", "Total over 22.5", "Total under 22.5",
+                s => Sum(s.HomeShots,s.AwayShots), 22.5, 5);
+            AddCountMarket(output, statsHistory, fixture, "Home team corners", "Over 4.5", "Under 4.5",
+                s => Same(s.HomeTeam,fixture.HomeTeam) ? s.HomeCorners : s.AwayCorners, 4.5, 5);
+            AddCountMarket(output, statsHistory, fixture, "Away team corners", "Over 4.5", "Under 4.5",
+                s => Same(s.HomeTeam,fixture.AwayTeam) ? s.HomeCorners : s.AwayCorners, 4.5, 5);
+            var refereeRows = statsHistory.Where(s => !string.IsNullOrWhiteSpace(fixture.Referee) &&
+                Same(s.Referee,fixture.Referee) && s.HomeYellowCards.HasValue && s.AwayYellowCards.HasValue &&
+                DateTimeOrder(s.KickoffUtc,fixture.KickoffUtc) < 0).OrderByDescending(s => s.KickoffUtc).Take(30).ToList();
+            if (refereeRows.Count >= 5)
+            {
+                double mean = refereeRows.Average(s => s.HomeYellowCards.Value + s.AwayYellowCards.Value);
+                double pOver = 1 - CdfPoisson(3, mean);
+                output.Markets.Add(new MarketEstimate { Market="Referee yellow cards", Outcome="Total over 3.5",
+                    Probability=Clamp(pOver,0,1), SampleSize=refereeRows.Count, HasSufficientData=true,
+                    Explanation="Referee mean: "+mean.ToString("0.00",CultureInfo.InvariantCulture)+" yellow cards/match; Poisson approximation" });
+            }
+            else output.Markets.Add(new MarketEstimate { Market="Referee yellow cards", Outcome="Total over 3.5",
+                Probability=0, SampleSize=refereeRows.Count, HasSufficientData=false,
+                Explanation=string.IsNullOrWhiteSpace(fixture.Referee) ? "Upcoming referee is not known." : "Need at least five prior matches with the same referee." });
+            return output;
+        }
+
         public static MultiMarketPrediction Analyze(FixtureRecord fixture, IList<FixtureRecord> goalHistory,
             IList<MatchStatisticsRecord> statsHistory)
         {
