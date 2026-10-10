@@ -222,6 +222,8 @@ namespace KoaZa.Data
                         {
                             Provider = Convert.ToString(reader["Provider"]), League = Convert.ToString(reader["League"]),
                             KickoffUtc = raw, HomeTeam = Convert.ToString(reader["HomeTeam"]), AwayTeam = Convert.ToString(reader["AwayTeam"]),
+                            HomeGoals = reader["HomeGoals"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["HomeGoals"]),
+                            AwayGoals = reader["AwayGoals"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["AwayGoals"]),
                             Status = status, ExternalId = Convert.ToString(reader["ExternalId"])
                         });
                     }
@@ -342,8 +344,9 @@ namespace KoaZa.Data
         {
             string s = (status ?? "").Trim().ToUpperInvariant();
             return s == "LIVE" || s == "1H" || s == "HT" || s == "2H" || s == "ET" || s == "P" ||
-                   s == "BT" || s == "INT" || s == "INPLAY" || s == "IN PROGRESS" || s == "INPROGRESS" ||
-                   s == "FIRST HALF" || s == "SECOND HALF" || s == "HALFTIME" || s == "EXTRA TIME";
+                   s == "BT" || s == "INT" || s == "INPLAY" || s == "IN_PLAY" || s == "IN PROGRESS" || s == "INPROGRESS" ||
+                   s == "FIRST HALF" || s == "SECOND HALF" || s == "FIRST_HALF" || s == "SECOND_HALF" ||
+                   s == "HALFTIME" || s == "EXTRA TIME" || s == "EXTRA_TIME" || s == "PAUSED" || s == "PENALTY_SHOOTOUT";
         }
     }
 }
