@@ -20,8 +20,18 @@ jobs:
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
 
+
       - name: Restore NuGet packages
-        run: nuget restore src/KoaZa/KoaZa.sln
+        run: nuget restore src/KoaZa/KoaZa.sln -PackagesDirectory src/KoaZa/packages -NonInteractive -Verbosity detailed
+
+      - name: Verify SQLite package
+        shell: pwsh
+        run: |
+          $dll = "src\KoaZa\packages\System.Data.SQLite.Core.1.0.119.0\lib\net46\System.Data.SQLite.dll"
+          if (-not (Test-Path $dll)) {
+            Write-Error "SQLite DLL is missing after NuGet restore."
+            exit 1
+          }
 
       - name: Build Release
         run: msbuild src/KoaZa/KoaZa.sln /m /p:Configuration=Release "/p:Platform=Any CPU" /verbosity:minimal
