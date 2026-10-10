@@ -73,8 +73,9 @@
             <DataGrid.Columns>
               <DataGridTextColumn Header="Date / ساعت" Binding="{Binding KickoffDisplay}" Width="1.15*"/>
               <DataGridTextColumn Header="League / لیگ" Binding="{Binding League}" Width="1.1*"/>
-              <DataGridTextColumn Header="Home / میزبان" Binding="{Binding HomeTeam}" Width="1.2*"/>
-              <DataGridTextColumn Header="Away / میهمان" Binding="{Binding AwayTeam}" Width="1.2*"/>
+              <DataGridTextColumn Header="Home / میزبان" Binding="{Binding HomeTeam}" Width="1.1*"/>
+              <DataGridTextColumn Header="Score / نتیجه" Binding="{Binding ScoreDisplay}" Width="0.65*"/>
+              <DataGridTextColumn Header="Away / میهمان" Binding="{Binding AwayTeam}" Width="1.1*"/>
             </DataGrid.Columns>
           </DataGrid>
           <TextBlock x:Name="FixtureStatusText" Grid.Row="2" TextWrapping="Wrap" Foreground="#79551D" Margin="0,10,0,0"/>
