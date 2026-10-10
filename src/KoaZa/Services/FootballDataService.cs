@@ -2029,7 +2029,8 @@ namespace KoaZa.Services
                         legacy.Referee = normalized.Referee;
                         db.SaveNormalizedFixtureStatistics(legacy);
                     }
-                    db.ReplaceMatchEvents(fixture.Provider, fixture.ExternalId, events);
+                    if (MatchStatisticsParser.HasEventPayload(json, fixture))
+                        db.ReplaceMatchEvents(fixture.Provider, fixture.ExternalId, events);
                     if (hasStats || events.Count > 0) imported++;
                 }
                 catch { /* One unavailable match must not cancel the rest of the import. */ }
