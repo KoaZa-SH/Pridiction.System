@@ -206,6 +206,12 @@ namespace KoaZa.Services
                 catch (Exception ex) { errors.Add("SportsAPI360: " + ex.Message); }
             }
 
+            if (providers.Any(p => p.Provider == "FiveDollarFootballAPI" && !string.IsNullOrWhiteSpace(p.Key)))
+            {
+                try { combined.AddRange(FetchFiveDollarRange("all", fromDate, toDate)); }
+                catch (Exception ex) { errors.Add("5DollarFootballAPI: " + ex.Message); }
+            }
+
             foreach (var config in providers.Where(p => !string.IsNullOrWhiteSpace(p.BaseUrl)))
             {
                 try { combined.AddRange(FetchCustom(config)); }
@@ -720,6 +726,7 @@ namespace KoaZa.Services
                 if (competition == "LIGUE1" || competition == "FL1") return "FL1";
             }
             if (provider == "OpenLigaDB" && (competition == "BUNDESLIGA" || competition == "BL1")) return "bl1";
+            if (provider == "FootballCharts" && (competition == "EPL" || competition == "PL")) return "premier";
             return null;
         }
 
