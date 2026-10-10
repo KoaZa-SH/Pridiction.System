@@ -443,7 +443,7 @@ namespace KoaZa.Services
         {
             var result = new List<NewsItem>();
             var terms = ((homeTeam ?? "") + " " + (awayTeam ?? "") + " " + (league ?? ""))
-                .Split(new[] { ' ', '-', '_', '/', '\\t' }, StringSplitOptions.RemoveEmptyEntries)
+                .Split(new[] { ' ', '-', '_', '/' }, StringSplitOptions.RemoveEmptyEntries)
                 .Where(t => t.Length >= 3).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             foreach (string feed in new[] { "https://www.varzesh3.com/rss/all", "https://www.varzesh3.com/rss/foreignFootball" })
             {
