@@ -217,18 +217,26 @@ namespace KoaZa.Services
         // Date-based import entry point used by the fixture-import window.
         public static List<FixtureRecord> FetchFromDate(string provider, string league, int season, DateTime startDate)
         {
+            return FetchFromDate(provider, league, season, startDate, DateTime.UtcNow.Date.AddDays(7));
+        }
+
+        public static List<FixtureRecord> FetchFromDate(string provider, string league, int season, DateTime startDate, DateTime endDate)
+        {
             DateTime fromDate = startDate.Date;
+            DateTime toDate = endDate.Date;
             DateTime today = DateTime.UtcNow.Date;
             if (fromDate > today) throw new ArgumentOutOfRangeException("startDate", "Start date cannot be in the future.");
-            if (provider == "Auto") return FetchAllUpcoming(season, fromDate);
-
+            if (toDate < fromDate) throw new ArgumentOutOfRangeException("endDate", "End date must be on or after the start date.");
+            if (toDate > today.AddDays(7)) throw new ArgumentOutOfRangeException("endDate", "End date cannot be more than 7 days in the future.");
             List<FixtureRecord> rows;
-            if (provider == "ApiFootball" || provider == "ApiSports")
-                rows = FetchApiFootballRange(league, fromDate, today.AddDays(7));
+            if (provider == "Auto")
+                rows = FetchAllUpcoming(season, fromDate);
+            else if (provider == "ApiFootball" || provider == "ApiSports")
+                rows = FetchApiFootballRange(league, fromDate, toDate);
             else
                 rows = Fetch(provider, league, season);
 
-            return FilterFixturesByDate(rows, fromDate, today.AddDays(7))
+            return FilterFixturesByDate(rows, fromDate, toDate)
                 .GroupBy(FixtureDeduplicationKey)
                 .Select(g => g.OrderByDescending(x => !string.IsNullOrWhiteSpace(x.ExternalId)).First())
                 .ToList();
@@ -277,7 +285,13 @@ namespace KoaZa.Services
                 string separator = path.IndexOf('?') >= 0 ? "&" : "?";
                 var root = Parse(Request("https://v3.football.api-sports.io" + path + separator + "page=" + page, "x-apisports-key", apiKey));
                 if (HasErrors(root))
-                    throw new InvalidOperationException("API-SPORTS returned an API/quota error while reading page " + page + ". If the requested history is large, narrow the date range or continue after the daily quota resets.");
+                {
+                    object apiErrors;
+                    root.TryGetValue("errors", out apiErrors);
+                    string details = apiErrors == null ? "" : new JavaScriptSerializer().Serialize(apiErrors);
+                    throw new InvalidOperationException("API-SPORTS rejected page " + page + (string.IsNullOrWhiteSpace(details) ? "." : ": " + details) +
+                        " Check the API key, plan permissions, league ID and quota; narrow the date range if needed.");
+                }
                 output.AddRange(ParseApiFootballFixtures(root));
                 var paging = GetMap(root, "paging");
                 int parsedTotal;
