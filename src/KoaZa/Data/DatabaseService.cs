@@ -20,6 +20,13 @@ namespace KoaZa.Data
         public double AwayConcededPerMatch { get; set; }
     }
 
+    public sealed class CompetitionCatalogEntry
+    {
+        public string League { get; set; }
+        public string Providers { get; set; }
+        public int FixtureCount { get; set; }
+    }
+
     public sealed class DatabaseService
     {
         private readonly string _connectionString;
@@ -299,6 +306,30 @@ namespace KoaZa.Data
                 using (var reader = cmd.ExecuteReader()) while (reader.Read()) leagues.Add(Convert.ToString(reader[0]));
             }
             return leagues;
+        }
+
+        public List<CompetitionCatalogEntry> GetKnownCompetitionCatalog()
+        {
+            var entries = new List<CompetitionCatalogEntry>();
+            using (var con = new SQLiteConnection(_connectionString))
+            {
+                con.Open();
+                const string sql = "SELECT League, GROUP_CONCAT(DISTINCT Provider), COUNT(*) FROM Fixtures WHERE League IS NOT NULL AND TRIM(League)<>'' GROUP BY League ORDER BY League;";
+                using (var cmd = new SQLiteCommand(sql, con))
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        entries.Add(new CompetitionCatalogEntry
+                        {
+                            League = Convert.ToString(reader[0]),
+                            Providers = reader.IsDBNull(1) ? "Unknown" : Convert.ToString(reader[1]),
+                            FixtureCount = Convert.ToInt32(reader[2], CultureInfo.InvariantCulture)
+                        });
+                    }
+                }
+            }
+            return entries;
         }
 
         private static bool IsCompletedStatus(string status)
