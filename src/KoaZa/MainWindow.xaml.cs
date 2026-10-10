@@ -76,18 +76,22 @@ namespace KoaZa
                 DateTime start = DateTime.Today;
                 DateTime end = start.AddDays(7);
                 _fixtures = _database.GetUpcomingFixtures(start, end);
-                var previousLeague = (LeagueFilterBox.SelectedItem as string);
+                var previousOption = LeagueFilterBox.SelectedItem as LeagueFilterOption;
+                string previousLeagueKey = previousOption == null ? null : previousOption.Key;
                 _loadingFilters = true;
                 LeagueFilterBox.Items.Clear();
-                LeagueFilterBox.Items.Add(LocalizationService.T("All competitions", "همه رقابت‌ها"));
-                foreach (string league in _database.GetKnownLeagues())
-                    LeagueFilterBox.Items.Add(LocalizationService.League(league));
+                LeagueFilterBox.Items.Add(new LeagueFilterOption(null, LocalizationService.T("All competitions", "همه رقابت‌ها"), true));
+                foreach (string league in _database.GetKnownLeagues().Where(CompetitionSelectionStore.IsVisible))
+                    LeagueFilterBox.Items.Add(new LeagueFilterOption(league, LocalizationService.League(league), false));
                 int selectedIndex = 0;
-                if (!string.IsNullOrWhiteSpace(previousLeague))
+                if (!string.IsNullOrWhiteSpace(previousLeagueKey))
                 {
                     for (int i = 0; i < LeagueFilterBox.Items.Count; i++)
-                        if (string.Equals(Convert.ToString(LeagueFilterBox.Items[i]), previousLeague, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var option = LeagueFilterBox.Items[i] as LeagueFilterOption;
+                        if (option != null && string.Equals(option.Key, previousLeagueKey, StringComparison.OrdinalIgnoreCase))
                             selectedIndex = i;
+                    }
                 }
                 LeagueFilterBox.SelectedIndex = selectedIndex;
                 _loadingFilters = false;
@@ -106,12 +110,13 @@ namespace KoaZa
         {
             if (_loadingFilters) return;
             var dateOption = DateFilterBox.SelectedItem as DateFilterOption;
-            string league = Convert.ToString(LeagueFilterBox.SelectedItem);
-            var filtered = _fixtures.AsEnumerable();
+            var leagueOption = LeagueFilterBox.SelectedItem as LeagueFilterOption;
+            var hiddenCompetitions = CompetitionSelectionStore.LoadHidden();
+            var filtered = _fixtures.Where(f => !hiddenCompetitions.Contains((f.League ?? "").Trim())).AsEnumerable();
             if (dateOption != null && dateOption.Date.HasValue)
                 filtered = filtered.Where(f => GetLocalKickoff(f).Date == dateOption.Date.Value.Date);
-            if (!string.IsNullOrWhiteSpace(league) && !league.StartsWith("All competitions", StringComparison.OrdinalIgnoreCase))
-                filtered = filtered.Where(f => string.Equals(LocalizationService.League(f.League), league, StringComparison.OrdinalIgnoreCase));
+            if (leagueOption != null && !leagueOption.IsAll && !string.IsNullOrWhiteSpace(leagueOption.Key))
+                filtered = filtered.Where(f => string.Equals((f.League ?? "").Trim(), leagueOption.Key, StringComparison.OrdinalIgnoreCase));
             var rows = filtered.OrderBy(GetLocalKickoff).Select(f => new FixtureRow(f)).ToList();
             FixturesGrid.ItemsSource = rows;
             FixtureCountText.Text = LocalizationService.IsPersian ? rows.Count + " مسابقه" : rows.Count + " matches";
@@ -136,6 +141,7 @@ namespace KoaZa
         {
             var window = new ApiSettingsWindow { Owner = this };
             window.ShowDialog();
+            LoadFixtureList();
         }
 
         private void LanguageBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -180,32 +186,64 @@ namespace KoaZa
             MarketsList.ItemsSource = null;
             try
             {
-                var homeMatches = _database.GetCompletedMatches(fixture.League, fixture.HomeTeam, 12);
-                var awayMatches = _database.GetCompletedMatches(fixture.League, fixture.AwayTeam, 12);
-                if (homeMatches.Count < 3 || awayMatches.Count < 3)
+                var homeLeagueMatches = _database.GetCompletedMatches(fixture.League, fixture.HomeTeam, 12);
+                var awayLeagueMatches = _database.GetCompletedMatches(fixture.League, fixture.AwayTeam, 12);
+                var homeMatches = homeLeagueMatches;
+                var awayMatches = awayLeagueMatches;
+
+                // If a team has too little history in this competition, use its recent completed
+                // matches from any competition instead of requiring head-to-head history.
+                if (homeMatches.Count < 3)
+                {
+                    var broader = _database.GetCompletedMatches(null, fixture.HomeTeam, 12);
+                    if (broader.Count > homeMatches.Count) homeMatches = broader;
+                }
+                if (awayMatches.Count < 3)
+                {
+                    var broader = _database.GetCompletedMatches(null, fixture.AwayTeam, 12);
+                    if (broader.Count > awayMatches.Count) awayMatches = broader;
+                }
+
+                var baselineMatches = _database.GetRecentCompletedMatches(fixture.League, 100);
+                if (baselineMatches.Count < 10) baselineMatches = _database.GetRecentCompletedMatches(null, 100);
+                if (homeMatches.Count == 0 && awayMatches.Count == 0 && baselineMatches.Count == 0)
                 {
                     ModelStatusText.Text = LocalizationService.IsPersian
-                        ? "نتایج تاریخی کافی نیست. میزبان: " + homeMatches.Count + " بازی؛ میهمان: " + awayMatches.Count + " بازی. روی «دریافت و ذخیره مسابقات» بزن تا نتایج اخیر دریافت شود؛ سپس مسابقه را دوباره انتخاب کن. اگر هنوز کافی نبود، سرویس داده یا سهمیهٔ API ممکن است این نتایج را پوشش ندهد."
-                        : "Not enough historical matches. Found " + homeMatches.Count + " for the home team and " + awayMatches.Count + " for the away team. Import completed results first.";
+                        ? "برای محاسبه احتمال‌ها هنوز نتیجهٔ تاریخی ذخیره نشده است. ابتدا مسابقات گذشته را از سرویس داده دریافت و ذخیره کن."
+                        : "No completed historical results are saved yet. Import past match results before calculating probabilities.";
                     return;
                 }
 
-                double homeAttack = Average(homeMatches, fixture.HomeTeam, true, true);
-                double homeDefence = Average(homeMatches, fixture.HomeTeam, false, true);
-                double awayAttack = Average(awayMatches, fixture.AwayTeam, true, false);
-                double awayDefence = Average(awayMatches, fixture.AwayTeam, false, false);
-                double homeOverallAttack = Average(homeMatches, fixture.HomeTeam, true, null);
-                double homeOverallDefence = Average(homeMatches, fixture.HomeTeam, false, null);
-                double awayOverallAttack = Average(awayMatches, fixture.AwayTeam, true, null);
-                double awayOverallDefence = Average(awayMatches, fixture.AwayTeam, false, null);
-
-                if (double.IsNaN(homeAttack)) homeAttack = homeOverallAttack;
-                if (double.IsNaN(homeDefence)) homeDefence = homeOverallDefence;
-                if (double.IsNaN(awayAttack)) awayAttack = awayOverallAttack;
-                if (double.IsNaN(awayDefence)) awayDefence = awayOverallDefence;
-
-                double homeRate = Clamp((homeAttack + awayDefence) / 2.0);
-                double awayRate = Clamp((awayAttack + homeDefence) / 2.0);
+                double homeRate;
+                double awayRate;
+                if (homeMatches.Count > 0 && awayMatches.Count > 0)
+                {
+                    double homeAttack = Average(homeMatches, fixture.HomeTeam, true, true);
+                    double homeDefence = Average(homeMatches, fixture.HomeTeam, false, true);
+                    double awayAttack = Average(awayMatches, fixture.AwayTeam, true, false);
+                    double awayDefence = Average(awayMatches, fixture.AwayTeam, false, false);
+                    double homeOverallAttack = Average(homeMatches, fixture.HomeTeam, true, null);
+                    double homeOverallDefence = Average(homeMatches, fixture.HomeTeam, false, null);
+                    double awayOverallAttack = Average(awayMatches, fixture.AwayTeam, true, null);
+                    double awayOverallDefence = Average(awayMatches, fixture.AwayTeam, false, null);
+                    if (double.IsNaN(homeAttack)) homeAttack = homeOverallAttack;
+                    if (double.IsNaN(homeDefence)) homeDefence = homeOverallDefence;
+                    if (double.IsNaN(awayAttack)) awayAttack = awayOverallAttack;
+                    if (double.IsNaN(awayDefence)) awayDefence = awayOverallDefence;
+                    homeRate = Clamp((homeAttack + awayDefence) / 2.0);
+                    awayRate = Clamp((awayAttack + homeDefence) / 2.0);
+                }
+                else
+                {
+                    // With no saved matches for one team, use the available competition/global
+                    // home/away scoring baseline rather than returning an empty probability panel.
+                    homeRate = homeMatches.Count > 0
+                        ? Clamp(Average(homeMatches, fixture.HomeTeam, true, null))
+                        : Clamp(MeanHomeGoals(baselineMatches));
+                    awayRate = awayMatches.Count > 0
+                        ? Clamp(Average(awayMatches, fixture.AwayTeam, true, null))
+                        : Clamp(MeanAwayGoals(baselineMatches));
+                }
                 var probabilities = PoissonModel.Analyze(homeRate, awayRate);
                 MarketsList.ItemsSource = probabilities.Markets.Select(m => new MarketRow
                 {
@@ -215,11 +253,16 @@ namespace KoaZa
                 }).ToList();
 
                 _database.SavePrediction(fixture.HomeTeam, fixture.AwayTeam, homeRate, awayRate, probabilities);
+                bool usedFallback = homeLeagueMatches.Count < 3 || awayLeagueMatches.Count < 3;
                 ModelStatusText.Text = LocalizationService.IsPersian
-                    ? "گل مورد انتظار (محاسبه خودکار): میزبان " + homeRate.ToString("0.00", CultureInfo.InvariantCulture) + "، میهمان " + awayRate.ToString("0.00", CultureInfo.InvariantCulture) +
-                      ". بر پایه حداکثر ۱۲ بازی اخیر هر تیم (" + homeMatches.Count + " بازی میزبان، " + awayMatches.Count + " بازی میهمان). مدل پواسون پایه؛ احتمال‌ها تضمین‌شده یا کالیبره‌شده نیستند."
-                    : "Expected goals (automatic): home " + homeRate.ToString("0.00", CultureInfo.InvariantCulture) + ", away " + awayRate.ToString("0.00", CultureInfo.InvariantCulture) +
-                      ". Based on up to 12 recent completed matches per team (" + homeMatches.Count + " home-team matches; " + awayMatches.Count + " away-team matches). Baseline Poisson; not calibrated betting guarantees.";
+                    ? "گل مورد انتظار: میزبان " + homeRate.ToString("0.00", CultureInfo.InvariantCulture) + "، میهمان " + awayRate.ToString("0.00", CultureInfo.InvariantCulture) +
+                      ". داده: " + homeMatches.Count + " بازی میزبان و " + awayMatches.Count + " بازی میهمان. " +
+                      (usedFallback ? "به‌دلیل کمبود داده در همین رقابت، سابقهٔ سایر رقابت‌ها یا میانگین گل‌های موجود هم استفاده شده است. " : "از سابقهٔ همین رقابت استفاده شده است. ") +
+                      "مدل پایه پواسون است؛ احتمال‌ها تخمینی هستند و تضمین نتیجه نیستند."
+                    : "Expected goals: home " + homeRate.ToString("0.00", CultureInfo.InvariantCulture) + ", away " + awayRate.ToString("0.00", CultureInfo.InvariantCulture) +
+                      ". Data: " + homeMatches.Count + " home-team matches and " + awayMatches.Count + " away-team matches. " +
+                      (usedFallback ? "Because same-competition history is limited, other competitions or available scoring averages were used. " : "Same-competition history was used. ") +
+                      "Baseline Poisson estimates; not guarantees.";
             }
             catch (Exception ex)
             {
@@ -308,12 +351,33 @@ namespace KoaZa
             return values.Count == 0 ? double.NaN : values.Average();
         }
 
+        private static double MeanHomeGoals(List<FixtureRecord> matches)
+        {
+            var values = matches.Where(m => m.HomeGoals.HasValue).Select(m => (double)m.HomeGoals.Value).ToList();
+            return values.Count == 0 ? 1.25 : values.Average();
+        }
+
+        private static double MeanAwayGoals(List<FixtureRecord> matches)
+        {
+            var values = matches.Where(m => m.AwayGoals.HasValue).Select(m => (double)m.AwayGoals.Value).ToList();
+            return values.Count == 0 ? 1.0 : values.Average();
+        }
+
         private static double Clamp(double rate) { return Math.Max(0.05, Math.Min(5.0, rate)); }
 
         private sealed class DateFilterOption
         {
             public string Label { get; set; }
             public DateTime? Date { get; set; }
+            public override string ToString() { return Label; }
+        }
+
+        private sealed class LeagueFilterOption
+        {
+            public string Key { get; private set; }
+            public string Label { get; private set; }
+            public bool IsAll { get; private set; }
+            public LeagueFilterOption(string key, string label, bool isAll) { Key = key; Label = label; IsAll = isAll; }
             public override string ToString() { return Label; }
         }
 
