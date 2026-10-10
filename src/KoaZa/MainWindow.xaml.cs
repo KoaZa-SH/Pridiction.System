@@ -19,6 +19,7 @@ namespace KoaZa
         private bool _loadingFilters;
         private bool _settingLanguage;
         private bool _suppressFixtureSelection;
+        private string _newsCompetition;
 
         public MainWindow()
         {
@@ -118,12 +119,12 @@ namespace KoaZa
             var hiddenCompetitions = CompetitionSelectionStore.LoadHidden();
             var filtered = _fixtures.Where(f => !hiddenCompetitions.Contains((f.League ?? "").Trim())).AsEnumerable();
             if (dateOption != null && dateOption.Date.HasValue)
-                filtered = filtered.Where(f => GetLocalKickoff(f).Date == dateOption.Date.Value.Date);
+                filtered = filtered.Where(f => IsLiveFixture(f.Status) || GetLocalKickoff(f).Date == dateOption.Date.Value.Date);
             if (leagueOption != null && !leagueOption.IsAll && !string.IsNullOrWhiteSpace(leagueOption.Key))
                 filtered = filtered.Where(f => string.Equals((f.League ?? "").Trim(), leagueOption.Key, StringComparison.OrdinalIgnoreCase));
             var previous = FixturesGrid.SelectedItem as FixtureRow;
             string previousId = previous == null ? null : previous.Fixture.ExternalId;
-            var rows = filtered.OrderBy(GetLocalKickoff).Select(f => new FixtureRow(f)).ToList();
+            var rows = filtered.OrderByDescending(f => IsLiveFixture(f.Status)).ThenBy(GetLocalKickoff).Select(f => new FixtureRow(f)).ToList();
             var selectedRow = !string.IsNullOrWhiteSpace(previousId)
                 ? rows.FirstOrDefault(r => string.Equals(r.Fixture.ExternalId, previousId, StringComparison.OrdinalIgnoreCase))
                 : null;
@@ -137,6 +138,7 @@ namespace KoaZa
             if (selectedRow != null)
             {
                 AnalyzeFixture(selectedRow.Fixture);
+                LoadLatestNews(selectedRow.Fixture.League);
             }
             else
             {
@@ -159,21 +161,43 @@ namespace KoaZa
         private void Refresh_Click(object sender, RoutedEventArgs e) { LoadFixtureList(); }
         private void Filters_Changed(object sender, SelectionChangedEventArgs e) { ApplyFilters(); }
 
-        private void RefreshNews_Click(object sender, RoutedEventArgs e) { LoadLatestNews(); }
-
-        private async void LoadLatestNews()
+        private void RefreshNews_Click(object sender, RoutedEventArgs e)
         {
-            NewsStatusText.Text = LocalizationService.T("Loading latest football headlines...", "در حال دریافت آخرین اخبار فوتبال...");
+            var row = FixturesGrid.SelectedItem as FixtureRow;
+            LoadLatestNews(row == null ? null : row.Fixture.League, true);
+        }
+
+        private void LoadLatestNews()
+        {
+            var row = FixturesGrid == null ? null : FixturesGrid.SelectedItem as FixtureRow;
+            LoadLatestNews(row == null ? null : row.Fixture.League, false);
+        }
+
+        private async void LoadLatestNews(string competition, bool force = false)
+        {
+            string target = (competition ?? "").Trim();
+            if (target.Length == 0)
+            {
+                _newsCompetition = null;
+                NewsList.ItemsSource = new List<NewsItem>();
+                NewsStatusText.Text = LocalizationService.T("Select a match to see news for its competition.", "برای دیدن اخبار مرتبط با رقابت، یک مسابقه را انتخاب کن.");
+                return;
+            }
+            if (!force && string.Equals(_newsCompetition, target, StringComparison.OrdinalIgnoreCase)) return;
+            _newsCompetition = target;
+            NewsStatusText.Text = LocalizationService.T("Loading news for ", "در حال دریافت اخبار رقابت ") + LocalizationService.League(target) + "...";
             try
             {
-                var news = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchLatestNews());
+                var news = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchLatestNews(target));
+                if (!string.Equals(_newsCompetition, target, StringComparison.OrdinalIgnoreCase)) return;
                 NewsList.ItemsSource = news;
                 NewsStatusText.Text = news.Count == 0
-                    ? LocalizationService.T("No headlines could be loaded. Check your internet connection or try again later.", "خبری دریافت نشد؛ اتصال اینترنت را بررسی کن یا بعداً دوباره تلاش کن.")
-                    : LocalizationService.T("Latest headlines from Varzesh3, Football360, FBTV3 and Google News. Select a headline to open the article.", "آخرین تیترها از ورزش سه، فوتبال ۳۶۰، فوتبال برتر و Google News؛ برای باز کردن خبر روی تیتر کلیک کن.") + " (" + news.Count + ")";
+                    ? LocalizationService.T("No news found for this competition. Try refreshing later.", "خبر مرتبطی برای این رقابت پیدا نشد؛ بعداً دوباره نوسازی کن.")
+                    : LocalizationService.T("Competition-specific headlines for: ", "اخبار مرتبط با رقابت: ") + LocalizationService.League(target) + " (" + news.Count + ")";
             }
             catch (Exception ex)
             {
+                if (!string.Equals(_newsCompetition, target, StringComparison.OrdinalIgnoreCase)) return;
                 NewsStatusText.Text = LocalizationService.T("News feed unavailable: ", "خبرخوان در دسترس نیست: ") + ex.Message;
             }
         }
@@ -218,6 +242,7 @@ namespace KoaZa
             var row = FixturesGrid.SelectedItem as FixtureRow;
             if (row == null || _database == null) return;
             AnalyzeFixture(row.Fixture);
+            LoadLatestNews(row.Fixture.League);
         }
 
         private void AnalyzeFixture(FixtureRecord fixture)
@@ -391,13 +416,27 @@ namespace KoaZa
                 PercentLabel = hasSufficientData ? (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%" :
                     (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% • " + LocalizationService.T("low confidence", "اطمینان پایین"),
                 HasData = hasSufficientData,
+                BarBrush = m.Market == "Match result" && m.Outcome == "Draw"
+                    ? System.Windows.Media.Brushes.DarkOrange : System.Windows.Media.Brushes.SeaGreen,
                 Reason = reason
             }).ToList();
-            string unavailable = LocalizationService.T("Not calculated: historical corner/card statistics are unavailable.", "محاسبه نشده: آمار تاریخی کرنر و کارت در دسترس نیست.");
-            rows.Add(new MarketRow { Label = LocalizationService.Market("Corners", "Total over 8.5"), Percent = 0, PercentLabel = LocalizationService.T("Stats unavailable", "آمار موجود نیست"), HasData = false, Reason = unavailable });
-            rows.Add(new MarketRow { Label = LocalizationService.Market("Corners", "Total under 8.5"), Percent = 0, PercentLabel = LocalizationService.T("Stats unavailable", "آمار موجود نیست"), HasData = false, Reason = unavailable });
-            rows.Add(new MarketRow { Label = LocalizationService.Market("Yellow cards", "Total over 3.5"), Percent = 0, PercentLabel = "—", HasData = false, Reason = unavailable });
-            rows.Add(new MarketRow { Label = LocalizationService.Market("Yellow cards", "Total under 3.5"), Percent = 0, PercentLabel = "—", HasData = false, Reason = unavailable });
+            string unavailable = LocalizationService.T("Not calculated: this app has no reliable historical event statistics for this market yet.", "محاسبه نشده: هنوز آمار تاریخی قابل‌اعتماد برای این بازار در برنامه موجود نیست.");
+            string[] unavailableMarkets =
+            {
+                "Corners|Total over 8.5", "Corners|Total under 8.5",
+                "Home team corners|Over 4.5", "Home team corners|Under 4.5",
+                "Away team corners|Over 4.5", "Away team corners|Under 4.5",
+                "Yellow cards|Total over 3.5", "Yellow cards|Total under 3.5",
+                "Shots on target|Total over 8.5", "Shots on target|Total under 8.5",
+                "VAR review|Yes"
+            };
+            foreach (string item in unavailableMarkets)
+            {
+                string[] parts = item.Split('|');
+                rows.Add(new MarketRow { Label = LocalizationService.Market(parts[0], parts[1]), Percent = 0,
+                    PercentLabel = LocalizationService.T("Stats unavailable", "آمار موجود نیست"), HasData = false,
+                    BarBrush = System.Windows.Media.Brushes.Gray, Reason = unavailable });
+            }
             MarketsList.ItemsSource = rows;
             if (!hasSufficientData) reason = string.IsNullOrWhiteSpace(reason) ? unavailable : reason + " " + unavailable;
             SetMarketChartState(hasSufficientData, reason);
@@ -417,12 +456,16 @@ namespace KoaZa
             var labels = new[]
             {
                 LocalizationService.Market("Match result", "Home win"), LocalizationService.Market("Match result", "Draw"),
-                LocalizationService.Market("Match result", "Away win"), LocalizationService.Market("Total goals", "Over 0.5"),
-                LocalizationService.Market("Total goals", "Over 1.5"), LocalizationService.Market("Total goals", "Over 2.5"),
-                LocalizationService.Market("Total goals", "Over 3.5"), LocalizationService.Market("Both teams to score", "Yes"),
-                LocalizationService.Market("Home team goals", "Over 0.5"), LocalizationService.Market("Home team goals", "Over 1.5"),
-                LocalizationService.Market("Away team goals", "Over 0.5"), LocalizationService.Market("Away team goals", "Over 1.5"),
-                LocalizationService.Market("Corners", "Total over 8.5"), LocalizationService.Market("Yellow cards", "Total over 3.5")
+                LocalizationService.Market("Match result", "Away win"), LocalizationService.Market("Double chance", "1X"),
+                LocalizationService.Market("Double chance", "X2"), LocalizationService.Market("Double chance", "12"),
+                LocalizationService.Market("Both teams to score", "Yes"), LocalizationService.Market("Total goals", "Over 0.5"),
+                LocalizationService.Market("Total goals", "Under 0.5"), LocalizationService.Market("Total goals", "Over 1.5"),
+                LocalizationService.Market("Total goals", "Under 1.5"), LocalizationService.Market("Total goals", "Over 2.5"),
+                LocalizationService.Market("Total goals", "Under 2.5"), LocalizationService.Market("Total goals", "Over 3.5"),
+                LocalizationService.Market("Total goals", "Under 3.5"), LocalizationService.Market("Corners", "Total over 8.5"),
+                LocalizationService.Market("Home team corners", "Over 4.5"), LocalizationService.Market("Away team corners", "Over 4.5"),
+                LocalizationService.Market("Yellow cards", "Total over 3.5"), LocalizationService.Market("Shots on target", "Total over 8.5"),
+                LocalizationService.Market("VAR review", "Yes")
             };
             SetMarketChartState(false, reason);
             return labels.Select(label => new MarketRow { Label = label, Percent = 0, PercentLabel = "—", HasData = false, Reason = reason }).ToList();
@@ -476,7 +519,8 @@ namespace KoaZa
         private sealed class FixtureRow
         {
             public FixtureRecord Fixture { get; private set; }
-            public string League { get { return LocalizationService.League(Fixture.League); } }
+            public bool IsLive { get { return IsLiveFixture(Fixture.Status); } }
+            public string League { get { return (IsLive ? "● LIVE / زنده • " : "") + LocalizationService.League(Fixture.League); } }
             public string HomeTeam { get { return LocalizationService.Team(Fixture.HomeTeam); } }
             public string AwayTeam { get { return LocalizationService.Team(Fixture.AwayTeam); } }
             public string KickoffDisplay { get { return LocalizationService.IsPersian ? GetLocalKickoff(Fixture).ToString("yyyy/MM/dd HH:mm", CultureInfo.GetCultureInfo("fa-IR")) : GetLocalKickoff(Fixture).ToString("dd MMM HH:mm", CultureInfo.GetCultureInfo("en-US")); } }
@@ -490,6 +534,7 @@ namespace KoaZa
             public string PercentLabel { get; set; }
             public bool HasData { get; set; }
             public string Reason { get; set; }
+            public System.Windows.Media.Brush BarBrush { get; set; }
         }
     }
 }
