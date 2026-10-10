@@ -327,7 +327,7 @@ namespace KoaZa
                 NewsList.ItemsSource = news;
                 NewsStatusText.Text = news.Count == 0
                     ? LocalizationService.T("No matching headlines found in the current news feed.", "در خبرخوان فعلی خبر مرتبطی پیدا نشد.")
-                    : LocalizationService.T("Headlines from Google News RSS. Open a headline to read the source article.", "تیترها از خبرخوان Google News هستند؛ برای خواندن منبع، روی تیتر کلیک کن.");
+                    : LocalizationService.T("Headlines from Varzesh3 and Google News RSS. Open a headline to read the source article.", "تیترها از خبرخوان ورزش سه و Google News هستند؛ برای خواندن منبع، روی تیتر کلیک کن.");
             }
             catch (Exception ex)
             {
