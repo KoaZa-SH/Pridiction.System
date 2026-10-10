@@ -17,7 +17,7 @@
 - When a fixture is selected, the app can fetch and cache the provider's fixture details (statistics, events, lineups and player data when available) in SQLite. Live fixtures with scores are not filtered out just because goals are already recorded.
 - A match-specific news panel searches Google News RSS for both teams and the competition; it requires an internet connection but no separate API key. News headlines are context, not verified causal impact or a sentiment-based prediction.
 - **Floodlight**, **Sports Open Data**, and manually added providers use an HTTPS fixtures endpoint that returns a normalized JSON array/object (schema below). Their provider-specific authentication and JSON schemas may need adaptation to the vendor's documentation.
-- The **Auto** fixture refresh queries API-SPORTS across each of the next seven UTC dates and live fixtures, then merges/deduplicates compatible enabled SportsAPI360 and custom feeds. It is not restricted to the English Premier League: it can include leagues, domestic cups, continental club competitions, national-team tournaments and Olympics fixtures when the provider covers them.
+- The **Auto** fixture refresh queries API-SPORTS across each of the next seven UTC dates and live fixtures, then merges/deduplicates compatible enabled football-data.org, OpenLigaDB, SportsAPI360 and custom feeds. It is not restricted to the English Premier League: it can include leagues, domestic cups, continental club competitions, national-team tournaments and Olympics fixtures when the provider covers them.
 - Credentials are stored locally using Windows DPAPI.
 - GitHub Actions workflow builds the Windows application and can publish a portable build artifact when the build succeeds.
 
@@ -87,7 +87,7 @@ Provider coverage, API limits, competition identifiers, and historical availabil
 
 The news panel uses the Google News RSS search endpoint, so there is no required news API key. It searches for the selected home/away teams and competition, and opens the original publisher's article. RSS availability and relevance depend on the network and news index. It does not claim that a headline caused a match outcome or automatically assign a verified impact score. If you later need structured news sentiment, injury/news classification or a commercial SLA, add a dedicated provider such as GNews or another licensed news API and review its current pricing, coverage and terms.
 
-Detailed match information is requested from API-SPORTS when a match is selected and cached locally. The API's `fixtures?id=...` response can contain match statistics, events, lineups and player data when covered. A missing statistic means unavailable, not zero. The amount of data depends on the competition and subscription.
+Detailed match information is requested from API-SPORTS when a match is selected and cached locally. The API's `fixtures?id=...` response can contain match statistics, events, lineups and player data when covered; the separate injuries endpoint is also requested for non-live matches when available. A missing statistic means unavailable, not zero. The amount of data depends on the competition and subscription.
 
 ## Limitations and responsible use
 
@@ -152,7 +152,7 @@ Bug reports and focused pull requests are welcome. Please include the operating 
 
 بخش اخبار از Google News RSS استفاده می‌کند و به کلید API جداگانه نیاز ندارد؛ اتصال اینترنت لازم است. خبرها بر اساس نام هر دو تیم و رقابت جست‌وجو می‌شوند و با کلیک روی تیتر، منبع اصلی باز می‌شود. این بخش تضمین نمی‌کند خبر واقعاً علت تغییر نتیجه است یا میزان اثرگذاری آن را به‌طور قطعی محاسبه نمی‌کند. برای تحلیل ساختاریافته احساسات خبر، دسته‌بندی مصدومیت یا سرویس تجاری پایدار، می‌توان بعداً یک ارائه‌دهنده تخصصی خبر مانند GNews یا سرویس مجاز دیگری اضافه کرد؛ هزینه، پوشش و شرایط استفاده آن باید جداگانه بررسی شود.
 
-هنگام انتخاب مسابقه، جزئیات قابل‌دسترس از API-SPORTS دریافت و در SQLite ذخیره می‌شود. داده‌های آمار، رویدادها، ترکیب‌ها و بازیکنان به پوشش همان رقابت و طرح اشتراک وابسته‌اند.
+هنگام انتخاب مسابقه، جزئیات قابل‌دسترس از API-SPORTS دریافت و در SQLite ذخیره می‌شود. داده‌های آمار، رویدادها، ترکیب‌ها، بازیکنان و در صورت دسترسی اطلاعات مصدومیت به پوشش همان رقابت و طرح اشتراک وابسته‌اند.
 
 ## امنیت کلیدهای API
 
