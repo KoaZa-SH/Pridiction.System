@@ -40,6 +40,7 @@ namespace KoaZa.Data
                 con.Open();
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS Predictions (Id INTEGER PRIMARY KEY AUTOINCREMENT, CreatedUtc TEXT NOT NULL, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, HomeGoalRate REAL NOT NULL, AwayGoalRate REAL NOT NULL, HomeWin REAL NOT NULL, DrawProbability REAL NOT NULL, AwayWin REAL NOT NULL, Over25 REAL NOT NULL, Under25 REAL NOT NULL, BothTeamsScore REAL NOT NULL, ModelVersion TEXT NOT NULL);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS Fixtures (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, League TEXT NOT NULL, KickoffUtc TEXT, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, HomeGoals INTEGER NULL, AwayGoals INTEGER NULL, Status TEXT, ExternalId TEXT, UpdatedUtc TEXT NOT NULL);", con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS FixtureDetails (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, ExternalId TEXT NOT NULL, RawJson TEXT NOT NULL, UpdatedUtc TEXT NOT NULL, UNIQUE(Provider, ExternalId));", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE UNIQUE INDEX IF NOT EXISTS UX_Fixtures_Provider_ExternalId ON Fixtures(Provider, ExternalId);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE INDEX IF NOT EXISTS IX_Fixtures_Kickoff ON Fixtures(KickoffUtc);", con)) cmd.ExecuteNonQuery();
             }
@@ -98,6 +99,38 @@ namespace KoaZa.Data
             }
         }
 
+        public void SaveFixtureDetails(string provider, string externalId, string rawJson)
+        {
+            if (string.IsNullOrWhiteSpace(externalId) || string.IsNullOrWhiteSpace(rawJson)) return;
+            using (var con = new SQLiteConnection(_connectionString))
+            {
+                con.Open();
+                using (var cmd = new SQLiteCommand("INSERT OR REPLACE INTO FixtureDetails (Provider, ExternalId, RawJson, UpdatedUtc) VALUES (@provider,@external,@json,@updated);", con))
+                {
+                    cmd.Parameters.AddWithValue("@provider", provider ?? "");
+                    cmd.Parameters.AddWithValue("@external", externalId);
+                    cmd.Parameters.AddWithValue("@json", rawJson);
+                    cmd.Parameters.AddWithValue("@updated", DateTime.UtcNow.ToString("o"));
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public string GetFixtureDetails(string provider, string externalId)
+        {
+            using (var con = new SQLiteConnection(_connectionString))
+            {
+                con.Open();
+                using (var cmd = new SQLiteCommand("SELECT RawJson FROM FixtureDetails WHERE Provider=@provider AND ExternalId=@external LIMIT 1;", con))
+                {
+                    cmd.Parameters.AddWithValue("@provider", provider ?? "");
+                    cmd.Parameters.AddWithValue("@external", externalId ?? "");
+                    object value = cmd.ExecuteScalar();
+                    return value == null || value == DBNull.Value ? null : Convert.ToString(value);
+                }
+            }
+        }
+
         public List<FixtureRecord> GetUpcomingFixtures(DateTime fromLocal, DateTime toLocal)
         {
             var all = new List<FixtureRecord>();
@@ -116,7 +149,9 @@ namespace KoaZa.Data
                         DateTime local = kickoff.ToLocalTime();
                         if (local < fromLocal || local >= toLocal) continue;
                         string status = Convert.ToString(reader["Status"]);
-                        if (IsCompletedStatus(status) || reader["HomeGoals"] != DBNull.Value || reader["AwayGoals"] != DBNull.Value) continue;
+                        // Live matches can already have a score. Keep them visible until they reach a completed status.
+                        bool live = IsLiveStatus(status);
+                        if (IsCompletedStatus(status) || (!live && (reader["HomeGoals"] != DBNull.Value || reader["AwayGoals"] != DBNull.Value))) continue;
                         all.Add(new FixtureRecord
                         {
                             Provider = Convert.ToString(reader["Provider"]), League = Convert.ToString(reader["League"]),
@@ -177,7 +212,15 @@ namespace KoaZa.Data
         private static bool IsCompletedStatus(string status)
         {
             string s = (status ?? "").Trim().ToUpperInvariant();
-            return s == "FT" || s == "AET" || s == "PEN" || s == "FINISHED" || s == "MATCH FINISHED" || s == "FULL TIME";
+            return s == "FT" || s == "AET" || s == "PEN" || s == "FINISHED" || s == "MATCH FINISHED" || s == "FULL TIME" || s == "AFTER EXTRA TIME" || s == "AFTER PENALTIES";
+        }
+
+        private static bool IsLiveStatus(string status)
+        {
+            string s = (status ?? "").Trim().ToUpperInvariant();
+            return s == "LIVE" || s == "1H" || s == "HT" || s == "2H" || s == "ET" || s == "P" ||
+                   s == "BT" || s == "INT" || s == "INPLAY" || s == "IN PROGRESS" || s == "INPROGRESS" ||
+                   s == "FIRST HALF" || s == "SECOND HALF" || s == "HALFTIME" || s == "EXTRA TIME";
         }
     }
 }
