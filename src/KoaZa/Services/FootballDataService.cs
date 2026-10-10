@@ -385,10 +385,10 @@ namespace KoaZa.Services
                         var statsRoot = Parse(Request("https://v3.football.api-sports.io/fixtures/statistics?fixture=" + fixtureId, "x-apisports-key", config.Key));
                         if (!HasErrors(statsRoot))
                         {
-                            var baseItem = GetList(root, "response").FirstOrDefault();
-                            var statsItem = GetList(statsRoot, "response").FirstOrDefault();
-                            if (baseItem != null && statsItem != null)
-                                baseItem["statistics"] = statsItem.ContainsKey("statistics") ? statsItem["statistics"] : new List<object>();
+                            var baseItem = GetList(root, "response").FirstOrDefault() as Dictionary<string, object>;
+                            var statsRows = GetList(statsRoot, "response");
+                            if (baseItem != null && statsRows.Count > 0)
+                                baseItem["statistics"] = statsRows;
                         }
                     }
                     catch { /* Statistics can be unavailable for a league, match state, or plan. */ }
