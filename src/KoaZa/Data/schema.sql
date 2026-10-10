@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS MatchStatistics (
   HomePossession REAL,
   AwayPossession REAL,
   DataSource TEXT,
+  Status TEXT,
   UpdatedUtc TEXT NOT NULL,
   UNIQUE(Provider, ExternalId)
 );
