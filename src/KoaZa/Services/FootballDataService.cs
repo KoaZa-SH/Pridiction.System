@@ -383,6 +383,7 @@ namespace KoaZa.Services
                     string json = Request("https://v3.football.api-sports.io/fixtures?id=" + fixtureId, "x-apisports-key", config.Key);
                     var root = Parse(json);
                     if (HasErrors(root)) throw new InvalidOperationException("API-SPORTS returned a quota/API error.");
+                    root["detailsVersion"] = 2;
 
                     string status = (fixture.Status ?? "").Trim().ToUpperInvariant();
                     bool live = status == "LIVE" || status == "1H" || status == "HT" || status == "2H" || status == "ET" || status == "P" || status == "BT" || status == "INT";
