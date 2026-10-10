@@ -48,13 +48,29 @@ namespace KoaZa.Services
         public static string Translate(string value)
         {
             if (string.IsNullOrWhiteSpace(value)) return value;
-            string result;
-            if (IsPersian && Persian.TryGetValue(value, out result)) return result;
-            if (!IsPersian)
+            foreach (var pair in Persian)
             {
-                foreach (var pair in Persian) if (string.Equals(pair.Value, value, StringComparison.OrdinalIgnoreCase)) return pair.Key;
+                string english = pair.Key.Split('/')[0].Trim();
+                if (IsPersian && (string.Equals(value, pair.Key, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(value, english, StringComparison.OrdinalIgnoreCase))) return pair.Value;
+                if (!IsPersian && (string.Equals(value, pair.Value, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(value, pair.Key, StringComparison.OrdinalIgnoreCase))) return english;
             }
             return value;
+        }
+        public static string Market(string market, string outcome)
+        {
+            if (!IsPersian) return market + " — " + outcome;
+            var markets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+                {"Match result","نتیجه مسابقه"},{"Double chance","شانس دوگانه"},{"Both teams to score","گل‌زنی هر دو تیم"},
+                {"Total goals","مجموع گل‌ها"},{"Home team goals","گل‌های میزبان"},{"Away team goals","گل‌های میهمان"},
+                {"Home win","برد میزبان"},{"Draw","مساوی"},{"Away win","برد میهمان"},{"Yes","بله"},{"No","خیر"},
+                {"Over 0.5","بیشتر از ۰٫۵"},{"Under 0.5","کمتر از ۰٫۵"},{"Over 1.5","بیشتر از ۱٫۵"},{"Under 1.5","کمتر از ۱٫۵"},
+                {"Over 2.5","بیشتر از ۲٫۵"},{"Under 2.5","کمتر از ۲٫۵"},{"Over 3.5","بیشتر از ۳٫۵"},{"Under 3.5","کمتر از ۳٫۵"}
+            };
+            string m, o;
+            return (markets.TryGetValue(market, out m) ? m : market) + " — " +
+                (markets.TryGetValue(outcome, out o) ? o : outcome);
         }
         public static void Apply(Window window)
         {
