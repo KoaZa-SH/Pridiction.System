@@ -84,6 +84,7 @@ namespace KoaZa.Services
             var result = NewRecord(fixture);
             var fixtureMap = Map(Get(item, "fixture"));
             result.Referee = String(Get(fixtureMap, "referee", null));
+            fixture.Referee = result.Referee;
             var teams = Map(Get(item, "teams"));
             var home = Map(Get(teams, "home"));
             var away = Map(Get(teams, "away"));
@@ -146,6 +147,7 @@ namespace KoaZa.Services
             var possession = Map(Get(item, "possession"));
             row.HomePossession = Double(Get(possession, "home", null)); row.AwayPossession = Double(Get(possession, "away", null));
             row.Referee = String(Get(item, "referee", null));
+            fixture.Referee = row.Referee;
             if (home.Count > 0 && row.HomeTeam.Length == 0) row.HomeTeam = String(Get(home, "name", ""));
             if (away.Count > 0 && row.AwayTeam.Length == 0) row.AwayTeam = String(Get(away, "name", ""));
             return row;
@@ -246,8 +248,7 @@ namespace KoaZa.Services
                 s => Same(s.HomeTeam,fixture.AwayTeam) ? s.HomeCorners : s.AwayCorners, 4.5, 5);
             var referee = statsHistory.Where(s => !string.IsNullOrWhiteSpace(s.Referee) && s.HomeYellowCards.HasValue && s.AwayYellowCards.HasValue)
                 .Where(s => s.KickoffUtc.CompareTo(fixture.KickoffUtc ?? "") < 0).ToList();
-            string targetReferee = statsHistory.Where(s => Same(s.HomeTeam,fixture.HomeTeam) && Same(s.AwayTeam,fixture.AwayTeam))
-                .Select(s => s.Referee).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+            string targetReferee = fixture.Referee;
             var refereeRows = string.IsNullOrWhiteSpace(targetReferee) ? new List<MatchStatisticsRecord>() :
                 referee.Where(s => Same(s.Referee,targetReferee)).Take(30).ToList();
             if (refereeRows.Count >= 5) {
