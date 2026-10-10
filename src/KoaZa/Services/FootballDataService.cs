@@ -513,6 +513,7 @@ namespace KoaZa.Services
         private readonly TextBox _keyBox;
         private readonly TextBox _customNameBox;
         private readonly TextBox _baseUrlBox;
+        private readonly TextBox _headerBox;
         private readonly ListBox _providersList;
         private readonly TextBlock _status;
         private List<ApiProviderConfig> _providers;
@@ -520,7 +521,7 @@ namespace KoaZa.Services
         public ApiSettingsWindow()
         {
             Title = LocalizationService.T("KoaZa — API Provider Settings", "KoaZa — تنظیمات سرویس‌های API");
-            Width = 760; Height = 570; MinWidth = 600; MinHeight = 460;
+            Width = 1040; Height = 570; MinWidth = 850; MinHeight = 460;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Background = new SolidColorBrush(Color.FromRgb(244, 247, 245));
             _providers = ApiProviderStore.Load();
@@ -536,10 +537,11 @@ namespace KoaZa.Services
             root.Children.Add(title); Grid.SetRow(title, 0);
 
             var entry = new Grid { Margin = new Thickness(0, 0, 0, 12) };
-            entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.25, GridUnitType.Star) });
-            entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.3, GridUnitType.Star) });
-            entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.3, GridUnitType.Star) });
-            entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.8, GridUnitType.Star) });
+            entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+            entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.1, GridUnitType.Star) });
+            entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+            entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.7, GridUnitType.Star) });
+            entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
             entry.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             _providerBox = new ComboBox { Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(6), VerticalContentAlignment = VerticalAlignment.Center };
             _providerBox.Items.Add(new ProviderChoice("OddsPapi", "OddsPapi"));
@@ -563,8 +565,11 @@ namespace KoaZa.Services
             _baseUrlBox.GotKeyboardFocus += (s, e) => { if (_baseUrlBox.Text == "HTTPS endpoint") _baseUrlBox.Text = ""; };
             _baseUrlBox.LostKeyboardFocus += (s, e) => { if (string.IsNullOrWhiteSpace(_baseUrlBox.Text)) _baseUrlBox.Text = "HTTPS endpoint"; };
             Grid.SetColumn(_baseUrlBox, 3); entry.Children.Add(_baseUrlBox);
+            _headerBox = new TextBox { Text = "x-api-key", Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "Authentication header (custom providers)" };
+            _headerBox.GotKeyboardFocus += (s, e) => { if (_headerBox.Text == "x-api-key") _headerBox.SelectAll(); };
+            Grid.SetColumn(_headerBox, 4); entry.Children.Add(_headerBox);
             var add = new Button { Content = LocalizationService.T("Add", "افزودن"), Padding = new Thickness(12, 7, 12, 7), Background = new SolidColorBrush(Color.FromRgb(22, 134, 91)), Foreground = Brushes.White, BorderThickness = new Thickness(0) };
-            add.Click += Add_Click; Grid.SetColumn(add, 4); entry.Children.Add(add);
+            add.Click += Add_Click; Grid.SetColumn(add, 5); entry.Children.Add(add);
             root.Children.Add(entry); Grid.SetRow(entry, 1);
 
             _providersList = new ListBox { Margin = new Thickness(0, 0, 0, 10), Padding = new Thickness(8) };
@@ -596,6 +601,7 @@ namespace KoaZa.Services
             _keyBox.Text = "";
             _customNameBox.Text = "Custom name";
             _baseUrlBox.Text = "HTTPS endpoint";
+            _headerBox.Text = "x-api-key";
             _customNameBox.IsEnabled = choice.Id == "Custom";
             _baseUrlBox.IsEnabled = choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData";
             _keyBox.ToolTip = choice.Id == "OpenLigaDB" ? "This provider does not require a key." : "Paste the token/key from this provider's official account.";
@@ -608,6 +614,7 @@ namespace KoaZa.Services
             string key = (_keyBox.Text ?? "").Trim();
             string providerId = choice.Id;
             string baseUrl = (_baseUrlBox.Text == "HTTPS endpoint" ? "" : (_baseUrlBox.Text ?? "").Trim());
+            string headerName = string.IsNullOrWhiteSpace(_headerBox.Text) ? "x-api-key" : _headerBox.Text.Trim();
             if (choice.Id == "Custom")
                 providerId = (_customNameBox.Text == "Custom name" ? "" : (_customNameBox.Text ?? "").Trim());
             if (choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData")
@@ -628,7 +635,7 @@ namespace KoaZa.Services
                 _status.Text = LocalizationService.T("That provider/key combination is already in the list.", "این سرویس و کلید از قبل وجود دارد.");
                 return;
             }
-            _providers.Add(new ApiProviderConfig { Provider = providerId, Key = key, Enabled = true, BaseUrl = baseUrl, HeaderName = "x-api-key" });
+            _providers.Add(new ApiProviderConfig { Provider = providerId, Key = key, Enabled = true, BaseUrl = baseUrl, HeaderName = headerName });
             RefreshList();
             _keyBox.Text = "";
             _customNameBox.Text = "";
