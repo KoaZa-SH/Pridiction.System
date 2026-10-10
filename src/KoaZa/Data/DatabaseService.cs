@@ -199,6 +199,39 @@ namespace KoaZa.Data
             return matches;
         }
 
+
+        public List<FixtureRecord> GetRecentCompletedMatches(string league, int limit)
+        {
+            var matches = new List<FixtureRecord>();
+            using (var con = new SQLiteConnection(_connectionString))
+            {
+                con.Open();
+                string sql = "SELECT Provider, League, KickoffUtc, HomeTeam, AwayTeam, HomeGoals, AwayGoals, Status, ExternalId FROM Fixtures WHERE HomeGoals IS NOT NULL AND AwayGoals IS NOT NULL AND (UPPER(Status) IN ('FT','AET','PEN','FINISHED','MATCH FINISHED','FULL TIME','AFTER EXTRA TIME','AFTER PENALTIES') OR Status IS NULL OR Status='') ";
+                if (!string.IsNullOrWhiteSpace(league)) sql += "AND UPPER(League)=UPPER(@league) ";
+                sql += "ORDER BY KickoffUtc DESC LIMIT @limit;";
+                using (var cmd = new SQLiteCommand(sql, con))
+                {
+                    if (!string.IsNullOrWhiteSpace(league)) cmd.Parameters.AddWithValue("@league", league);
+                    cmd.Parameters.AddWithValue("@limit", limit);
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            matches.Add(new FixtureRecord
+                            {
+                                Provider = Convert.ToString(reader["Provider"]), League = Convert.ToString(reader["League"]),
+                                KickoffUtc = Convert.ToString(reader["KickoffUtc"]), HomeTeam = Convert.ToString(reader["HomeTeam"]),
+                                AwayTeam = Convert.ToString(reader["AwayTeam"]), HomeGoals = Convert.ToInt32(reader["HomeGoals"]),
+                                AwayGoals = Convert.ToInt32(reader["AwayGoals"]), Status = Convert.ToString(reader["Status"]),
+                                ExternalId = Convert.ToString(reader["ExternalId"])
+                            });
+                        }
+                    }
+                }
+            }
+            return matches;
+        }
+
         public List<string> GetKnownLeagues()
         {
             var leagues = new List<string>();
