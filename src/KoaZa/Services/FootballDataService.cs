@@ -958,12 +958,14 @@ namespace KoaZa.Services
             try
             {
                 _status.Text = LocalizationService.T("Requesting fixture data. Please wait...", "در حال دریافت مسابقات...");
-                var records = FootballDataService.Fetch(choice.Id, _leagueBox.Text.Trim(), season);
+                var records = choice.Id == "Auto"
+                    ? FootballDataService.FetchAllUpcoming(season)
+                    : FootballDataService.Fetch(choice.Id, _leagueBox.Text.Trim(), season);
                 DatabaseServiceProxy.SaveFixtures(records);
                 _grid.ItemsSource = records.Select(r => new FixtureImportRow(r)).ToList();
                 _status.Text = LocalizationService.IsPersian
-                    ? records.Count + " مسابقه از " + choice.Label + " دریافت و در پایگاه داده محلی ذخیره شد. خالی بودن گل‌ها یعنی نتیجه هنوز ثبت نشده یا سرویس آن را ارائه نمی‌کند."
-                    : "Received " + records.Count + " fixture(s) from " + choice.Label + " and saved them to local SQLite. Empty scores mean the match has not finished or the provider does not expose scores.";
+                    ? records.Count + " مسابقه از رقابت‌های تحت پوشش سرویس‌های فعال دریافت و ذخیره شد. برای پوشش کامل‌تر، سرویس و سهمیه مناسب لازم است."
+                    : "Received and saved " + records.Count + " fixtures across competitions covered by the enabled providers. Coverage depends on provider support and quota.";
             }
             catch (Exception ex) { _status.Text = LocalizationService.T("Import failed: ", "دریافت ناموفق بود: ") + ex.Message; }
         }
