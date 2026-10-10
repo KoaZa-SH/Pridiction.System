@@ -24,7 +24,7 @@ namespace KoaZa.Services
             {"Match analysis / تحلیل مسابقه","تحلیل مسابقه"},{"Select a match from the list / یک مسابقه انتخاب کن","یک مسابقه را انتخاب کن"},
             {"Market probabilities / احتمال بازارها","احتمال بازارها"},{"Home team / میزبان","تیم میزبان"},{"Away team / میهمان","تیم میهمان"},{"Probabilities are estimates, not guarantees. / احتمال‌ها تخمینی هستند، نه تضمین نتیجه.","احتمال‌ها تخمینی هستند، نه تضمین نتیجه."},
             {"KoaZa • Local SQLite • Historical Poisson baseline","KoaZa • پایگاه داده محلی • مدل پواسون تاریخی"},
-            {"Corner and card probabilities require historical match statistics; this model currently calculates goal markets.","محاسبه احتمال کرنر و کارت به آمار تاریخی مسابقه نیاز دارد؛ مدل فعلی احتمال‌های مربوط به گل را محاسبه می‌کند."},
+            {"Additional markets use real historical corners, shots, cards, referee and VAR data when enough samples are available; missing values are never assumed to be zero.","بازارهای آماری از داده واقعی کرنر، شوت، کارت، داور و VAR استفاده می‌کنند؛ داده ناموجود صفر فرض نمی‌شود."},
             {"Match statistics & events / آمار و رویدادهای مسابقه","آمار و رویدادهای مسابقه"},
             {"Relevant match news / اخبار مرتبط با مسابقه","اخبار مرتبط با مسابقه"},
             {"Select a match to load statistics, cards, fouls, corners and events.","برای دیدن آمار، کارت‌ها، خطاها، کرنرها و رویدادها یک مسابقه انتخاب کن."},
