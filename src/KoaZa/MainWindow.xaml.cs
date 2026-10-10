@@ -399,6 +399,8 @@ namespace KoaZa
                     json = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchFixtureDetails(fixture));
                     _database.SaveFixtureDetails(fixture.Provider, fixture.ExternalId, json);
                 }
+                // Normalize available detailed fields so later match predictions can use this history.
+                _database.SaveNormalizedFixtureStatistics(FootballDataService.ExtractFixtureStatistics(json, fixture));
                 if (!IsCurrentFixture(fixtureId)) return;
                 StatsText.Text = FootballDataService.SummarizeFixtureDetails(json);
             }
