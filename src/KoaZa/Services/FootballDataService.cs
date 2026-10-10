@@ -800,71 +800,63 @@ namespace KoaZa.Services
             var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "FiveDollarFootballAPI" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
             if (configs.Count == 0) throw new InvalidOperationException("Add an enabled 5DollarFootballAPI key in API Settings.");
             string leagueValue = (league ?? "").Trim();
+            bool numericLeague = long.TryParse(leagueValue, out _);
+            if (!numericLeague && !leagueValue.Equals("all", StringComparison.OrdinalIgnoreCase) &&
+                (toDate.Date - fromDate.Date).TotalDays > 31)
+                throw new InvalidOperationException("For date ranges longer than 31 days, enter the numeric league ID so the API can use its season/league endpoint without one request per day. 'all' across long history may exhaust the daily quota.");
+
             var output = new List<FixtureRecord>();
             Exception last = null;
             foreach (var config in configs)
             {
                 try
                 {
-                    for (DateTime day = fromDate.Date; day <= toDate.Date; day = day.AddDays(1))
+                    if (numericLeague && (toDate.Date - fromDate.Date).TotalDays > 1)
                     {
-                        long start = new DateTimeOffset(DateTime.SpecifyKind(day, DateTimeKind.Utc)).ToUnixTimeSeconds();
-                        long end = new DateTimeOffset(DateTime.SpecifyKind(day.AddDays(1), DateTimeKind.Utc)).ToUnixTimeSeconds();
+                        long startTime = new DateTimeOffset(DateTime.SpecifyKind(fromDate.Date, DateTimeKind.Utc)).ToUnixTimeSeconds();
+                        long endTime = new DateTimeOffset(DateTime.SpecifyKind(toDate.Date.AddDays(1), DateTimeKind.Utc)).ToUnixTimeSeconds();
                         int page = 1;
                         bool more;
                         do
                         {
-                            string url = "https://api.5dollarfootballapi.com/v1/fixtures?start_time=" + start +
-                                "&end_time=" + end + "&include=stats,events&per_page=50&page=" + page;
-                            if (!string.IsNullOrWhiteSpace(leagueValue) && !leagueValue.Equals("all", StringComparison.OrdinalIgnoreCase))
-                                url += "&league=" + Uri.EscapeDataString(leagueValue);
+                            string url = "https://api.5dollarfootballapi.com/v1/leagues/" + Uri.EscapeDataString(leagueValue) +
+                                "/fixtures?start_time=" + startTime + "&end_time=" + endTime + "&include=stats,events&per_page=50&page=" + page;
                             var request = (HttpWebRequest)WebRequest.Create(url);
                             request.Method = "GET"; request.Accept = "application/json"; request.Timeout = 20000; request.ReadWriteTimeout = 20000;
                             request.Headers[HttpRequestHeader.Authorization] = "Bearer " + config.Key;
                             var root = Parse(ReadResponse(request));
                             if (HasErrors(root)) throw new InvalidOperationException("5DollarFootballAPI returned an API/quota error.");
-                            foreach (var item in GetList(root, "data"))
-                            {
-                                var leagueMap = GetMap(item, "league");
-                                var teams = GetMap(item, "teams");
-                                var goals = GetMap(item, "goals");
-                                var corners = GetMap(item, "corners");
-                                var cards = GetMap(item, "cards");
-                                var homeCards = GetMap(cards, "home");
-                                var awayCards = GetMap(cards, "away");
-                                var stats = GetMap(item, "stats");
-                                if (stats.Count == 0) stats = GetMap(item, "statistics");
-                                var events = GetList(item, "events");
-                                int varCount = events.Count(e =>
-                                {
-                                    string type = GetString(e, "type", "").ToLowerInvariant();
-                                    return type.Contains("var") || type.Contains("video_assistant");
-                                });
-                                output.Add(new FixtureRecord
-                                {
-                                    Provider = "FiveDollarFootballAPI",
-                                    League = GetString(leagueMap, "name", leagueValue.Length == 0 ? "Unknown competition" : leagueValue),
-                                    KickoffUtc = GetString(item, "kickoff_utc", GetString(item, "date", "")),
-                                    HomeTeam = GetString(GetMap(teams, "home"), "name", GetString(item, "home_team", "Home")),
-                                    AwayTeam = GetString(GetMap(teams, "away"), "name", GetString(item, "away_team", "Away")),
-                                    HomeGoals = GetNullableInt(goals, "home"),
-                                    AwayGoals = GetNullableInt(goals, "away"),
-                                    HomeCorners = GetNullableInt(corners, "home"),
-                                    AwayCorners = GetNullableInt(corners, "away"),
-                                    HomeYellowCards = GetNullableInt(homeCards, "yellow"),
-                                    AwayYellowCards = GetNullableInt(awayCards, "yellow"),
-                                    HomeShotsOnTarget = GetNullableInt(GetMap(stats, "shots_on_target"), "home"),
-                                    AwayShotsOnTarget = GetNullableInt(GetMap(stats, "shots_on_target"), "away"),
-                                    Referee = GetString(item, "referee", GetString(item, "referee_name", "")),
-                                    VarReviews = events.Count == 0 ? (int?)null : varCount,
-                                    Status = GetString(item, "status", ""),
-                                    ExternalId = GetString(item, "id", "")
-                                });
-                            }
+                            output.AddRange(ParseFiveDollarFixtures(root, leagueValue));
                             var pagination = GetMap(root, "pagination");
                             more = GetString(pagination, "has_more", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
                             page++;
                         } while (more && page <= 100);
+                    }
+                    else
+                    {
+                        for (DateTime day = fromDate.Date; day <= toDate.Date; day = day.AddDays(1))
+                        {
+                            long startTime = new DateTimeOffset(DateTime.SpecifyKind(day, DateTimeKind.Utc)).ToUnixTimeSeconds();
+                            long endTime = new DateTimeOffset(DateTime.SpecifyKind(day.AddDays(1), DateTimeKind.Utc)).ToUnixTimeSeconds();
+                            int page = 1;
+                            bool more;
+                            do
+                            {
+                                string url = "https://api.5dollarfootballapi.com/v1/fixtures?start_time=" + startTime +
+                                    "&end_time=" + endTime + "&include=stats,events&per_page=50&page=" + page;
+                                if (!string.IsNullOrWhiteSpace(leagueValue) && !leagueValue.Equals("all", StringComparison.OrdinalIgnoreCase))
+                                    url += "&league=" + Uri.EscapeDataString(leagueValue);
+                                var request = (HttpWebRequest)WebRequest.Create(url);
+                                request.Method = "GET"; request.Accept = "application/json"; request.Timeout = 20000; request.ReadWriteTimeout = 20000;
+                                request.Headers[HttpRequestHeader.Authorization] = "Bearer " + config.Key;
+                                var root = Parse(ReadResponse(request));
+                                if (HasErrors(root)) throw new InvalidOperationException("5DollarFootballAPI returned an API/quota error.");
+                                output.AddRange(ParseFiveDollarFixtures(root, leagueValue));
+                                var pagination = GetMap(root, "pagination");
+                                more = GetString(pagination, "has_more", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
+                                page++;
+                            } while (more && page <= 100);
+                        }
                     }
                     return output;
                 }
@@ -872,6 +864,50 @@ namespace KoaZa.Services
             }
             if (output.Count > 0) return output;
             throw new InvalidOperationException("5DollarFootballAPI fixture request failed. Check the bearer key, league ID, plan history limit and quota.", last);
+        }
+
+        private static List<FixtureRecord> ParseFiveDollarFixtures(Dictionary<string, object> root, string leagueValue)
+        {
+            var output = new List<FixtureRecord>();
+            foreach (var item in GetList(root, "data"))
+            {
+                var leagueMap = GetMap(item, "league");
+                var teams = GetMap(item, "teams");
+                var goals = GetMap(item, "goals");
+                var corners = GetMap(item, "corners");
+                var cards = GetMap(item, "cards");
+                var homeCards = GetMap(cards, "home");
+                var awayCards = GetMap(cards, "away");
+                var stats = GetMap(item, "stats");
+                if (stats.Count == 0) stats = GetMap(item, "statistics");
+                var events = GetList(item, "events");
+                int varCount = events.Count(e =>
+                {
+                    string type = GetString(e, "type", "").ToLowerInvariant();
+                    return type.Contains("var") || type.Contains("video_assistant");
+                });
+                output.Add(new FixtureRecord
+                {
+                    Provider = "FiveDollarFootballAPI",
+                    League = GetString(leagueMap, "name", leagueValue.Length == 0 ? "Unknown competition" : leagueValue),
+                    KickoffUtc = GetString(item, "kickoff_utc", GetString(item, "date", "")),
+                    HomeTeam = GetString(GetMap(teams, "home"), "name", GetString(item, "home_team", "Home")),
+                    AwayTeam = GetString(GetMap(teams, "away"), "name", GetString(item, "away_team", "Away")),
+                    HomeGoals = GetNullableInt(goals, "home"),
+                    AwayGoals = GetNullableInt(goals, "away"),
+                    HomeCorners = GetNullableInt(corners, "home"),
+                    AwayCorners = GetNullableInt(corners, "away"),
+                    HomeYellowCards = GetNullableInt(homeCards, "yellow"),
+                    AwayYellowCards = GetNullableInt(awayCards, "yellow"),
+                    HomeShotsOnTarget = GetNullableInt(GetMap(stats, "shots_on_target"), "home"),
+                    AwayShotsOnTarget = GetNullableInt(GetMap(stats, "shots_on_target"), "away"),
+                    Referee = GetString(item, "referee", GetString(item, "referee_name", "")),
+                    VarReviews = events.Count == 0 ? (int?)null : varCount,
+                    Status = GetString(item, "status", ""),
+                    ExternalId = GetString(item, "id", "")
+                });
+            }
+            return output;
         }
 
         private static List<FixtureRecord> FetchFootballCharts(string league, int season)
