@@ -282,11 +282,10 @@ namespace KoaZa
                     dataWarning = LocalizationService.T(
                         "Limited historical data. Orange chart: estimates use available team results and/or competition averages; confidence is low.",
                         "داده تاریخی محدود است. نمودار نارنجی: تخمین‌ها از نتایج موجود تیم‌ها و/یا میانگین رقابت استفاده می‌کنند؛ اطمینان پایین است.");
-                if (string.IsNullOrEmpty(dataWarning))
-                    dataWarning = LocalizationService.T(
-                        "Goal estimates use saved match results, but historical corner/card statistics are not available. The whole chart is orange because some requested markets cannot be calculated yet.",
-                        "تخمین گل‌ها از نتایج ذخیره‌شده استفاده می‌کند، اما آمار تاریخی کرنر و کارت موجود نیست. چون بخشی از بازارها هنوز قابل محاسبه نیستند، کل نمودار نارنجی نمایش داده می‌شود.");
-                SetMarketRows(probabilities, false, dataWarning);
+                // Do not force the entire chart orange merely because corner/card data is absent.
+                // The goal model is shown normally when team and competition history is sufficient;
+                // unsupported corner/card rows remain individually orange and explicitly unavailable.
+                SetMarketRows(probabilities, hasReliableHistory, dataWarning);
 
                 _database.SavePrediction(fixture.HomeTeam, fixture.AwayTeam, homeRate, awayRate, probabilities);
                 bool usedFallback = homeLeagueMatches.Count < 3 || awayLeagueMatches.Count < 3;
