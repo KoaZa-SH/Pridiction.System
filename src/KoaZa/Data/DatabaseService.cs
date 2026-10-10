@@ -219,11 +219,12 @@ namespace KoaZa.Data
             using (var con = new SQLiteConnection(_connectionString))
             {
                 con.Open();
-                string sql = "SELECT * FROM MatchStatistics WHERE KickoffUtc IS NOT NULL AND KickoffUtc<>'' ";
+                string sql = "SELECT * FROM MatchStatistics WHERE KickoffUtc IS NOT NULL AND KickoffUtc<>'' AND KickoffUtc < @before AND HomeGoals IS NOT NULL AND AwayGoals IS NOT NULL AND (HomeShots IS NOT NULL OR AwayShots IS NOT NULL OR HomeShotsOnTarget IS NOT NULL OR AwayShotsOnTarget IS NOT NULL OR HomeCorners IS NOT NULL OR AwayCorners IS NOT NULL OR HomeYellowCards IS NOT NULL OR AwayYellowCards IS NOT NULL OR Referee IS NOT NULL) ";
                 if (!string.IsNullOrWhiteSpace(league)) sql += "AND UPPER(League)=UPPER(@league) ";
                 sql += "ORDER BY KickoffUtc DESC LIMIT @limit;";
                 using (var cmd = new SQLiteCommand(sql, con))
                 {
+                    cmd.Parameters.AddWithValue("@before", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
                     if (!string.IsNullOrWhiteSpace(league)) cmd.Parameters.AddWithValue("@league", league);
                     cmd.Parameters.AddWithValue("@limit", Math.Max(1, limit) * 3);
                     using (var rd = cmd.ExecuteReader()) while (rd.Read()) rows.Add(ReadStatistics(rd));
