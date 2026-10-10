@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Data.SQLite;
+using System.Collections.Generic;
+using KoaZa.Services;
 namespace KoaZa.Data
 {
     public sealed class DatabaseService
@@ -21,6 +23,8 @@ namespace KoaZa.Data
             {
                 con.Open();
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS Predictions (Id INTEGER PRIMARY KEY AUTOINCREMENT, CreatedUtc TEXT NOT NULL, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, HomeGoalRate REAL NOT NULL, AwayGoalRate REAL NOT NULL, HomeWin REAL NOT NULL, DrawProbability REAL NOT NULL, AwayWin REAL NOT NULL, Over25 REAL NOT NULL, Under25 REAL NOT NULL, BothTeamsScore REAL NOT NULL, ModelVersion TEXT NOT NULL);", con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS Fixtures (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, League TEXT NOT NULL, KickoffUtc TEXT, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, HomeGoals INTEGER NULL, AwayGoals INTEGER NULL, Status TEXT, ExternalId TEXT, UpdatedUtc TEXT NOT NULL);", con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("CREATE UNIQUE INDEX IF NOT EXISTS UX_Fixtures_Provider_ExternalId ON Fixtures(Provider, ExternalId);", con)) cmd.ExecuteNonQuery();
             }
         }
         public void SavePrediction(string home, string away, double homeRate, double awayRate, Services.MatchProbabilities p)
@@ -36,5 +40,34 @@ namespace KoaZa.Data
                 }
             }
         }
+        public void SaveFixtures(List<FixtureRecord> fixtures)
+        {
+            using (var con = new SQLiteConnection(_connectionString))
+            {
+                con.Open();
+                using (var transaction = con.BeginTransaction())
+                {
+                    foreach (var f in fixtures)
+                    {
+                        using (var cmd = new SQLiteCommand("INSERT OR REPLACE INTO Fixtures (Provider, League, KickoffUtc, HomeTeam, AwayTeam, HomeGoals, AwayGoals, Status, ExternalId, UpdatedUtc) VALUES (@provider,@league,@kickoff,@home,@away,@hg,@ag,@status,@external,@updated);", con, transaction))
+                        {
+                            cmd.Parameters.AddWithValue("@provider", f.Provider ?? "");
+                            cmd.Parameters.AddWithValue("@league", f.League ?? "");
+                            cmd.Parameters.AddWithValue("@kickoff", f.KickoffUtc ?? "");
+                            cmd.Parameters.AddWithValue("@home", f.HomeTeam ?? "");
+                            cmd.Parameters.AddWithValue("@away", f.AwayTeam ?? "");
+                            cmd.Parameters.AddWithValue("@hg", f.HomeGoals.HasValue ? (object)f.HomeGoals.Value : DBNull.Value);
+                            cmd.Parameters.AddWithValue("@ag", f.AwayGoals.HasValue ? (object)f.AwayGoals.Value : DBNull.Value);
+                            cmd.Parameters.AddWithValue("@status", f.Status ?? "");
+                            cmd.Parameters.AddWithValue("@external", string.IsNullOrEmpty(f.ExternalId) ? Guid.NewGuid().ToString("N") : f.ExternalId);
+                            cmd.Parameters.AddWithValue("@updated", DateTime.UtcNow.ToString("o"));
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                    transaction.Commit();
+                }
+            }
+        }
+
     }
 }
