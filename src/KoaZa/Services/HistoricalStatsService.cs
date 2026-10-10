@@ -167,7 +167,7 @@ namespace KoaZa.Services
             row.HomeShotsOnTarget = Int(Get(onTarget, "home", null)); row.AwayShotsOnTarget = Int(Get(onTarget, "away", null));
             var possession = Map(Get(item, "possession"));
             row.HomePossession = Double(Get(possession, "home", null)); row.AwayPossession = Double(Get(possession, "away", null));
-            row.Referee = String(Get(item, "referee", null));
+            row.Referee = String(Get(item, "referee", Get(Map(Get(item, "fixture")), "referee", null)));
             fixture.Referee = row.Referee;
             if (home.Count > 0 && row.HomeTeam.Length == 0) row.HomeTeam = String(Get(home, "name", ""));
             if (away.Count > 0 && row.AwayTeam.Length == 0) row.AwayTeam = String(Get(away, "name", ""));
