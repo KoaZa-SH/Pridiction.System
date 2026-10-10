@@ -429,7 +429,8 @@ namespace KoaZa
             string fixtureId = fixture.ExternalId;
             StatsText.Text = LocalizationService.T("Loading match statistics...", "در حال دریافت آمار مسابقه...");
             bool apiSports = fixture.Provider == "API-Football" || fixture.Provider == "ApiFootball" || fixture.Provider == "ApiSports";
-            if (!apiSports)
+            bool fiveDollar = fixture.Provider == "FiveDollarFootballAPI";
+            if (!apiSports && !fiveDollar)
             {
                 StatsText.Text = SummarizeStoredFixtureStatistics(fixture);
                 return;
@@ -448,10 +449,24 @@ namespace KoaZa
                     json = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchFixtureDetails(fixture));
                     _database.SaveFixtureDetails(fixture.Provider, fixture.ExternalId, json);
                 }
-                // Normalize available detailed fields so later match predictions can use this history.
-                _database.SaveNormalizedFixtureStatistics(FootballDataService.ExtractFixtureStatistics(json, fixture));
+                // Normalize provider-specific details into legacy columns and the complete historical table.
+                var legacyStats = FootballDataService.ExtractFixtureStatistics(json, fixture);
+                MatchStatisticsRecord normalized = fiveDollar
+                    ? MatchStatisticsParser.ParseFiveDollarOrGeneric(json, fixture)
+                    : MatchStatisticsParser.ParseApiFootball(json, fixture);
+                if (normalized != null)
+                {
+                    legacyStats.HomeCorners = normalized.HomeCorners; legacyStats.AwayCorners = normalized.AwayCorners;
+                    legacyStats.HomeShotsOnTarget = normalized.HomeShotsOnTarget; legacyStats.AwayShotsOnTarget = normalized.AwayShotsOnTarget;
+                    legacyStats.HomeYellowCards = normalized.HomeYellowCards; legacyStats.AwayYellowCards = normalized.AwayYellowCards;
+                    legacyStats.Referee = normalized.Referee;
+                    _database.SaveMatchStatistics(normalized);
+                    _database.ReplaceMatchEvents(fixture.Provider, fixture.ExternalId, MatchStatisticsParser.ParseEvents(json, fixture));
+                }
+                _database.SaveNormalizedFixtureStatistics(legacyStats);
                 if (!IsCurrentFixture(fixtureId)) return;
-                StatsText.Text = FootballDataService.SummarizeFixtureDetails(json);
+                StatsText.Text = FootballDataService.SummarizeFixtureDetails(json, fixture);
+                UpdateMultiMarketPredictions(fixture);
             }
             catch (Exception ex)
             {
