@@ -11,12 +11,12 @@
 - Windows desktop UI built with **C# / WPF**.
 - Targets **.NET Framework 4.8**.
 - Local **SQLite** database for storing imported fixtures.
-- Fixture-provider integrations currently being developed:
-  - **API-Football** — requires an API key; competition coverage depends on the account/plan.
-  - **football-data.org** — requires a token; free-tier competition coverage and rate limits apply.
-  - **OpenLigaDB** — no API key for supported competitions; particularly useful for German leagues.
-- An **Auto** provider mode attempts enabled providers until one returns fixture data.
-- Multiple keys can be configured for supported providers; credentials are stored locally using Windows DPAPI.
+- A persistent **Persian / English language setting** for the interface, fixture labels, market names, dates, and team names. Known club and national-team names use curated Persian names; unknown Latin-script names are transliterated as a fallback.
+- Provider settings include **OddsPapi**, **Floodlight**, **Sports Open Data**, **OpenLigaDB**, **API-SPORTS**, and **SportsAPI360**, plus a manual provider option.
+- Built-in fixture adapters: **API-SPORTS** (API key; league IDs and plan coverage apply), **OpenLigaDB** (no key; supported competitions), **OddsPapi** (API key; enter its own tournament ID), and **SportsAPI360** (API key; schedule endpoint covers the next seven days).
+- **Floodlight**, **Sports Open Data**, and manually added providers use an HTTPS fixtures endpoint that returns a normalized JSON array/object (schema below). Their provider-specific authentication and JSON schemas may need adaptation to the vendor's documentation.
+- The **Auto** provider mode tries compatible configured providers; it does not merge results across providers.
+- Credentials are stored locally using Windows DPAPI.
 - GitHub Actions workflow builds the Windows application and can publish a portable build artifact when the build succeeds.
 
 ## Requirements
@@ -45,7 +45,7 @@ The GitHub Actions workflow is defined in `.github/workflows/build-windows.yml`.
 
 ## Data providers
 
-Open **API Settings / تنظیمات API** in the app to add, enable, disable, or remove provider credentials. Then open **Fetch Fixtures / دریافت مسابقات** to select a provider, competition, and season and import matches into the local database.
+Change the global language from the selector at the top of the main window; the preference is saved for the current Windows user. Open **API Settings / تنظیمات API** to add, enable, disable, or remove providers. For **Floodlight**, **Sports Open Data**, or a manual provider, enter an HTTPS fixtures endpoint. Then open **Import Fixtures / دریافت مسابقات** and select a provider and its provider-specific competition/tournament identifier.
 
 ### Provider and competition examples
 
@@ -57,6 +57,8 @@ Open **API Settings / تنظیمات API** in the app to add, enable, disable, o
 | Italian Serie A | `SERIEA` | Coverage depends on provider |
 | French Ligue 1 | `LIGUE1` | Coverage depends on provider |
 | Iranian Pro League | `IRAN` | Currently mapped to API-Football; availability depends on its coverage and your plan |
+
+For manual endpoints, the response should be a JSON array or an object containing a `response`, `matches`, `fixtures`, or `data` array. Each row should include `homeTeam` and `awayTeam` (strings or objects with a `name`), plus a date field such as `date`, `kickoff`, or `utcDate`; optional fields are `league`, `homeGoals`, `awayGoals`, `status`, and `id`. The app sends the configured key in the `x-api-key` header by default for these endpoints.
 
 Provider coverage, API limits, competition identifiers, and historical availability can change. Check the provider's own documentation and account dashboard. Auto mode returns the first successful non-empty result; it does **not** combine or deduplicate data from every provider.
 
@@ -99,12 +101,12 @@ Bug reports and focused pull requests are welcome. Please include the operating 
 - رابط دسکتاپ با **C# و WPF**.
 - هدف‌گذاری برای **.NET Framework 4.8**.
 - ذخیره اطلاعات مسابقات در پایگاه داده محلی **SQLite**.
-- اتصال در حال توسعه به سه منبع داده:
-  - **API-Football**: نیازمند کلید API؛ پوشش لیگ‌ها به حساب و طرح اشتراک بستگی دارد.
-  - **football-data.org**: نیازمند توکن؛ محدودیت تعداد درخواست و لیگ‌های طرح رایگان اعمال می‌شود.
-  - **OpenLigaDB**: برای لیگ‌های پشتیبانی‌شده، بدون نیاز به کلید؛ به‌ویژه برای مسابقات آلمان کاربرد دارد.
-- حالت **Auto** برای امتحان‌کردن منابع فعال تا زمان دریافت اطلاعات مسابقه.
-- امکان ثبت چند کلید برای منابع پشتیبانی‌شده؛ کلیدها با Windows DPAPI به‌صورت محلی محافظت می‌شوند.
+- تنظیم زبان سراسری **فارسی / انگلیسی** که ذخیره می‌شود و روی رابط، تاریخ‌ها، نام بازارها و نام تیم‌ها اثر می‌گذارد. نام تیم‌های شناخته‌شده ترجمه شده و برای نام‌های ناشناخته، آوانویسی فارسی به‌عنوان جایگزین استفاده می‌شود.
+- تنظیمات منابع شامل **OddsPapi**، **Floodlight**، **Sports Open Data**، **OpenLigaDB**، **API-SPORTS** و **SportsAPI360** است؛ افزودن منبع دستی نیز وجود دارد.
+- اتصال آماده برای دریافت مسابقات: **API-SPORTS**، **OpenLigaDB**، **OddsPapi** و **SportsAPI360**. شناسه لیگ/رقابت و محدودیت طرح اشتراک هر سرویس را جداگانه بررسی کنید.
+- برای **Floodlight**، **Sports Open Data** و منابع دستی، نشانی HTTPS داده مسابقات لازم است و پاسخ باید با قالب JSON مشخص‌شده در بخش انگلیسی سازگار باشد.
+- حالت **Auto** منابع سازگار را امتحان می‌کند و داده‌ها را از چند منبع با هم ادغام نمی‌کند.
+- کلیدها با Windows DPAPI به‌صورت محلی محافظت می‌شوند.
 - ساخت برنامه ویندوز از طریق GitHub Actions؛ فایل قابل‌دریافت فقط پس از موفقیت ساخت منتشر می‌شود.
 
 ## دریافت نسخه آماده
@@ -118,10 +120,11 @@ Bug reports and focused pull requests are welcome. Please include the operating 
 
 ## روش دریافت مسابقات
 
-1. برنامه را اجرا کنید.
-2. وارد **API Settings / تنظیمات API** شوید و منبع داده و کلیدهای لازم را اضافه کنید.
-3. از **Fetch Fixtures / دریافت مسابقات** منبع، کد لیگ و فصل را انتخاب کنید.
-4. مسابقات دریافت‌شده در پایگاه داده محلی SQLite ذخیره می‌شوند.
+1. برنامه را اجرا کنید و از انتخابگر بالای صفحه زبان **فارسی** یا **English** را انتخاب کنید.
+2. وارد **API Settings / تنظیمات API** شوید و سرویس و کلیدهای لازم را اضافه کنید.
+3. برای Floodlight، Sports Open Data یا سرویس دستی، نشانی HTTPS endpoint را وارد کنید.
+4. از **Import Fixtures / دریافت مسابقات** سرویس و شناسه رقابت مخصوص همان سرویس را انتخاب کنید.
+5. مسابقات دریافت‌شده در پایگاه داده محلی SQLite ذخیره می‌شوند.
 
 نمونه کدهای حالت Auto:
 
@@ -152,7 +155,8 @@ Bug reports and focused pull requests are welcome. Please include the operating 
 - [ ] محاسبه فرم تیم‌ها و نرخ گل‌زنی/گل‌خوردن از مسابقات گذشته
 - [ ] اتصال آمار تاریخی به مدل پیش‌بینی پواسون
 - [ ] افزودن ارزیابی گذشته‌نگر، سنجش دقت و نمایش عدم‌قطعیت
-- [ ] تکمیل ترجمه فارسی/انگلیسی و بهبود پیام‌های خطا
+- [x] افزودن انتخاب زبان فارسی/انگلیسی و ترجمه نام تیم‌ها
+- [x] افزودن سرویس‌های API درخواستی و امکان ثبت منبع دستی
 
 ## هشدار
 
