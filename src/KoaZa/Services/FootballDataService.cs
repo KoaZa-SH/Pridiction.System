@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -669,7 +670,7 @@ namespace KoaZa.Services
 
         public FixturesWindow()
         {
-            Title = "KoaZa — Fixture Import";
+            Title = LocalizationService.T("KoaZa — Fixture Import", "KoaZa — دریافت مسابقات");
             Width = 1000; Height = 650; MinWidth = 780; MinHeight = 480;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Background = new SolidColorBrush(Color.FromRgb(244, 247, 245));
@@ -705,6 +706,7 @@ namespace KoaZa.Services
             root.Children.Add(_status); Grid.SetRow(_status, 2);
             Content = root;
             ProviderChanged(null, null);
+            LocalizationService.Apply(this);
         }
 
         private void ProviderChanged(object sender, SelectionChangedEventArgs e)
