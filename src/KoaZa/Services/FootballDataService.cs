@@ -249,7 +249,20 @@ namespace KoaZa.Services
                     string json = Request("https://v3.football.api-sports.io/fixtures?id=" + fixtureId, "x-apisports-key", config.Key);
                     var root = Parse(json);
                     if (HasErrors(root)) throw new InvalidOperationException("API-SPORTS returned a quota/API error.");
-                    return json;
+
+                    // Injuries are a separate API resource; attach them when available without failing the fixture details request.
+                    string status = (fixture.Status ?? "").Trim().ToUpperInvariant();
+                    bool live = status == "LIVE" || status == "1H" || status == "HT" || status == "2H" || status == "ET" || status == "P" || status == "BT" || status == "INT";
+                    if (!live)
+                    {
+                        try
+                        {
+                            var injuryRoot = Parse(Request("https://v3.football.api-sports.io/injuries?fixture=" + fixtureId, "x-apisports-key", config.Key));
+                            if (!HasErrors(injuryRoot)) root["injuriesPayload"] = injuryRoot;
+                        }
+                        catch { /* Some plans/competitions do not expose injury data. */ }
+                    }
+                    return new JavaScriptSerializer().Serialize(root);
                 }
                 catch (Exception ex) { last = ex; }
             }
@@ -303,7 +316,23 @@ namespace KoaZa.Services
             }
             var players = GetList(item, "players");
             if (players.Count > 0) sb.AppendLine("Player-level data is included in the saved API response.");
-            if (stats.Count == 0 && events.Count == 0 && lineups.Count == 0)
+            var injuryPayload = GetMap(root, "injuriesPayload");
+            var injuries = GetList(injuryPayload, "response");
+            if (injuries.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("INJURIES / AVAILABILITY");
+                foreach (var injury in injuries.Take(30))
+                {
+                    string player = GetString(GetMap(injury, "player"), "name", "Player");
+                    string team = GetString(GetMap(injury, "team"), "name", "");
+                    string type = GetString(GetMap(injury, "player"), "type", "");
+                    string reason = GetString(GetMap(injury, "player"), "reason", "");
+                    sb.AppendLine(player + (team.Length > 0 ? " — " + team : "") +
+                        (type.Length > 0 ? " — " + type : "") + (reason.Length > 0 ? " / " + reason : ""));
+                }
+            }
+            if (stats.Count == 0 && events.Count == 0 && lineups.Count == 0 && injuries.Count == 0)
                 sb.AppendLine("The provider returned the fixture but no statistics/events/lineups for this competition or match.");
             sb.AppendLine();
             sb.Append("Coverage depends on the competition and API plan; missing fields are not assumed to be zero.");
