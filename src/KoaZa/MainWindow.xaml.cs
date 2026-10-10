@@ -116,7 +116,7 @@ namespace KoaZa
             FixtureCountText.Text = LocalizationService.IsPersian ? rows.Count + " مسابقه" : rows.Count + " matches";
             MarketsList.ItemsSource = null;
             MatchTitleText.Text = LocalizationService.T("Select a match from the list", "یک مسابقه را انتخاب کن");
-            ModelStatusText.Text = "Predictions use saved completed matches. No manual xG entry is required.";
+            ModelStatusText.Text = LocalizationService.T("Predictions use saved completed matches. No manual xG entry is required.", "پیش‌بینی از نتایج تاریخی ذخیره‌شده محاسبه می‌شود؛ ورود دستی xG لازم نیست.");
         }
 
         private static DateTime GetLocalKickoff(FixtureRecord fixture)
