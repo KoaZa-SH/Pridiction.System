@@ -256,8 +256,24 @@ namespace KoaZa
             SetMarketChartState(false, LocalizationService.T("Calculating market probabilities...", "در حال محاسبه احتمال بازارها..."));
             try
             {
-                var homeLeagueMatches = _database.GetCompletedMatches(fixture.League, fixture.HomeTeam, 12);
-                var awayLeagueMatches = _database.GetCompletedMatches(fixture.League, fixture.AwayTeam, 12);
+                // Prevent temporal leakage: a live fixture must not be analyzed with results
+                // from matches that finished after this fixture had already kicked off.
+                DateTime targetKickoffUtc;
+                bool hasTargetKickoff = DateTime.TryParse(fixture.KickoffUtc, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out targetKickoffUtc);
+                Func<FixtureRecord, bool> isHistoricalBeforeTarget = m =>
+                {
+                    if (!hasTargetKickoff) return true;
+                    DateTime historicalKickoffUtc;
+                    return DateTime.TryParse(m.KickoffUtc, CultureInfo.InvariantCulture,
+                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out historicalKickoffUtc)
+                        && historicalKickoffUtc < targetKickoffUtc;
+                };
+
+                var homeLeagueMatches = _database.GetCompletedMatches(fixture.League, fixture.HomeTeam, 12)
+                    .Where(isHistoricalBeforeTarget).ToList();
+                var awayLeagueMatches = _database.GetCompletedMatches(fixture.League, fixture.AwayTeam, 12)
+                    .Where(isHistoricalBeforeTarget).ToList();
                 var homeMatches = homeLeagueMatches;
                 var awayMatches = awayLeagueMatches;
 
@@ -274,8 +290,11 @@ namespace KoaZa
                     if (broader.Count > awayMatches.Count) awayMatches = broader;
                 }
 
-                var baselineMatches = _database.GetRecentCompletedMatches(fixture.League, 100);
-                if (baselineMatches.Count < 10) baselineMatches = _database.GetRecentCompletedMatches(null, 100);
+                var baselineMatches = _database.GetRecentCompletedMatches(fixture.League, 100)
+                    .Where(isHistoricalBeforeTarget).ToList();
+                if (baselineMatches.Count < 10)
+                    baselineMatches = _database.GetRecentCompletedMatches(null, 100)
+                        .Where(isHistoricalBeforeTarget).ToList();
                 bool hasReliableHistory = homeLeagueMatches.Count >= 3 && awayLeagueMatches.Count >= 3 && baselineMatches.Count >= 10;
                 string dataWarning = "";
                 double homeRate;
@@ -325,6 +344,7 @@ namespace KoaZa
                 }
                 // Head-to-head is a capped supporting signal, not a replacement for recent form.
                 var headToHead = _database.GetRecentCompletedMatches(fixture.League, 100)
+                    .Where(isHistoricalBeforeTarget)
                     .Where(m => (string.Equals(m.HomeTeam, fixture.HomeTeam, StringComparison.OrdinalIgnoreCase) && string.Equals(m.AwayTeam, fixture.AwayTeam, StringComparison.OrdinalIgnoreCase)) ||
                                 (string.Equals(m.HomeTeam, fixture.AwayTeam, StringComparison.OrdinalIgnoreCase) && string.Equals(m.AwayTeam, fixture.HomeTeam, StringComparison.OrdinalIgnoreCase)))
                     .Take(8).ToList();
