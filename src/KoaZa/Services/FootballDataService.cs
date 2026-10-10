@@ -384,24 +384,29 @@ namespace KoaZa.Services
                     var root = Parse(json);
                     if (HasErrors(root)) throw new InvalidOperationException("API-SPORTS returned a quota/API error.");
 
-                    // Detailed statistics and events are separate endpoints. They are best-effort so a plan
-                    // that lacks one resource can still return the base fixture and injuries.
-                    try
-                    {
-                        var statsPayload = Parse(Request("https://v3.football.api-sports.io/fixtures/statistics?fixture=" + fixtureId, "x-apisports-key", config.Key));
-                        if (!HasErrors(statsPayload)) root["statisticsPayload"] = statsPayload;
-                    }
-                    catch { }
-                    try
-                    {
-                        var eventsPayload = Parse(Request("https://v3.football.api-sports.io/fixtures/events?fixture=" + fixtureId, "x-apisports-key", config.Key));
-                        if (!HasErrors(eventsPayload)) root["eventsPayload"] = eventsPayload;
-                    }
-                    catch { }
-
-                    // Injuries are a separate API resource; attach them when available without failing the fixture details request.
                     string status = (fixture.Status ?? "").Trim().ToUpperInvariant();
                     bool live = status == "LIVE" || status == "1H" || status == "HT" || status == "2H" || status == "ET" || status == "P" || status == "BT" || status == "INT";
+                    bool completed = status == "FT" || status == "AET" || status == "PEN" || status == "FINISHED";
+
+                    // Do not spend quota on event/stat endpoints for a match that has not started.
+                    // For live or completed fixtures, these calls are best-effort by plan/competition.
+                    if (live || completed)
+                    {
+                        try
+                        {
+                            var statsPayload = Parse(Request("https://v3.football.api-sports.io/fixtures/statistics?fixture=" + fixtureId, "x-apisports-key", config.Key));
+                            if (!HasErrors(statsPayload)) root["statisticsPayload"] = statsPayload;
+                        }
+                        catch { }
+                        try
+                        {
+                            var eventsPayload = Parse(Request("https://v3.football.api-sports.io/fixtures/events?fixture=" + fixtureId, "x-apisports-key", config.Key));
+                            if (!HasErrors(eventsPayload)) root["eventsPayload"] = eventsPayload;
+                        }
+                        catch { }
+                    }
+
+                    // Injuries are a separate API resource; attach them when available without failing the fixture details request.
                     if (!live)
                     {
                         try
