@@ -93,6 +93,14 @@ namespace KoaZa.Services
         private static string Decode(string value) { return Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
     }
 
+    public sealed class NewsItem
+    {
+        public string Title { get; set; }
+        public string Url { get; set; }
+        public string Summary { get; set; }
+        public string Published { get; set; }
+    }
+
     public sealed class FixtureRecord
     {
         public string Provider { get; set; }
@@ -108,6 +116,207 @@ namespace KoaZa.Services
 
     public static class FootballDataService
     {
+
+        // Bulk refresh: API-SPORTS date queries return fixtures across all competitions covered by the account.
+        // The provider's coverage and quota still determine which competitions/data are available.
+        public static List<FixtureRecord> FetchAllUpcoming(int season)
+        {
+            var combined = new List<FixtureRecord>();
+            var errors = new List<string>();
+            var providers = ApiProviderStore.Load().Where(p => p.Enabled).ToList();
+            var apiKeys = providers.Where(p => (p.Provider == "ApiFootball" || p.Provider == "ApiSports") && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+
+            foreach (var config in apiKeys)
+            {
+                try
+                {
+                    for (int day = 0; day < 7; day++)
+                    {
+                        string date = DateTime.UtcNow.Date.AddDays(day).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                        string json = Request("https://v3.football.api-sports.io/fixtures?date=" + date + "&timezone=UTC", "x-apisports-key", config.Key);
+                        var root = Parse(json);
+                        if (HasErrors(root)) throw new InvalidOperationException("API-SPORTS returned an API or quota error for " + date + ".");
+                        combined.AddRange(ParseApiFootballFixtures(root));
+                    }
+                    string liveJson = Request("https://v3.football.api-sports.io/fixtures?live=all", "x-apisports-key", config.Key);
+                    var liveRoot = Parse(liveJson);
+                    if (!HasErrors(liveRoot)) combined.AddRange(ParseApiFootballFixtures(liveRoot));
+                    break;
+                }
+                catch (Exception ex) { errors.Add("API-SPORTS: " + ex.Message); }
+            }
+
+            // SportsAPI360 supports a schedule query across all tournaments for the next seven days.
+            if (combined.Count == 0)
+            {
+                foreach (var config in providers.Where(p => p.Provider == "SportsAPI360" && !string.IsNullOrWhiteSpace(p.Key)))
+                {
+                    try { combined.AddRange(FetchSportsApi360("all")); break; }
+                    catch (Exception ex) { errors.Add("SportsAPI360: " + ex.Message); }
+                }
+            }
+
+            // Custom endpoints are treated as provider-defined normalized fixture feeds.
+            if (combined.Count == 0)
+            {
+                foreach (var config in providers.Where(p => !string.IsNullOrWhiteSpace(p.BaseUrl)))
+                {
+                    try { combined.AddRange(FetchCustom(config)); }
+                    catch (Exception ex) { errors.Add(config.Provider + ": " + ex.Message); }
+                }
+            }
+
+            if (combined.Count == 0)
+                throw new InvalidOperationException("No fixtures could be received from enabled providers. For global competitions, configure an API-SPORTS key or a working SportsAPI360/custom feed. " + string.Join(" | ", errors));
+
+            DateTime from = DateTime.UtcNow.Date.AddDays(-1);
+            DateTime to = DateTime.UtcNow.Date.AddDays(8);
+            return combined.Where(f => {
+                    DateTime kickoff;
+                    return !DateTime.TryParse(f.KickoffUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out kickoff)
+                        || (kickoff >= from && kickoff < to);
+                })
+                .GroupBy(f => !string.IsNullOrWhiteSpace(f.ExternalId)
+                    ? (f.Provider ?? "") + "|" + f.ExternalId
+                    : (f.Provider ?? "") + "|" + (f.KickoffUtc ?? "") + "|" + (f.HomeTeam ?? "") + "|" + (f.AwayTeam ?? ""))
+                .Select(g => g.OrderByDescending(x => !string.IsNullOrWhiteSpace(x.League)).First())
+                .ToList();
+        }
+
+        private static List<FixtureRecord> ParseApiFootballFixtures(Dictionary<string, object> root)
+        {
+            var output = new List<FixtureRecord>();
+            foreach (var item in GetList(root, "response"))
+            {
+                var fixture = GetMap(item, "fixture");
+                var teams = GetMap(item, "teams");
+                var home = GetMap(teams, "home");
+                var away = GetMap(teams, "away");
+                var goals = GetMap(item, "goals");
+                var leagueMap = GetMap(item, "league");
+                output.Add(new FixtureRecord
+                {
+                    Provider = "API-Football",
+                    League = GetString(leagueMap, "name", GetString(leagueMap, "country", "Competition")),
+                    KickoffUtc = GetString(fixture, "date", ""),
+                    HomeTeam = GetString(home, "name", "Home"),
+                    AwayTeam = GetString(away, "name", "Away"),
+                    HomeGoals = GetNullableInt(goals, "home"),
+                    AwayGoals = GetNullableInt(goals, "away"),
+                    Status = GetString(GetMap(fixture, "status"), "short", ""),
+                    ExternalId = GetString(fixture, "id", "")
+                });
+            }
+            return output;
+        }
+
+        public static string FetchFixtureDetails(FixtureRecord fixture)
+        {
+            if (fixture == null) throw new ArgumentNullException("fixture");
+            if (fixture.Provider != "API-Football" && fixture.Provider != "ApiFootball" && fixture.Provider != "ApiSports")
+                throw new InvalidOperationException("Detailed statistics are currently available through the API-SPORTS/API-Football adapter. Other providers may not expose a compatible fixture-details endpoint.");
+            int fixtureId;
+            if (!int.TryParse(fixture.ExternalId, out fixtureId))
+                throw new InvalidOperationException("This match does not have a numeric API-SPORTS fixture ID.");
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && (p.Provider == "ApiFootball" || p.Provider == "ApiSports") && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+            if (configs.Count == 0) throw new InvalidOperationException("Enable an API-SPORTS provider to retrieve detailed match data.");
+            Exception last = null;
+            foreach (var config in configs)
+            {
+                try
+                {
+                    string json = Request("https://v3.football.api-sports.io/fixtures?id=" + fixtureId, "x-apisports-key", config.Key);
+                    var root = Parse(json);
+                    if (HasErrors(root)) throw new InvalidOperationException("API-SPORTS returned a quota/API error.");
+                    return json;
+                }
+                catch (Exception ex) { last = ex; }
+            }
+            throw new InvalidOperationException("Could not retrieve fixture statistics/events/lineups. Check API key, quota and competition coverage.", last);
+        }
+
+        public static string SummarizeFixtureDetails(string json)
+        {
+            var root = Parse(json);
+            var item = GetList(root, "response").FirstOrDefault();
+            if (item == null) return "No detailed statistics are available for this match yet.";
+            var sb = new StringBuilder();
+            var stats = GetList(item, "statistics");
+            if (stats.Count > 0)
+            {
+                sb.AppendLine("MATCH STATISTICS");
+                foreach (var teamStats in stats)
+                {
+                    string team = GetString(GetMap(teamStats, "team"), "name", "Team");
+                    sb.AppendLine(team + ":");
+                    foreach (var stat in GetList(teamStats, "statistics"))
+                    {
+                        string type = GetString(stat, "type", "");
+                        string value = GetString(stat, "value", "—");
+                        if (!string.IsNullOrWhiteSpace(type)) sb.AppendLine("  " + type + ": " + value);
+                    }
+                }
+            }
+            var events = GetList(item, "events");
+            if (events.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("MATCH EVENTS");
+                foreach (var ev in events.Take(30))
+                {
+                    string time = GetString(GetMap(ev, "time"), "elapsed", "");
+                    string team = GetString(GetMap(ev, "team"), "name", "");
+                    string type = GetString(ev, "type", "");
+                    string detail = GetString(ev, "detail", "");
+                    string player = GetString(GetMap(ev, "player"), "name", "");
+                    sb.AppendLine((time.Length > 0 ? time + "' " : "") + team + " — " + type + (detail.Length > 0 ? " / " + detail : "") + (player.Length > 0 ? " (" + player + ")" : ""));
+                }
+            }
+            var lineups = GetList(item, "lineups");
+            if (lineups.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("LINEUPS");
+                foreach (var lineup in lineups)
+                    sb.AppendLine(GetString(GetMap(lineup, "team"), "name", "Team") + ": " + GetString(lineup, "formation", "formation unavailable") + " — Coach: " + GetString(GetMap(lineup, "coach"), "name", "unknown"));
+            }
+            var players = GetList(item, "players");
+            if (players.Count > 0) sb.AppendLine("Player-level data is included in the saved API response.");
+            if (stats.Count == 0 && events.Count == 0 && lineups.Count == 0)
+                sb.AppendLine("The provider returned the fixture but no statistics/events/lineups for this competition or match.");
+            sb.AppendLine();
+            sb.Append("Coverage depends on the competition and API plan; missing fields are not assumed to be zero.");
+            return sb.ToString();
+        }
+
+        public static List<NewsItem> FetchMatchNews(string homeTeam, string awayTeam, string league)
+        {
+            string query = "\"" + (homeTeam ?? "").Trim() + "\" \"" + (awayTeam ?? "").Trim() + "\" football";
+            if (!string.IsNullOrWhiteSpace(league)) query += " " + league.Trim();
+            string url = "https://news.google.com/rss/search?q=" + Uri.EscapeDataString(query) + "&hl=en-US&gl=US&ceid=US:en";
+            var doc = new System.Xml.XmlDocument();
+            doc.LoadXml(Request(url, null, null));
+            var result = new List<NewsItem>();
+            var nodes = doc.SelectNodes("//item");
+            if (nodes == null) return result;
+            foreach (System.Xml.XmlNode node in nodes)
+            {
+                string title = node["title"] == null ? "" : System.Net.WebUtility.HtmlDecode(node["title"].InnerText);
+                string link = node["link"] == null ? "" : node["link"].InnerText;
+                string description = node["description"] == null ? "" : System.Net.WebUtility.HtmlDecode(node["description"].InnerText);
+                string pubDate = node["pubDate"] == null ? "" : node["pubDate"].InnerText;
+                if (title.Length == 0 || link.Length == 0) continue;
+                result.Add(new NewsItem { Title = title, Url = link, Summary = StripHtml(description), Published = pubDate });
+                if (result.Count >= 8) break;
+            }
+            return result;
+        }
+
+        private static string StripHtml(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "";
+            return System.Text.RegularExpressions.Regex.Replace(value, "<[^>]+>", " ").Replace("&nbsp;", " ").Trim();
+        }
         public static List<FixtureRecord> Fetch(string provider, string league, int season)
         {
             if (provider == "Auto") return FetchAuto(league, season);
@@ -316,33 +525,11 @@ namespace KoaZa.Services
             {
                 try
                 {
-                    string json = Request("https://v3.football.api-sports.io" + path, "x-apisports-key", config.Key);
-                    var root = Parse(json);
+                    var root = Parse(Request("https://v3.football.api-sports.io" + path, "x-apisports-key", config.Key));
                     if (HasErrors(root)) { last = new InvalidOperationException("API-Football returned an API or quota error."); continue; }
-                    var response = GetList(root, "response");
-                    var output = new List<FixtureRecord>();
-                    foreach (var item in response)
-                    {
-                        var fixture = GetMap(item, "fixture");
-                        var teams = GetMap(item, "teams");
-                        var home = GetMap(teams, "home");
-                        var away = GetMap(teams, "away");
-                        var goals = GetMap(item, "goals");
-                        var leagueMap = GetMap(item, "league");
-                        output.Add(new FixtureRecord
-                        {
-                            Provider = "API-Football",
-                            League = GetString(leagueMap, "name", league),
-                            KickoffUtc = GetString(fixture, "date", ""),
-                            HomeTeam = GetString(home, "name", "Home"),
-                            AwayTeam = GetString(away, "name", "Away"),
-                            HomeGoals = GetNullableInt(goals, "home"),
-                            AwayGoals = GetNullableInt(goals, "away"),
-                            Status = GetString(GetMap(fixture, "status"), "short", ""),
-                            ExternalId = GetString(fixture, "id", "")
-                        });
-                    }
-                    return output;
+                    var rows = ParseApiFootballFixtures(root);
+                    if (rows.Count > 0) return rows;
+                    last = new InvalidOperationException("No fixtures were returned for this league and season.");
                 }
                 catch (WebException ex)
                 {
@@ -351,7 +538,7 @@ namespace KoaZa.Services
                     throw new InvalidOperationException("API-Football connection failed (HTTP " + status + ").", ex);
                 }
             }
-            throw new InvalidOperationException("All enabled API-Football keys failed. Check key validity and quota.", last);
+            throw new InvalidOperationException("All enabled API-Football keys failed or returned no fixtures. Check key validity, league ID and quota.", last);
         }
 
         private static List<FixtureRecord> FetchFootballData(string league, int season)
