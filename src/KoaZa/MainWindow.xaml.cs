@@ -292,6 +292,7 @@ namespace KoaZa
                     var priorProbabilities = PoissonModel.Analyze(homeRate, awayRate);
                     SetMarketRows(priorProbabilities, false, dataWarning);
                     ModelStatusText.Text = dataWarning;
+                    UpdateMultiMarketPredictions(fixture);
                     return;
                 }
 
