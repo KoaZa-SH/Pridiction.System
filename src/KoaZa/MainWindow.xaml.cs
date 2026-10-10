@@ -367,11 +367,11 @@ namespace KoaZa
                     ? "گل مورد انتظار: میزبان " + homeRate.ToString("0.00", CultureInfo.InvariantCulture) + "، میهمان " + awayRate.ToString("0.00", CultureInfo.InvariantCulture) +
                       ". داده: " + homeMatches.Count + " بازی میزبان و " + awayMatches.Count + " بازی میهمان. " +
                       (usedFallback ? "به‌دلیل کمبود داده در همین رقابت، سابقهٔ سایر رقابت‌ها یا میانگین گل‌های موجود هم استفاده شده است. " : "از سابقهٔ همین رقابت استفاده شده است. ") +
-                      "مدل پایه پواسون است؛ احتمال‌ها تخمینی هستند و تضمین نتیجه نیستند."
+                      "مدل پواسون با سابقه رودررو و شوت در چارچوب، در صورت وجود داده، اصلاح می‌شود؛ بازارهای آماری بر پایه فراوانی تاریخی‌اند. احتمال‌ها تخمینی هستند و تضمین نتیجه نیستند."
                     : "Expected goals: home " + homeRate.ToString("0.00", CultureInfo.InvariantCulture) + ", away " + awayRate.ToString("0.00", CultureInfo.InvariantCulture) +
                       ". Data: " + homeMatches.Count + " home-team matches and " + awayMatches.Count + " away-team matches. " +
                       (usedFallback ? "Because same-competition history is limited, other competitions or available scoring averages were used. " : "Same-competition history was used. ") +
-                      "Baseline Poisson estimates; not guarantees.";
+                      "Poisson baseline refined by head-to-head and shots-on-target when available; statistical markets use historical frequencies. Estimates, not guarantees.";
                 if (!string.IsNullOrEmpty(dataWarning))
                     ModelStatusText.Text += " " + dataWarning;
             }
