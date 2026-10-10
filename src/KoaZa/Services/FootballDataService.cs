@@ -1721,9 +1721,11 @@ namespace KoaZa.Services
                     FootballDataService.FetchFromDate(choice.Id, competition, season, startDate, endDate));
                 DatabaseServiceProxy.SaveFixtures(records);
                 _grid.ItemsSource = records.Select(r => new FixtureImportRow(r)).ToList();
+                _status.Text = LocalizationService.T("Fixtures saved. Importing detailed stats for up to 10 completed matches...", "مسابقات ذخیره شد؛ در حال دریافت آمار تفصیلی حداکثر ۱۰ بازی تمام‌شده...");
+                int statsImported = await System.Threading.Tasks.Task.Run(() => DatabaseServiceProxy.ImportHistoricalStatistics(records));
                 _status.Text = LocalizationService.IsPersian
-                    ? records.Count + " مسابقه از " + startDate.ToString("yyyy-MM-dd") + " تا " + endDate.ToString("yyyy-MM-dd") + " دریافت و در پایگاه داده محلی ذخیره شد. داده‌های قبلی پاک نمی‌شوند؛ پوشش به سرویس و سهمیه وابسته است."
-                    : "Received and saved " + records.Count + " fixtures/results from " + startDate.ToString("yyyy-MM-dd") + " through " + endDate.ToString("yyyy-MM-dd") + ". Existing local records are retained; coverage depends on provider and quota.";
+                    ? records.Count + " مسابقه از " + startDate.ToString("yyyy-MM-dd") + " تا " + endDate.ToString("yyyy-MM-dd") + " دریافت و ذخیره شد؛ آمار ساختاریافته برای " + statsImported + " مسابقه وارد شد. داده‌های قبلی حفظ می‌شوند؛ پوشش به سرویس و سهمیه وابسته است."
+                    : "Received and saved " + records.Count + " fixtures/results from " + startDate.ToString("yyyy-MM-dd") + " through " + endDate.ToString("yyyy-MM-dd") + "; structured event stats imported for " + statsImported + " matches. Existing local data is retained; coverage depends on provider and quota.";
             }
             catch (Exception ex) { _status.Text = LocalizationService.T("Import failed: ", "دریافت ناموفق بود: ") + ex.Message; }
             finally { if (fetchButton != null) fetchButton.IsEnabled = true; }
