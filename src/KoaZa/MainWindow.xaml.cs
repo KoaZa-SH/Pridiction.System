@@ -465,13 +465,16 @@ namespace KoaZa
                 LocalizationService.Market("Match result", "Home win"), LocalizationService.Market("Match result", "Draw"),
                 LocalizationService.Market("Match result", "Away win"), LocalizationService.Market("Double chance", "1X"),
                 LocalizationService.Market("Double chance", "X2"), LocalizationService.Market("Double chance", "12"),
-                LocalizationService.Market("Both teams to score", "Yes"), LocalizationService.Market("Total goals", "Over 0.5"),
-                LocalizationService.Market("Total goals", "Under 0.5"), LocalizationService.Market("Total goals", "Over 1.5"),
-                LocalizationService.Market("Total goals", "Under 1.5"), LocalizationService.Market("Total goals", "Over 2.5"),
-                LocalizationService.Market("Total goals", "Under 2.5"), LocalizationService.Market("Total goals", "Over 3.5"),
-                LocalizationService.Market("Total goals", "Under 3.5"), LocalizationService.Market("Corners", "Total over 8.5"),
-                LocalizationService.Market("Home team corners", "Over 4.5"), LocalizationService.Market("Away team corners", "Over 4.5"),
-                LocalizationService.Market("Yellow cards", "Total over 3.5"), LocalizationService.Market("Shots on target", "Total over 8.5"),
+                LocalizationService.Market("Both teams to score", "Yes"),
+                LocalizationService.Market("Total goals", "Over 0.5"), LocalizationService.Market("Total goals", "Under 0.5"),
+                LocalizationService.Market("Total goals", "Over 1.5"), LocalizationService.Market("Total goals", "Under 1.5"),
+                LocalizationService.Market("Total goals", "Over 2.5"), LocalizationService.Market("Total goals", "Under 2.5"),
+                LocalizationService.Market("Total goals", "Over 3.5"), LocalizationService.Market("Total goals", "Under 3.5"),
+                LocalizationService.Market("Corners", "Total over 8.5"), LocalizationService.Market("Corners", "Total under 8.5"),
+                LocalizationService.Market("Home team corners", "Over 4.5"), LocalizationService.Market("Home team corners", "Under 4.5"),
+                LocalizationService.Market("Away team corners", "Over 4.5"), LocalizationService.Market("Away team corners", "Under 4.5"),
+                LocalizationService.Market("Yellow cards", "Total over 3.5"), LocalizationService.Market("Yellow cards", "Total under 3.5"),
+                LocalizationService.Market("Shots on target", "Total over 8.5"), LocalizationService.Market("Shots on target", "Total under 8.5"),
                 LocalizationService.Market("VAR review", "Yes")
             };
             SetMarketChartState(false, reason);
