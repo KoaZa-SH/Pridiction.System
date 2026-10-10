@@ -428,6 +428,7 @@ namespace KoaZa
                 if (goals.Count < 10) goals = _database.GetRecentCompletedMatches(null, 100);
                 var stats = _database.GetRecentMatchStatistics(fixture.League, 500);
                 var prediction = MultiMarketPredictionService.Analyze(fixture, goals, stats);
+                _database.SaveMarketPredictions(fixture, prediction);
                 var rows = prediction.Markets.Select(m => new MarketRow
                 {
                     Label = LocalizationService.Market(m.Market, m.Outcome),
