@@ -23,14 +23,55 @@ namespace KoaZa.Data
     public sealed class DatabaseService
     {
         private readonly string _connectionString;
+        private readonly string _databasePath;
+        private static readonly string UserDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KoaZa");
+        private static readonly string BackupFolder = Path.Combine(UserDataFolder, "Backups");
+
         public DatabaseService()
         {
-            string folder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
-            Directory.CreateDirectory(folder);
-            string path = Path.Combine(folder, "koaza.db");
-            _connectionString = "Data Source=" + path + ";Version=3;";
-            if (!File.Exists(path)) SQLiteConnection.CreateFile(path);
+            Directory.CreateDirectory(UserDataFolder);
+            _databasePath = Path.Combine(UserDataFolder, "koaza.db");
+            string legacyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "koaza.db");
+            if (!File.Exists(_databasePath) && File.Exists(legacyPath))
+            {
+                try { File.Copy(legacyPath, _databasePath, false); } catch { }
+            }
+            _connectionString = "Data Source=" + _databasePath + ";Version=3;";
+            if (!File.Exists(_databasePath)) SQLiteConnection.CreateFile(_databasePath);
             Initialize();
+            try { CreateAutomaticBackupIfDue(); } catch { }
+        }
+
+        public string CreateBackupNow()
+        {
+            Directory.CreateDirectory(BackupFolder);
+            string backupPath = Path.Combine(BackupFolder, "koaza_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".db");
+            using (var source = new SQLiteConnection(_connectionString))
+            using (var destination = new SQLiteConnection("Data Source=" + backupPath + ";Version=3;"))
+            {
+                source.Open();
+                destination.Open();
+                source.BackupDatabase(destination, "main", "main", -1, null, 0);
+            }
+            PruneBackups(30);
+            return backupPath;
+        }
+
+        private void CreateAutomaticBackupIfDue()
+        {
+            Directory.CreateDirectory(BackupFolder);
+            bool backedUpToday = Directory.GetFiles(BackupFolder, "koaza_*.db")
+                .Select(path => File.GetLastWriteTime(path).Date).Any(date => date == DateTime.Today);
+            if (!backedUpToday) CreateBackupNow();
+        }
+
+        private static void PruneBackups(int keep)
+        {
+            foreach (string file in Directory.GetFiles(BackupFolder, "koaza_*.db")
+                .OrderByDescending(File.GetLastWriteTime).Skip(keep))
+            {
+                try { File.Delete(file); } catch { }
+            }
         }
 
         private void Initialize()
@@ -41,6 +82,7 @@ namespace KoaZa.Data
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS Predictions (Id INTEGER PRIMARY KEY AUTOINCREMENT, CreatedUtc TEXT NOT NULL, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, HomeGoalRate REAL NOT NULL, AwayGoalRate REAL NOT NULL, HomeWin REAL NOT NULL, DrawProbability REAL NOT NULL, AwayWin REAL NOT NULL, Over25 REAL NOT NULL, Under25 REAL NOT NULL, BothTeamsScore REAL NOT NULL, ModelVersion TEXT NOT NULL);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS Fixtures (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, League TEXT NOT NULL, KickoffUtc TEXT, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, HomeGoals INTEGER NULL, AwayGoals INTEGER NULL, Status TEXT, ExternalId TEXT, UpdatedUtc TEXT NOT NULL);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS FixtureDetails (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, ExternalId TEXT NOT NULL, RawJson TEXT NOT NULL, UpdatedUtc TEXT NOT NULL, UNIQUE(Provider, ExternalId));", con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS FixtureHistory (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, League TEXT NOT NULL, KickoffUtc TEXT, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, HomeGoals INTEGER, AwayGoals INTEGER, Status TEXT, ExternalId TEXT, UpdatedUtc TEXT NOT NULL, ArchivedUtc TEXT NOT NULL, UNIQUE(Provider, ExternalId, HomeGoals, AwayGoals, Status, KickoffUtc));", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE UNIQUE INDEX IF NOT EXISTS UX_Fixtures_Provider_ExternalId ON Fixtures(Provider, ExternalId);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE INDEX IF NOT EXISTS IX_Fixtures_Kickoff ON Fixtures(KickoffUtc);", con)) cmd.ExecuteNonQuery();
             }
@@ -72,6 +114,8 @@ namespace KoaZa.Data
 
         public void SaveFixtures(List<FixtureRecord> fixtures)
         {
+            if (fixtures == null || fixtures.Count == 0) return;
+            try { CreateBackupNow(); } catch { /* A backup failure must not silently destroy a successful data refresh. */ }
             using (var con = new SQLiteConnection(_connectionString))
             {
                 con.Open();
@@ -79,6 +123,15 @@ namespace KoaZa.Data
                 {
                     foreach (var f in fixtures)
                     {
+                        // Before refreshing an existing fixture, preserve any completed result in an
+                        // append-only archive. The unique key prevents repeated imports from duplicating it.
+                        using (var archive = new SQLiteCommand("INSERT OR IGNORE INTO FixtureHistory (Provider, League, KickoffUtc, HomeTeam, AwayTeam, HomeGoals, AwayGoals, Status, ExternalId, UpdatedUtc, ArchivedUtc) SELECT Provider, League, KickoffUtc, HomeTeam, AwayTeam, HomeGoals, AwayGoals, Status, ExternalId, UpdatedUtc, @archived FROM Fixtures WHERE Provider=@provider AND ExternalId=@external AND HomeGoals IS NOT NULL AND AwayGoals IS NOT NULL;", con, transaction))
+                        {
+                            archive.Parameters.AddWithValue("@archived", DateTime.UtcNow.ToString("o"));
+                            archive.Parameters.AddWithValue("@provider", f.Provider ?? "");
+                            archive.Parameters.AddWithValue("@external", string.IsNullOrEmpty(f.ExternalId) ? Guid.Empty.ToString("N") : f.ExternalId);
+                            archive.ExecuteNonQuery();
+                        }
                         using (var cmd = new SQLiteCommand("INSERT OR REPLACE INTO Fixtures (Provider, League, KickoffUtc, HomeTeam, AwayTeam, HomeGoals, AwayGoals, Status, ExternalId, UpdatedUtc) VALUES (@provider,@league,@kickoff,@home,@away,@hg,@ag,@status,@external,@updated);", con, transaction))
                         {
                             cmd.Parameters.AddWithValue("@provider", f.Provider ?? "");
