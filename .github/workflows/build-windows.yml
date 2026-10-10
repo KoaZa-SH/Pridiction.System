@@ -2,12 +2,18 @@
 name: Build KoaZa WPF app
 
 on:
-  workflow_dispatch:
   push:
-    branches: ["main", "master"]
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
+    name: Restore and build KoaZa
     runs-on: windows-latest
 
     steps:
@@ -20,26 +26,84 @@ jobs:
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
 
-      - name: Restore NuGet packages
-        run: nuget restore src/KoaZa/KoaZa.sln
-
-      - name: Build Release
-        run: msbuild src/KoaZa/KoaZa.sln /m /p:Configuration=Release "/p:Platform=Any CPU" /verbosity:minimal
-
-      - name: Prepare portable output folder
+      - name: Check project files
         shell: pwsh
         run: |
-          $out = "${{ github.workspace }}\artifact\KoaZa"
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
-          Copy-Item "src\KoaZa\bin\Release\*" $out -Recurse -Force
-          Copy-Item "README_FA.md" $out -Force
-          if (-not (Test-Path "$out\KoaZa.exe")) {
-            throw "KoaZa.exe was not produced by the build."
+          $required = @(
+            "src/KoaZa/KoaZa.sln",
+            "src/KoaZa/KoaZa.csproj",
+            "src/KoaZa/packages.config"
+          )
+
+          foreach ($file in $required) {
+            if (-not (Test-Path $file)) {
+              throw "Required file not found: $file"
+            }
           }
+
+      - name: Restore NuGet packages
+        shell: pwsh
+        run: |
+          nuget restore "src/KoaZa/KoaZa.sln" `
+            -PackagesDirectory "src/KoaZa/packages" `
+            -NonInteractive `
+            -Verbosity normal
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "NuGet restore failed."
+          }
+
+      - name: Verify SQLite package
+        shell: pwsh
+        run: |
+          $dll = "src/KoaZa/packages/System.Data.SQLite.Core.1.0.119.0/lib/net46/System.Data.SQLite.dll"
+
+          if (-not (Test-Path $dll)) {
+            Write-Host "Expected SQLite DLL was not found."
+            Get-ChildItem "src/KoaZa/packages" -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -ExpandProperty FullName
+            throw "SQLite package restore did not produce the expected DLL."
+          }
+
+          Write-Host "SQLite package found: $dll"
+
+      - name: Build Release
+        shell: pwsh
+        run: |
+          msbuild "src/KoaZa/KoaZa.sln" `
+            /m `
+            /p:Configuration=Release `
+            "/p:Platform=Any CPU" `
+            /verbosity:minimal
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSBuild failed."
+          }
+
+      - name: Prepare artifact
+        shell: pwsh
+        run: |
+          $source = "src/KoaZa/bin/Release"
+          $target = "artifact/KoaZa"
+
+          if (-not (Test-Path "$source/KoaZa.exe")) {
+            throw "Build output KoaZa.exe was not found."
+          }
+
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          Copy-Item "$source/*" $target -Recurse -Force
+
+          if (Test-Path "README_FA.md") {
+            Copy-Item "README_FA.md" $target -Force
+          }
+
+          Write-Host "Prepared application files:"
+          Get-ChildItem $target -Recurse
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: KoaZa-Windows-Build
-          path: artifact/KoaZa
+          path: artifact/KoaZa/
           if-no-files-found: error
+          retention-days: 7
