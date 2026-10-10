@@ -22,6 +22,7 @@ namespace KoaZa
         public MainWindow()
         {
             LocalizationService.Load();
+            ThemeService.Load();
             InitializeComponent();
             _settingLanguage = true;
             LanguageBox.SelectedIndex = LocalizationService.IsPersian ? 0 : 1;
@@ -33,6 +34,7 @@ namespace KoaZa
                 ConfigureDateFilters();
                 LoadFixtureList();
                 LocalizationService.Apply(this);
+                ThemeService.Apply(this);
             }
             catch (Exception ex)
             {
@@ -141,6 +143,7 @@ namespace KoaZa
         {
             var window = new ApiSettingsWindow { Owner = this };
             window.ShowDialog();
+            ThemeService.Apply(this);
             LoadFixtureList();
         }
 
@@ -207,7 +210,7 @@ namespace KoaZa
 
                 var baselineMatches = _database.GetRecentCompletedMatches(fixture.League, 100);
                 if (baselineMatches.Count < 10) baselineMatches = _database.GetRecentCompletedMatches(null, 100);
-                bool hasReliableHistory = homeMatches.Count >= 3 && awayMatches.Count >= 3 && baselineMatches.Count >= 10;
+                bool hasReliableHistory = homeLeagueMatches.Count >= 3 && awayLeagueMatches.Count >= 3 && baselineMatches.Count >= 10;
                 string dataWarning = "";
                 if (homeMatches.Count == 0 && awayMatches.Count == 0 && baselineMatches.Count == 0)
                 {
@@ -365,6 +368,22 @@ namespace KoaZa
                 HasData = hasSufficientData,
                 Reason = reason
             }).ToList();
+            var rows = probabilities.Markets.Select(m => new MarketRow
+            {
+                Label = LocalizationService.Market(m.Market, m.Outcome),
+                Percent = Math.Round(m.Probability * 100, 1),
+                PercentLabel = hasSufficientData ? (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%" :
+                    (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% • " + LocalizationService.T("low confidence", "اطمینان پایین"),
+                HasData = hasSufficientData,
+                Reason = reason
+            }).ToList();
+            string unavailable = LocalizationService.T("Not calculated: historical corner/card statistics are unavailable.", "محاسبه نشده: آمار تاریخی کرنر و کارت در دسترس نیست.");
+            rows.Add(new MarketRow { Label = LocalizationService.Market("Corners", "Total over 8.5"), Percent = 0, PercentLabel = "—", HasData = false, Reason = unavailable });
+            rows.Add(new MarketRow { Label = LocalizationService.Market("Corners", "Total under 8.5"), Percent = 0, PercentLabel = "—", HasData = false, Reason = unavailable });
+            rows.Add(new MarketRow { Label = LocalizationService.Market("Yellow cards", "Total over 3.5"), Percent = 0, PercentLabel = "—", HasData = false, Reason = unavailable });
+            rows.Add(new MarketRow { Label = LocalizationService.Market("Yellow cards", "Total under 3.5"), Percent = 0, PercentLabel = "—", HasData = false, Reason = unavailable });
+            MarketsList.ItemsSource = rows;
+            if (!hasSufficientData) reason = string.IsNullOrWhiteSpace(reason) ? unavailable : reason + " " + unavailable;
             SetMarketChartState(hasSufficientData, reason);
         }
 
