@@ -425,7 +425,7 @@ namespace KoaZa
             {
                 var goals = _database.GetRecentCompletedMatches(fixture.League, 100);
                 if (goals.Count < 10) goals = _database.GetRecentCompletedMatches(null, 100);
-                var stats = _database.GetHistoricalMatchStatistics(fixture.League, fixture.HomeTeam, fixture.AwayTeam, 120);
+                var stats = _database.GetRecentMatchStatistics(fixture.League, 500);
                 var prediction = MultiMarketPredictionService.Analyze(fixture, goals, stats);
                 var rows = prediction.Markets.Select(m => new MarketRow
                 {
