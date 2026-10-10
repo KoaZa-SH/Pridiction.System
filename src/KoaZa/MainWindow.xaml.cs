@@ -518,6 +518,7 @@ namespace KoaZa
             try
             {
                 var stats = _database.GetRecentMatchStatistics(fixture.League, 500);
+                if (stats.Count < 10) stats = _database.GetRecentMatchStatistics(null, 1000);
                 var eventPrediction = MultiMarketPredictionService.AnalyzeEventMarkets(fixture, stats);
                 try { _database.SaveMarketPredictions(fixture, eventPrediction); }
                 catch (Exception saveError) { ModelStatusText.Text += LocalizationService.T(" Event prediction save warning: ", " هشدار ذخیره بازارهای آماری: ") + saveError.Message; }
