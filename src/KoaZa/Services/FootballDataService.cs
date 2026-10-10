@@ -365,6 +365,32 @@ namespace KoaZa.Services
                     var root = Parse(json);
                     if (HasErrors(root)) throw new InvalidOperationException("API-SPORTS returned a quota/API error.");
 
+                    // API-Football keeps fixture statistics and events on separate endpoints.
+                    // Merge them into the fixture response shape expected by the UI/parser.
+                    try
+                    {
+                        var statsRoot = Parse(Request("https://v3.football.api-sports.io/fixtures/statistics?fixture=" + fixtureId, "x-apisports-key", config.Key));
+                        if (!HasErrors(statsRoot))
+                        {
+                            var baseItem = GetList(root, "response").FirstOrDefault();
+                            var statsItem = GetList(statsRoot, "response").FirstOrDefault();
+                            if (baseItem != null && statsItem != null)
+                                baseItem["statistics"] = statsItem.ContainsKey("statistics") ? statsItem["statistics"] : new List<object>();
+                        }
+                    }
+                    catch { /* Statistics can be unavailable for a league, match state, or plan. */ }
+                    try
+                    {
+                        var eventsRoot = Parse(Request("https://v3.football.api-sports.io/fixtures/events?fixture=" + fixtureId, "x-apisports-key", config.Key));
+                        if (!HasErrors(eventsRoot))
+                        {
+                            var baseItem = GetList(root, "response").FirstOrDefault();
+                            var eventRows = GetList(eventsRoot, "response");
+                            if (baseItem != null) baseItem["events"] = eventRows;
+                        }
+                    }
+                    catch { /* Events can be unavailable for a league, match state, or plan. */ }
+
                     // Injuries are a separate API resource; attach them when available without failing the fixture details request.
                     string status = (fixture.Status ?? "").Trim().ToUpperInvariant();
                     bool live = status == "LIVE" || status == "1H" || status == "HT" || status == "2H" || status == "ET" || status == "P" || status == "BT" || status == "INT";
@@ -644,6 +670,8 @@ namespace KoaZa.Services
             if (provider == "OpenLigaDB") return FetchOpenLiga(league, season);
             if (provider == "OddsPapi") return FetchOddsPapi(league);
             if (provider == "SportsAPI360") return FetchSportsApi360(league);
+            if (provider == "FiveDollarFootball" || provider == "5DollarFootballAPI") return FetchFiveDollarFootball(league, season);
+            if (provider == "FootballCharts" || provider == "Football-Charts") return FetchFootballCharts(league, season);
             var custom = ApiProviderStore.Load().FirstOrDefault(p => p.Enabled && p.Provider == provider && !string.IsNullOrWhiteSpace(p.BaseUrl));
             if (custom != null) return FetchCustom(custom);
             throw new InvalidOperationException("This provider is configured but does not yet have a built-in adapter. For Floodlight or Sports Open Data, enter the provider's HTTPS fixtures endpoint or use a custom provider with the documented normalized JSON format.");
@@ -1094,6 +1122,8 @@ namespace KoaZa.Services
             entry.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
             entry.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             _providerBox = new ComboBox { Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(6), VerticalContentAlignment = VerticalAlignment.Center };
+            _providerBox.Items.Add(new ProviderChoice("FiveDollarFootball", "5DollarFootballAPI"));
+            _providerBox.Items.Add(new ProviderChoice("FootballCharts", "Football-Charts"));
             _providerBox.Items.Add(new ProviderChoice("OddsPapi", "OddsPapi"));
             _providerBox.Items.Add(new ProviderChoice("Floodlight", "Floodlight"));
             _providerBox.Items.Add(new ProviderChoice("SportsOpenData", "Sports Open Data"));
