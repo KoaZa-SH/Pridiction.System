@@ -85,13 +85,7 @@ namespace KoaZa.Services
                 M("Total goals", "Over 0.5", over05), M("Total goals", "Under 0.5", 1 - over05),
                 M("Total goals", "Over 1.5", over15), M("Total goals", "Under 1.5", 1 - over15),
                 M("Total goals", "Over 2.5", over25), M("Total goals", "Under 2.5", 1 - over25),
-                M("Total goals", "Over 3.5", over35), M("Total goals", "Under 3.5", 1 - over35),
-                M("Home team goals", "Over 0.5", homeOver05), M("Home team goals", "Under 0.5", 1 - homeOver05),
-                M("Home team goals", "Over 1.5", homeOver15), M("Home team goals", "Under 1.5", 1 - homeOver15),
-                M("Home team goals", "Over 2.5", 1 - hp[0] - hp[1] - hp[2]), M("Home team goals", "Under 2.5", hp[0] + hp[1] + hp[2]),
-                M("Away team goals", "Over 0.5", awayOver05), M("Away team goals", "Under 0.5", 1 - awayOver05),
-                M("Away team goals", "Over 1.5", awayOver15), M("Away team goals", "Under 1.5", 1 - awayOver15),
-                M("Away team goals", "Over 2.5", 1 - ap[0] - ap[1] - ap[2]), M("Away team goals", "Under 2.5", ap[0] + ap[1] + ap[2])
+                M("Total goals", "Over 3.5", over35), M("Total goals", "Under 3.5", 1 - over35)
             };
             return new MatchProbabilities
             {
