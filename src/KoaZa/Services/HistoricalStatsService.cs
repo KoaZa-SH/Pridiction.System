@@ -254,12 +254,9 @@ namespace KoaZa.Services
             if (refereeRows.Count >= 5) {
                 double mean = refereeRows.Average(s => s.HomeYellowCards.Value + s.AwayYellowCards.Value);
                 double pOver = 1 - CdfPoisson(3, mean);
-                output.Markets.Add(new MarketEstimate { Market="Referee yellow cards", Outcome="Average per match",
-                    Probability=Clamp(mean/10.0,0,1), SampleSize=refereeRows.Count, HasSufficientData=true,
-                    Explanation="Referee historical mean: "+mean.ToString("0.00",CultureInfo.InvariantCulture)+" cards/match" });
                 output.Markets.Add(new MarketEstimate { Market="Referee yellow cards", Outcome="Total over 3.5",
                     Probability=Clamp(pOver,0,1), SampleSize=refereeRows.Count, HasSufficientData=true,
-                    Explanation="Poisson approximation using this referee's prior matches" });
+                    Explanation="Referee mean: "+mean.ToString("0.00",CultureInfo.InvariantCulture)+" yellow cards/match; Poisson approximation" });
             } else output.Markets.Add(new MarketEstimate { Market="Referee yellow cards", Outcome="Total over 3.5",
                 Probability=0, SampleSize=refereeRows.Count, HasSufficientData=false,
                 Explanation="Need at least five earlier matches with the same referee; no probability invented." });
