@@ -400,6 +400,30 @@ namespace KoaZa
             }
         }
 
+        private static string SummarizeStoredFixtureStatistics(FixtureRecord fixture)
+        {
+            var lines = new List<string>();
+            string home = fixture.HomeTeam ?? LocalizationService.T("Home", "میزبان");
+            string away = fixture.AwayTeam ?? LocalizationService.T("Away", "میهمان");
+            if (fixture.HomeCorners.HasValue || fixture.AwayCorners.HasValue)
+                lines.Add(LocalizationService.T("Corners", "کرنرها") + ": " + home + " " + (fixture.HomeCorners.HasValue ? fixture.HomeCorners.Value.ToString() : "—") +
+                    " | " + away + " " + (fixture.AwayCorners.HasValue ? fixture.AwayCorners.Value.ToString() : "—"));
+            if (fixture.HomeShotsOnTarget.HasValue || fixture.AwayShotsOnTarget.HasValue)
+                lines.Add(LocalizationService.T("Shots on target", "شوت در چارچوب") + ": " + home + " " + (fixture.HomeShotsOnTarget.HasValue ? fixture.HomeShotsOnTarget.Value.ToString() : "—") +
+                    " | " + away + " " + (fixture.AwayShotsOnTarget.HasValue ? fixture.AwayShotsOnTarget.Value.ToString() : "—"));
+            if (fixture.HomeYellowCards.HasValue || fixture.AwayYellowCards.HasValue)
+                lines.Add(LocalizationService.T("Yellow cards", "کارت زرد") + ": " + home + " " + (fixture.HomeYellowCards.HasValue ? fixture.HomeYellowCards.Value.ToString() : "—") +
+                    " | " + away + " " + (fixture.AwayYellowCards.HasValue ? fixture.AwayYellowCards.Value.ToString() : "—"));
+            if (!string.IsNullOrWhiteSpace(fixture.Referee))
+                lines.Add(LocalizationService.T("Referee", "داور") + ": " + fixture.Referee);
+            if (fixture.VarReviews.HasValue)
+                lines.Add(LocalizationService.T("VAR reviews", "بررسی‌های VAR") + ": " + fixture.VarReviews.Value);
+            if (lines.Count == 0)
+                return LocalizationService.T("This provider has not returned detailed statistics for this fixture. Missing statistics are not treated as zero.",
+                    "این سرویس برای این مسابقه آمار تفصیلی برنگردانده است؛ آمار ناموجود صفر فرض نمی‌شود.");
+            return string.Join(Environment.NewLine, lines);
+        }
+
         private async void LoadFixtureInsights(FixtureRecord fixture)
         {
             string fixtureId = fixture.ExternalId;
