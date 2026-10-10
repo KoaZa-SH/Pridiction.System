@@ -117,7 +117,7 @@ namespace KoaZa.Data
                     cmd.Parameters.AddWithValue("@p", s.Provider); cmd.Parameters.AddWithValue("@id", s.ExternalId);
                     cmd.Parameters.AddWithValue("@l", (object)s.League ?? DBNull.Value); cmd.Parameters.AddWithValue("@k", (object)s.KickoffUtc ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("@h", s.HomeTeam ?? ""); cmd.Parameters.AddWithValue("@a", s.AwayTeam ?? "");
-                    AddNullable(cmd,"@hg",s.HomeGoals); AddNullable(cmd,"@ag",s.AwayGoals); cmd.Parameters.AddWithValue("@r",(object)s.Referee ?? DBNull.Value);
+                    AddNullable(cmd,"@hg",s.HomeGoals); AddNullable(cmd,"@ag",s.AwayGoals); cmd.Parameters.AddWithValue("@r",string.IsNullOrWhiteSpace(s.Referee) ? (object)DBNull.Value : s.Referee);
                     AddNullable(cmd,"@hs",s.HomeShots); AddNullable(cmd,"@as",s.AwayShots); AddNullable(cmd,"@hot",s.HomeShotsOnTarget); AddNullable(cmd,"@aot",s.AwayShotsOnTarget);
                     AddNullable(cmd,"@hc",s.HomeCorners); AddNullable(cmd,"@ac",s.AwayCorners); AddNullable(cmd,"@hy",s.HomeYellowCards); AddNullable(cmd,"@ay",s.AwayYellowCards);
                     AddNullable(cmd,"@hr",s.HomeRedCards); AddNullable(cmd,"@ar",s.AwayRedCards); AddNullable(cmd,"@hf",s.HomeFouls); AddNullable(cmd,"@af",s.AwayFouls);
