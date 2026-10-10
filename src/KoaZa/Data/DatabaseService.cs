@@ -276,7 +276,7 @@ namespace KoaZa.Data
         {
             return (source ?? Enumerable.Empty<MatchStatisticsRecord>())
                 .GroupBy(s => NormalizeTeam(s.HomeTeam) + "|" + NormalizeTeam(s.AwayTeam) + "|" +
-                    NormalizeDate(s.KickoffUtc) + "|" + NormalizeTeam(s.League), StringComparer.OrdinalIgnoreCase)
+                    NormalizeDate(s.KickoffUtc), StringComparer.OrdinalIgnoreCase)
                 .Select(g => g.OrderByDescending(StatisticsCompleteness).ThenByDescending(s => s.UpdatedUtc).First())
                 .OrderByDescending(s => s.KickoffUtc).ToList();
         }
