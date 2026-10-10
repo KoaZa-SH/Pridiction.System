@@ -237,8 +237,16 @@ namespace KoaZa.Services
                 (Same(m.HomeTeam, fixture.HomeTeam) || Same(m.AwayTeam, fixture.HomeTeam))).Take(12).ToList();
             var awayGoals = goalHistory.Where(m => m.HomeGoals.HasValue && m.AwayGoals.HasValue &&
                 (Same(m.HomeTeam, fixture.AwayTeam) || Same(m.AwayTeam, fixture.AwayTeam))).Take(12).ToList();
-            double homeRate = homeGoals.Count == 0 ? 1.35 : AverageGoals(homeGoals, fixture.HomeTeam, true);
-            double awayRate = awayGoals.Count == 0 ? 1.10 : AverageGoals(awayGoals, fixture.AwayTeam, true);
+            double homeAttackAtHome = AverageTeamGoal(goalHistory, fixture.HomeTeam, true, true);
+            double awayDefenceAway = AverageTeamGoal(goalHistory, fixture.AwayTeam, false, false);
+            double awayAttackAway = AverageTeamGoal(goalHistory, fixture.AwayTeam, false, true);
+            double homeDefenceHome = AverageTeamGoal(goalHistory, fixture.HomeTeam, true, false);
+            double homeOverallAttack = homeGoals.Count == 0 ? double.NaN : AverageGoals(homeGoals, fixture.HomeTeam, true);
+            double awayOverallAttack = awayGoals.Count == 0 ? double.NaN : AverageGoals(awayGoals, fixture.AwayTeam, true);
+            double awayOverallDefence = awayGoals.Count == 0 ? double.NaN : AverageGoals(awayGoals, fixture.AwayTeam, false);
+            double homeOverallDefence = homeGoals.Count == 0 ? double.NaN : AverageGoals(homeGoals, fixture.HomeTeam, false);
+            double homeRate = MeanAvailable(homeAttackAtHome, awayDefenceAway, homeOverallAttack, awayOverallDefence, 1.35);
+            double awayRate = MeanAvailable(awayAttackAway, homeDefenceHome, awayOverallAttack, homeOverallDefence, 1.10);
             var h2h = goalHistory.Where(m => (Same(m.HomeTeam, fixture.HomeTeam) && Same(m.AwayTeam, fixture.AwayTeam)) ||
                 (Same(m.HomeTeam, fixture.AwayTeam) && Same(m.AwayTeam, fixture.HomeTeam))).Take(8).ToList();
             if (h2h.Count >= 3) {
@@ -351,6 +359,30 @@ namespace KoaZa.Services
             bool pb = DateTime.TryParse(b, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out db);
             if (pa && pb) return DateTime.Compare(da, db);
             return string.Compare(a ?? "", b ?? "", StringComparison.Ordinal);
+        }
+        private static double AverageTeamGoal(IList<FixtureRecord> rows, string team, bool venueHome, bool scored)
+        {
+            var values = (rows ?? new List<FixtureRecord>())
+                .Where(m => m.HomeGoals.HasValue && m.AwayGoals.HasValue &&
+                    (venueHome ? Same(m.HomeTeam, team) : Same(m.AwayTeam, team)))
+                .Take(12)
+                .Select(m => {
+                    bool home = Same(m.HomeTeam, team);
+                    if (scored) return (double)(home ? m.HomeGoals.Value : m.AwayGoals.Value);
+                    return (double)(home ? m.AwayGoals.Value : m.HomeGoals.Value);
+                }).ToList();
+            return values.Count < 3 ? double.NaN : values.Average();
+        }
+        private static double MeanAvailable(double a, double b, double fallbackA, double fallbackB, double neutral)
+        {
+            var values = new List<double>();
+            if (!double.IsNaN(a) && !double.IsInfinity(a)) values.Add(a);
+            if (!double.IsNaN(b) && !double.IsInfinity(b)) values.Add(b);
+            if (values.Count > 0) return values.Average();
+            values.Clear();
+            if (!double.IsNaN(fallbackA) && !double.IsInfinity(fallbackA)) values.Add(fallbackA);
+            if (!double.IsNaN(fallbackB) && !double.IsInfinity(fallbackB)) values.Add(fallbackB);
+            return values.Count > 0 ? values.Average() : neutral;
         }
         private static double AverageGoals(List<FixtureRecord> rows,string team,bool scored) {
             return rows.Average(m => {
