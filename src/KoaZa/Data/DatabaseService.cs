@@ -140,11 +140,11 @@ namespace KoaZa.Data
                     cmd.Parameters.AddWithValue("@before", DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture));
                     cmd.Parameters.AddWithValue("@home", homeTeam ?? ""); cmd.Parameters.AddWithValue("@away", awayTeam ?? "");
                     if (!string.IsNullOrWhiteSpace(league)) cmd.Parameters.AddWithValue("@league", league);
-                    cmd.Parameters.AddWithValue("@limit", Math.Max(1,limit));
+                    cmd.Parameters.AddWithValue("@limit", Math.Max(1,limit) * 3);
                     using (var rd = cmd.ExecuteReader()) while (rd.Read()) rows.Add(ReadStatistics(rd));
                 }
             }
-            return rows;
+            return DeduplicateStatistics(rows).Take(Math.Max(1,limit)).ToList();
         }
 
         public void SaveMatchEvents(IEnumerable<MatchEventRecord> events)
@@ -189,11 +189,46 @@ namespace KoaZa.Data
                 using (var cmd = new SQLiteCommand(sql, con))
                 {
                     if (!string.IsNullOrWhiteSpace(league)) cmd.Parameters.AddWithValue("@league", league);
-                    cmd.Parameters.AddWithValue("@limit", Math.Max(1, limit));
+                    cmd.Parameters.AddWithValue("@limit", Math.Max(1, limit) * 3);
                     using (var rd = cmd.ExecuteReader()) while (rd.Read()) rows.Add(ReadStatistics(rd));
                 }
             }
-            return rows;
+            return DeduplicateStatistics(rows).Take(Math.Max(1, limit)).ToList();
+        }
+
+        private static List<MatchStatisticsRecord> DeduplicateStatistics(IEnumerable<MatchStatisticsRecord> source)
+        {
+            return (source ?? Enumerable.Empty<MatchStatisticsRecord>())
+                .GroupBy(s => NormalizeTeam(s.HomeTeam) + "|" + NormalizeTeam(s.AwayTeam) + "|" +
+                    NormalizeDate(s.KickoffUtc) + "|" + NormalizeTeam(s.League), StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderByDescending(StatisticsCompleteness).ThenByDescending(s => s.UpdatedUtc).First())
+                .OrderByDescending(s => s.KickoffUtc).ToList();
+        }
+
+        private static int StatisticsCompleteness(MatchStatisticsRecord s)
+        {
+            int count = 0;
+            if (s.HomeGoals.HasValue) count++; if (s.AwayGoals.HasValue) count++;
+            if (!string.IsNullOrWhiteSpace(s.Referee)) count++;
+            if (s.HomeShots.HasValue) count++; if (s.AwayShots.HasValue) count++;
+            if (s.HomeShotsOnTarget.HasValue) count++; if (s.AwayShotsOnTarget.HasValue) count++;
+            if (s.HomeCorners.HasValue) count++; if (s.AwayCorners.HasValue) count++;
+            if (s.HomeYellowCards.HasValue) count++; if (s.AwayYellowCards.HasValue) count++;
+            if (s.HomeRedCards.HasValue) count++; if (s.AwayRedCards.HasValue) count++;
+            if (s.HomeFouls.HasValue) count++; if (s.AwayFouls.HasValue) count++;
+            return count;
+        }
+
+        private static string NormalizeTeam(string value)
+        {
+            return (value ?? "").Trim().ToUpperInvariant();
+        }
+
+        private static string NormalizeDate(string value)
+        {
+            DateTime parsed;
+            return DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out parsed)
+                ? parsed.ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture) : (value ?? "").Trim();
         }
 
         private static MatchStatisticsRecord ReadStatistics(SQLiteDataReader r)
