@@ -26,6 +26,7 @@ namespace KoaZa.Data
         private readonly string _databasePath;
         private static readonly string UserDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KoaZa");
         private static readonly string BackupFolder = Path.Combine(UserDataFolder, "Backups");
+        public static string LastBackupError { get; private set; }
 
         public DatabaseService()
         {
@@ -34,12 +35,14 @@ namespace KoaZa.Data
             string legacyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "koaza.db");
             if (!File.Exists(_databasePath) && File.Exists(legacyPath))
             {
-                try { File.Copy(legacyPath, _databasePath, false); } catch { }
+                try { File.Copy(legacyPath, _databasePath, false); }
+                catch (Exception ex) { throw new IOException("The existing database could not be migrated from the previous application folder. The original file was left untouched.", ex); }
             }
             _connectionString = "Data Source=" + _databasePath + ";Version=3;";
             if (!File.Exists(_databasePath)) SQLiteConnection.CreateFile(_databasePath);
             Initialize();
-            try { CreateAutomaticBackupIfDue(); } catch { }
+            try { CreateAutomaticBackupIfDue(); LastBackupError = null; }
+            catch (Exception ex) { LastBackupError = ex.Message; }
         }
 
         public string CreateBackupNow()
@@ -54,6 +57,7 @@ namespace KoaZa.Data
                 source.BackupDatabase(destination, "main", "main", -1, null, 0);
             }
             PruneBackups(30);
+            LastBackupError = null;
             return backupPath;
         }
 
