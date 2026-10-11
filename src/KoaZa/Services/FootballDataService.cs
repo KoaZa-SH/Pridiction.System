@@ -1255,7 +1255,7 @@ namespace KoaZa.Services
                     HomeGoals = FirstNullableInt(item, "homeGoals", "home_goals", "intHomeScore"),
                     AwayGoals = FirstNullableInt(item, "awayGoals", "away_goals", "intAwayScore"),
                     Status = FirstString(item, "status", "event_status", "strStatus"),
-                    ExternalId = FirstString(item, "id", "fixtureId", "event_key", "idEvent")
+                    ExternalId = FirstString(item, "id", "fixtureId", "event_key", "idEvent"), RawJson = SerializePayload(item)
                 });
             }
             if (output.Count == 0)
@@ -1359,7 +1359,7 @@ namespace KoaZa.Services
                     HomeTeam = home, AwayTeam = away,
                     HomeGoals = FirstNullableInt(item, "intHomeScore"),
                     AwayGoals = FirstNullableInt(item, "intAwayScore"),
-                    Status = FirstString(item, "strStatus"), ExternalId = FirstString(item, "idEvent")
+                    Status = FirstString(item, "strStatus"), ExternalId = FirstString(item, "idEvent"), RawJson = SerializePayload(item)
                 });
             }
             return output;
@@ -1402,7 +1402,7 @@ namespace KoaZa.Services
                             Provider = "AllSportsApi", League = FirstString(item, "league_name"),
                             KickoffUtc = FirstString(item, "event_date") + (FirstString(item, "event_time").Length > 0 ? "T" + FirstString(item, "event_time") + "Z" : ""),
                             HomeTeam = home, AwayTeam = away, HomeGoals = hg, AwayGoals = ag,
-                            Status = FirstString(item, "event_status"), ExternalId = FirstString(item, "event_key")
+                            Status = FirstString(item, "event_status"), ExternalId = FirstString(item, "event_key"), RawJson = SerializePayload(item)
                         });
                     }
                     if (output.Count == 0) throw new InvalidOperationException("AllSportsApi returned no recognizable fixtures in the selected date window.");
@@ -1449,7 +1449,7 @@ namespace KoaZa.Services
                             Provider = "ScoreBat", League = FirstString(item, "competition"),
                             KickoffUtc = FirstString(item, "date"),
                             HomeTeam = home, AwayTeam = away, Status = "video available",
-                            ExternalId = FirstString(item, "matchviewUrl")
+                            ExternalId = FirstString(item, "matchviewUrl"), RawJson = SerializePayload(item)
                         });
                     }
                     if (output.Count > 0) return output;
