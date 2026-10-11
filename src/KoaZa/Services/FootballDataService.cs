@@ -1191,11 +1191,33 @@ namespace KoaZa.Services
                     var ids = tournaments.Where(t => FirstString(t, "tournamentId").Length > 0 &&
                         (IntValue(FirstString(t, "futureFixtures")) > 0 || IntValue(FirstString(t, "upcomingFixtures")) > 0 || IntValue(FirstString(t, "liveFixtures")) > 0))
                         .Select(t => FirstString(t, "tournamentId")).Distinct(StringComparer.OrdinalIgnoreCase).Take(40).ToList();
+                    var providerRows = new List<FixtureRecord>();
                     foreach (string id in ids)
                     {
-                        try { all.AddRange(FetchOddsPapi(id)); }
+                        try { providerRows.AddRange(FetchOddsPapi(id)); }
                         catch (Exception ex) { errors.Add(id + ": " + ex.Message); }
                     }
+                    if (ids.Count > 0)
+                    {
+                        try
+                        {
+                            string oddsUrl = "https://api.oddspapi.io/v4/odds-by-tournaments?bookmaker=pinnacle&tournamentIds=" +
+                                Uri.EscapeDataString(string.Join(",", ids)) + "&apiKey=" + Uri.EscapeDataString(config.Key);
+                            var oddsRows = ToRows(new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(Request(oddsUrl, null, null)));
+                            foreach (var oddsItem in oddsRows)
+                            {
+                                string eventId = FirstString(oddsItem, "fixtureId");
+                                var fixture = providerRows.FirstOrDefault(x => string.Equals(x.ExternalId, eventId, StringComparison.OrdinalIgnoreCase));
+                                if (fixture == null) continue;
+                                var wrapper = new Dictionary<string, object>();
+                                wrapper["fixture"] = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(fixture.RawJson);
+                                wrapper["odds"] = oddsItem;
+                                fixture.RawJson = SerializePayload(wrapper);
+                            }
+                        }
+                        catch (Exception ex) { errors.Add("OddsPapi markets: " + ex.Message); }
+                    }
+                    all.AddRange(providerRows);
                 }
                 catch (Exception ex) { errors.Add(ex.Message); }
             }
