@@ -1160,7 +1160,14 @@ namespace KoaZa.Services
         {
             if (string.IsNullOrWhiteSpace(config.BaseUrl))
                 throw new InvalidOperationException(config.Provider + " requires its documented HTTPS fixtures/events endpoint in API Settings.");
-            string json = Request(config.BaseUrl, string.IsNullOrWhiteSpace(config.HeaderName) ? "x-api-key" : config.HeaderName, config.Key);
+            if (config.Provider == "Betfair")
+                throw new InvalidOperationException("Betfair's native API uses session authentication and JSON-RPC POST. Configure an HTTPS proxy that exposes a GET fixtures endpoint, or use a dedicated Betfair session adapter.");
+            string endpoint = config.BaseUrl;
+            string header = string.IsNullOrWhiteSpace(config.HeaderName) ? "x-api-key" : config.HeaderName;
+            if (config.Provider == "Sportradar" && !string.IsNullOrWhiteSpace(config.Key) &&
+                endpoint.IndexOf("api_key=", StringComparison.OrdinalIgnoreCase) < 0)
+                endpoint += (endpoint.Contains("?") ? "&" : "?") + "api_key=" + Uri.EscapeDataString(config.Key);
+            string json = Request(endpoint, config.Provider == "Sportradar" ? null : header, config.Provider == "Sportradar" ? null : config.Key);
             object parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(json);
             var rootMap = parsed as Dictionary<string, object>;
             object rowsObject = parsed;
@@ -1553,6 +1560,12 @@ namespace KoaZa.Services
             request.Timeout = 20000;
             request.ReadWriteTimeout = 20000;
             if (!string.IsNullOrEmpty(header) && !string.IsNullOrEmpty(key)) request.Headers[header] = key;
+            if (!string.IsNullOrEmpty(header) && header.Equals("X-RapidAPI-Key", StringComparison.OrdinalIgnoreCase))
+            {
+                Uri uri;
+                if (Uri.TryCreate(url, UriKind.Absolute, out uri) && uri.Host.EndsWith(".p.rapidapi.com", StringComparison.OrdinalIgnoreCase))
+                    request.Headers["X-RapidAPI-Host"] = uri.Host;
+            }
             using (var response = (HttpWebResponse)request.GetResponse())
             using (var stream = response.GetResponseStream())
             using (var reader = new StreamReader(stream, Encoding.UTF8))
@@ -1949,7 +1962,8 @@ namespace KoaZa.Services
             _keyBox.Text = "API key / token";
             _customNameBox.Text = "Custom name";
             _baseUrlBox.Text = "HTTPS endpoint";
-            _headerBox.Text = "x-api-key";
+            _headerBox.Text = (choice.Id == "FootballBettingOdds" || choice.Id == "PremierLeagueStats" || choice.Id == "TheRundown")
+                ? "X-RapidAPI-Key" : choice.Id == "BallDontLie" ? "Authorization" : "x-api-key";
             _customNameBox.IsEnabled = choice.Id == "Custom";
             _baseUrlBox.IsEnabled = choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData" || choice.Id == "Sportmonks" || choice.Id == "TheRundown" || choice.Id == "FootballBettingOdds" || choice.Id == "Betfair" || choice.Id == "Sportradar" || choice.Id == "SportsDataIO" || choice.Id == "BallDontLie" || choice.Id == "PremierLeagueStats";
             _keyBox.ToolTip = choice.Id == "OpenLigaDB" ? "This provider does not require a key." : choice.Id == "FootballCharts" ? "Optional bearer key for the higher daily request limit; no key is required to start." : "Paste the token/key from this provider's official account.";
