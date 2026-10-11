@@ -1075,8 +1075,8 @@ namespace KoaZa.Services
             if (!string.IsNullOrWhiteSpace(key)) request.Headers[HttpRequestHeader.Authorization] = "Bearer " + key;
             var parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(ReadResponse(request));
             var root = parsed as Dictionary<string, object>;
-            var leagues = ToRows(parsed);
-            if (leagues.Count == 0 && root != null) leagues = ToRows(GetList(root, "leagues"));
+            var leagues = root == null ? ToRows(parsed) : GetList(root, "leagues");
+            if (leagues.Count == 0) leagues = ToRows(parsed);
             var slugs = leagues.Select(x => FirstString(x, "slug", "league_slug", "league", "id"))
                 .Where(x => x.Length > 0 && !x.Contains(" ")).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (slugs.Count == 0) throw new InvalidOperationException("Football-Charts did not return a discoverable league catalog.");
