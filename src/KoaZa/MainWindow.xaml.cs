@@ -280,15 +280,12 @@ namespace KoaZa
                 string dataWarning = "";
                 double homeRate;
                 double awayRate;
-                if (homeMatches.Count == 0 && awayMatches.Count == 0 && baselineMatches.Count == 0)
+                if (homeMatches.Count == 0 && awayMatches.Count == 0)
                 {
-                    // Keep the chart visible, but use neutral prior rates and clearly mark them as
-                    // placeholders rather than pretending that team-specific data was available.
-                    homeRate = 1.35;
-                    awayRate = 1.10;
+                    // Without any prior for either team, identical default percentages would be misleading.
                     dataWarning = LocalizationService.T(
-                        "No historical results are saved. Orange chart: neutral baseline only, not a team-specific prediction. Import past results to improve it.",
-                        "نتیجه تاریخی ذخیره نشده است. نمودار نارنجی: فقط میانگین پایه و نه پیش‌بینی اختصاصی این دو تیم. برای بهبود، نتایج بازی‌های گذشته را دریافت و ذخیره کن.");
+                        "No previous matches are available for either team. Probabilities are withheld instead of showing a fixed generic baseline. Import historical results first.",
+                        "برای هیچ‌یک از دو تیم مسابقه تاریخی در دسترس نیست. به‌جای نمایش درصدهای ثابت و عمومی، احتمال‌ها نمایش داده نمی‌شوند. ابتدا نتایج گذشته را وارد کن.");
                     MarketsList.ItemsSource = BuildUnavailableMarketRows(dataWarning);
                     SetMarketChartState(false, dataWarning);
                     ModelStatusText.Text = dataWarning;
