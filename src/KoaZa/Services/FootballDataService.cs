@@ -304,9 +304,8 @@ namespace KoaZa.Services
                 throw new InvalidOperationException("No fixtures could be received from enabled providers. " + string.Join(" | ", errors));
 
             return FilterFixturesByDate(combined, fromDate, toDate)
-                .GroupBy(FixtureDeduplicationKey)
-                .Select(g => g.OrderByDescending(x => !string.IsNullOrWhiteSpace(x.League))
-                    .ThenByDescending(x => !string.IsNullOrWhiteSpace(x.ExternalId)).First())
+                .GroupBy(x => (x.Provider ?? "") + "|" + (string.IsNullOrWhiteSpace(x.ExternalId) ? FixtureDeduplicationKey(x) : x.ExternalId.Trim()), StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderByDescending(x => !string.IsNullOrWhiteSpace(x.League)).ThenByDescending(x => !string.IsNullOrWhiteSpace(x.RawJson)).First())
                 .ToList();
         }
 
