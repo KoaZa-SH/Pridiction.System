@@ -436,7 +436,11 @@ namespace KoaZa.Data
 
         private static string CreateStableFixtureId(string provider, FixtureRecord fixture)
         {
-            string identity = (provider ?? "") + "|" + (fixture.League ?? "") + "|" + (fixture.KickoffUtc ?? "") + "|" +
+            DateTime kickoff;
+            string dateKey = DateTime.TryParse(fixture.KickoffUtc, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out kickoff)
+                ? kickoff.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : (fixture.KickoffUtc ?? "").Trim();
+            string identity = (provider ?? "").Trim().ToUpperInvariant() + "|" + dateKey + "|" +
                 (fixture.HomeTeam ?? "").Trim().ToUpperInvariant() + "|" + (fixture.AwayTeam ?? "").Trim().ToUpperInvariant();
             using (var sha = SHA256.Create())
                 return "generated-" + BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(identity))).Replace("-", "");
