@@ -419,7 +419,7 @@ namespace KoaZa.Data
                         }
                         if (!string.IsNullOrWhiteSpace(f.RawJson))
                         {
-                            using (var raw = new SQLiteCommand("INSERT INTO FixtureDetails (Provider,ExternalId,RawJson,UpdatedUtc) VALUES (@provider,@external,@json,@updated) ON CONFLICT(Provider,ExternalId) DO UPDATE SET RawJson=excluded.RawJson,UpdatedUtc=excluded.UpdatedUtc WHERE instr(FixtureDetails.RawJson, '"detailsVersion"') = 0 OR instr(excluded.RawJson, '"detailsVersion"') > 0;", con, transaction))
+                            using (var raw = new SQLiteCommand("INSERT INTO FixtureDetails (Provider,ExternalId,RawJson,UpdatedUtc) VALUES (@provider,@external,@json,@updated) ON CONFLICT(Provider,ExternalId) DO UPDATE SET RawJson=excluded.RawJson,UpdatedUtc=excluded.UpdatedUtc WHERE instr(FixtureDetails.RawJson, '\"detailsVersion\"') = 0 OR instr(excluded.RawJson, '"detailsVersion"') > 0;", con, transaction))
                             {
                                 raw.Parameters.AddWithValue("@provider", provider);
                                 raw.Parameters.AddWithValue("@external", external);
