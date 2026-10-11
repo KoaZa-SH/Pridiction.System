@@ -174,7 +174,7 @@ namespace KoaZa.Services
                 return FetchAllUpcoming(season, fromDate);
             List<FixtureRecord> rows;
             if (provider == "ApiFootball" || provider == "ApiSports")
-                rows = FetchApiFootballRange("all", fromDate, toDate);
+                rows = FetchApiFootballRollingRange(fromDate, toDate, null);
             else if (provider == "FiveDollarFootballAPI")
                 rows = FetchFiveDollarRange("all", fromDate, toDate);
             else if (provider == "FootballData")
@@ -222,8 +222,7 @@ namespace KoaZa.Services
                 {
                     // One bounded date-range request replaces dozens of daily calls. API-Football
                     // returns fixtures and completed scores across the competitions covered by this key.
-                    combined.AddRange(FetchApiFootballPaged(
-                        "/fixtures?from=" + from + "&to=" + to + "&timezone=UTC", config.Key));
+                    combined.AddRange(FetchApiFootballRollingRange(fromDate, toDate, config.Key));
                     if (combined.Count > 0) break;
                 }
                 catch (Exception ex) { errors.Add("API-SPORTS: " + ex.Message); }
@@ -342,6 +341,29 @@ namespace KoaZa.Services
                     DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out kickoff)
                     && kickoff >= fromDate && kickoff < toDateExclusive.AddDays(1);
             }).ToList();
+        }
+
+        private static List<FixtureRecord> FetchApiFootballRollingRange(DateTime fromDate, DateTime toDate, string apiKey = null)
+        {
+            var all = new List<FixtureRecord>();
+            var configs = string.IsNullOrWhiteSpace(apiKey)
+                ? ApiProviderStore.Load().Where(p => p.Enabled && (p.Provider == "ApiFootball" || p.Provider == "ApiSports") && !string.IsNullOrWhiteSpace(p.Key)).ToList()
+                : new List<ApiProviderConfig> { new ApiProviderConfig { Provider = "ApiSports", Key = apiKey, Enabled = true } };
+            if (configs.Count == 0) throw new InvalidOperationException("No enabled API-Football key is saved. Open API Settings.");
+            foreach (var config in configs)
+            {
+                DateTime cursor = fromDate.Date;
+                while (cursor <= toDate.Date)
+                {
+                    DateTime chunkEnd = cursor.AddDays(29);
+                    if (chunkEnd > toDate.Date) chunkEnd = toDate.Date;
+                    string from = cursor.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                    string to = chunkEnd.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                    all.AddRange(FetchApiFootballPaged("/fixtures?from=" + from + "&to=" + to + "&timezone=UTC", config.Key));
+                    cursor = chunkEnd.AddDays(1);
+                }
+            }
+            return all.GroupBy(FixtureDeduplicationKey).Select(g => g.First()).ToList();
         }
 
         private static List<FixtureRecord> FetchApiFootballRange(string league, DateTime fromDate, DateTime toDate)
@@ -1294,6 +1316,34 @@ namespace KoaZa.Services
             return null;
         }
 
+        private static List<FixtureRecord> FetchTheOddsApiAll()
+        {
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "TheOddsAPI" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+            if (configs.Count == 0) throw new InvalidOperationException("Add an enabled The Odds API key in API Settings.");
+            var all = new List<FixtureRecord>();
+            var errors = new List<string>();
+            foreach (var config in configs)
+            {
+                try
+                {
+                    string json = Request("https://api.the-odds-api.com/v4/sports/?apiKey=" + Uri.EscapeDataString(config.Key), null, null);
+                    var sports = ToRows(new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(json));
+                    var keys = sports.Where(x => FirstString(x, "key").StartsWith("soccer_", StringComparison.OrdinalIgnoreCase) &&
+                        !FirstString(x, "active").Equals("false", StringComparison.OrdinalIgnoreCase))
+                        .Select(x => FirstString(x, "key")).Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    foreach (string key in keys)
+                    {
+                        try { all.AddRange(FetchTheOddsApi(key)); }
+                        catch (Exception ex) { errors.Add(key + ": " + ex.Message); }
+                    }
+                }
+                catch (Exception ex) { errors.Add(ex.Message); }
+            }
+            var unique = all.GroupBy(FixtureDeduplicationKey).Select(g => g.First()).ToList();
+            if (unique.Count == 0) throw new InvalidOperationException("Could not discover soccer events from The Odds API. " + string.Join(" | ", errors.Take(5)));
+            return unique;
+        }
+
         private static List<FixtureRecord> FetchTheOddsApi(string sportKey)
         {
             var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "TheOddsAPI" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
@@ -1570,6 +1620,20 @@ namespace KoaZa.Services
                 }
             }
             throw new InvalidOperationException("All enabled football-data.org tokens failed. Check token and free-plan coverage.", last);
+        }
+
+        private static List<FixtureRecord> FetchOpenLigaAll(int season)
+        {
+            var all = new List<FixtureRecord>();
+            var errors = new List<string>();
+            foreach (string league in new[] { "bl1", "bl2", "bl3" })
+            {
+                try { all.AddRange(FetchOpenLiga(league, season)); }
+                catch (Exception ex) { errors.Add(league + ": " + ex.Message); }
+            }
+            var rows = all.GroupBy(FixtureDeduplicationKey).Select(g => g.First()).ToList();
+            if (rows.Count == 0) throw new InvalidOperationException("OpenLigaDB did not return matches for the automatically discovered German leagues. " + string.Join(" | ", errors));
+            return rows;
         }
 
         private static List<FixtureRecord> FetchOpenLiga(string league, int season)
