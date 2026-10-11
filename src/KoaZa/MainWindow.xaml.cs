@@ -280,17 +280,14 @@ namespace KoaZa
                 string dataWarning = "";
                 double homeRate;
                 double awayRate;
-                if (homeMatches.Count == 0 && awayMatches.Count == 0 && baselineMatches.Count == 0)
+                if (homeMatches.Count == 0 && awayMatches.Count == 0)
                 {
-                    // Keep the chart visible, but use neutral prior rates and clearly mark them as
-                    // placeholders rather than pretending that team-specific data was available.
-                    homeRate = 1.35;
-                    awayRate = 1.10;
+                    // Without any prior for either team, identical default percentages would be misleading.
                     dataWarning = LocalizationService.T(
-                        "No historical results are saved. Orange chart: neutral baseline only, not a team-specific prediction. Import past results to improve it.",
-                        "نتیجه تاریخی ذخیره نشده است. نمودار نارنجی: فقط میانگین پایه و نه پیش‌بینی اختصاصی این دو تیم. برای بهبود، نتایج بازی‌های گذشته را دریافت و ذخیره کن.");
-                    var priorProbabilities = PoissonModel.Analyze(homeRate, awayRate);
-                    SetMarketRows(priorProbabilities, false, dataWarning);
+                        "No previous matches are available for either team. Probabilities are withheld instead of showing a fixed generic baseline. Import historical results first.",
+                        "برای هیچ‌یک از دو تیم مسابقه تاریخی در دسترس نیست. به‌جای نمایش درصدهای ثابت و عمومی، احتمال‌ها نمایش داده نمی‌شوند. ابتدا نتایج گذشته را وارد کن.");
+                    MarketsList.ItemsSource = BuildUnavailableMarketRows(dataWarning);
+                    SetMarketChartState(false, dataWarning);
                     ModelStatusText.Text = dataWarning;
                     UpdateMultiMarketPredictions(fixture);
                     return;
@@ -323,6 +320,18 @@ namespace KoaZa
                     awayRate = awayMatches.Count > 0
                         ? Clamp(Average(awayMatches, fixture.AwayTeam, true, null))
                         : Clamp(MeanAwayGoals(baselineMatches));
+                }
+                // Empirical-Bayes shrinkage: small team samples are pulled toward the competition
+                // baseline, while each team's observed results still change its own estimates.
+                // This avoids presenting the same hard-coded 1.35/1.10 rates for unrelated fixtures.
+                if (baselineMatches.Count >= 3)
+                {
+                    double priorHome = baselineMatches.Average(m => (double)m.HomeGoals.Value);
+                    double priorAway = baselineMatches.Average(m => (double)m.AwayGoals.Value);
+                    double homeWeight = homeMatches.Count / (homeMatches.Count + 5.0);
+                    double awayWeight = awayMatches.Count / (awayMatches.Count + 5.0);
+                    homeRate = Clamp(homeWeight * homeRate + (1.0 - homeWeight) * priorHome);
+                    awayRate = Clamp(awayWeight * awayRate + (1.0 - awayWeight) * priorAway);
                 }
                 // Head-to-head is a capped supporting signal, not a replacement for recent form.
                 var headToHead = _database.GetRecentCompletedMatches(fixture.League, 100)
@@ -368,9 +377,9 @@ namespace KoaZa
                 var probabilities = PoissonModel.Analyze(homeRate, awayRate);
                 AddHistoricalStatMarkets(probabilities, baselineMatches, homeMatches, awayMatches, fixture);
                 if (!hasReliableHistory)
-                    dataWarning = LocalizationService.T(
-                        "Limited historical data. Orange chart: estimates use available team results and/or competition averages; confidence is low.",
-                        "داده تاریخی محدود است. نمودار نارنجی: تخمین‌ها از نتایج موجود تیم‌ها و/یا میانگین رقابت استفاده می‌کنند؛ اطمینان پایین است.");
+                    dataWarning = LocalizationService.IsPersian
+                        ? "داده تاریخی محدود است (میزبان: " + homeMatches.Count + " بازی، میهمان: " + awayMatches.Count + " بازی، رقابت: " + baselineMatches.Count + " بازی). درصدها با ترکیب سابقه موجود و میانگین پایه محاسبه شده‌اند و اطمینان پایین است."
+                        : "Limited history (home: " + homeMatches.Count + " matches, away: " + awayMatches.Count + ", competition baseline: " + baselineMatches.Count + "). Estimates blend observed results with a baseline and have low confidence.";
                 // Do not force the entire chart orange merely because corner/card data is absent.
                 // The goal model is shown normally when team and competition history is sufficient;
                 // unsupported corner/card rows remain individually orange and explicitly unavailable.
@@ -562,8 +571,8 @@ namespace KoaZa
                     : hasSufficientData ? (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%" :
                         (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% • " + LocalizationService.T("low confidence", "اطمینان پایین"),
                 HasData = hasSufficientData,
-                BarBrush = m.Market == "Match result" && m.Outcome == "Draw"
-                    ? System.Windows.Media.Brushes.DarkOrange : System.Windows.Media.Brushes.SeaGreen,
+                BarBrush = !hasSufficientData ? System.Windows.Media.Brushes.DarkOrange :
+                    (m.Market == "Match result" && m.Outcome == "Draw" ? System.Windows.Media.Brushes.DarkOrange : System.Windows.Media.Brushes.SeaGreen),
                 Reason = reason
             }).ToList();
             string unavailable = LocalizationService.T("Not calculated: this app has no reliable historical event statistics for this market yet.", "محاسبه نشده: هنوز آمار تاریخی قابل‌اعتماد برای این بازار در برنامه موجود نیست.");

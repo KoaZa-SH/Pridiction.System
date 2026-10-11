@@ -96,6 +96,8 @@ namespace KoaZa.Data
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS Predictions (Id INTEGER PRIMARY KEY AUTOINCREMENT, CreatedUtc TEXT NOT NULL, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, HomeGoalRate REAL NOT NULL, AwayGoalRate REAL NOT NULL, HomeWin REAL NOT NULL, DrawProbability REAL NOT NULL, AwayWin REAL NOT NULL, Over25 REAL NOT NULL, Under25 REAL NOT NULL, BothTeamsScore REAL NOT NULL, ModelVersion TEXT NOT NULL, MarketsJson TEXT NULL);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS Fixtures (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, League TEXT NOT NULL, KickoffUtc TEXT, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, HomeGoals INTEGER NULL, AwayGoals INTEGER NULL, Status TEXT, ExternalId TEXT, UpdatedUtc TEXT NOT NULL, HomeCorners INTEGER NULL, AwayCorners INTEGER NULL, HomeShotsOnTarget INTEGER NULL, AwayShotsOnTarget INTEGER NULL, HomeYellowCards INTEGER NULL, AwayYellowCards INTEGER NULL, Referee TEXT NULL, VarReviews INTEGER NULL);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS FixtureDetails (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, ExternalId TEXT NOT NULL, RawJson TEXT NOT NULL, UpdatedUtc TEXT NOT NULL, UNIQUE(Provider, ExternalId));", con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("DELETE FROM Fixtures WHERE Id NOT IN (SELECT MIN(Id) FROM Fixtures GROUP BY Provider, ExternalId);", con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("CREATE UNIQUE INDEX IF NOT EXISTS UX_Fixtures_ProviderExternal ON Fixtures(Provider, ExternalId);", con)) cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("CREATE TABLE IF NOT EXISTS FixtureHistory (Id INTEGER PRIMARY KEY AUTOINCREMENT, Provider TEXT NOT NULL, League TEXT NOT NULL, KickoffUtc TEXT, HomeTeam TEXT NOT NULL, AwayTeam TEXT NOT NULL, HomeGoals INTEGER, AwayGoals INTEGER, Status TEXT, ExternalId TEXT, UpdatedUtc TEXT NOT NULL, ArchivedUtc TEXT NOT NULL, HomeCorners INTEGER NULL, AwayCorners INTEGER NULL, HomeShotsOnTarget INTEGER NULL, AwayShotsOnTarget INTEGER NULL, HomeYellowCards INTEGER NULL, AwayYellowCards INTEGER NULL, Referee TEXT NULL, VarReviews INTEGER NULL, UNIQUE(Provider, ExternalId, HomeGoals, AwayGoals, Status, KickoffUtc));", con)) cmd.ExecuteNonQuery();
                 EnsureColumnExists(con, "Predictions", "MarketsJson", "TEXT NULL");
                 foreach (string column in new[] { "HomeCorners", "AwayCorners", "HomeShotsOnTarget", "AwayShotsOnTarget", "HomeYellowCards", "AwayYellowCards", "Referee", "VarReviews" })
@@ -405,7 +407,7 @@ namespace KoaZa.Data
                             archive.Parameters.AddWithValue("@external", external);
                             archive.ExecuteNonQuery();
                         }
-                        using (var insert = new SQLiteCommand("INSERT OR IGNORE INTO Fixtures (Provider, League, KickoffUtc, HomeTeam, AwayTeam, HomeGoals, AwayGoals, Status, ExternalId, UpdatedUtc, HomeCorners, AwayCorners, HomeShotsOnTarget, AwayShotsOnTarget, HomeYellowCards, AwayYellowCards, Referee, VarReviews) VALUES (@provider,@league,@kickoff,@home,@away,@hg,@ag,@status,@external,@updated,@hc,@ac,@hs,@as,@hy,@ay,@referee,@var);", con, transaction))
+                        using (var insert = new SQLiteCommand("INSERT INTO Fixtures (Provider, League, KickoffUtc, HomeTeam, AwayTeam, HomeGoals, AwayGoals, Status, ExternalId, UpdatedUtc, HomeCorners, AwayCorners, HomeShotsOnTarget, AwayShotsOnTarget, HomeYellowCards, AwayYellowCards, Referee, VarReviews) SELECT @provider,@league,@kickoff,@home,@away,@hg,@ag,@status,@external,@updated,@hc,@ac,@hs,@as,@hy,@ay,@referee,@var WHERE NOT EXISTS (SELECT 1 FROM Fixtures WHERE Provider=@provider AND ExternalId=@external);", con, transaction))
                         {
                             AddFixtureParameters(insert, f, provider, external, now);
                             insert.ExecuteNonQuery();
@@ -415,6 +417,17 @@ namespace KoaZa.Data
                             AddFixtureParameters(update, f, provider, external, now);
                             update.ExecuteNonQuery();
                         }
+                        if (!string.IsNullOrWhiteSpace(f.RawJson))
+                        {
+                            using (var raw = new SQLiteCommand("INSERT INTO FixtureDetails (Provider,ExternalId,RawJson,UpdatedUtc) VALUES (@provider,@external,@json,@updated) ON CONFLICT(Provider,ExternalId) DO UPDATE SET RawJson=excluded.RawJson,UpdatedUtc=excluded.UpdatedUtc WHERE instr(FixtureDetails.RawJson, '\"detailsVersion\"') = 0 OR instr(excluded.RawJson, '\"detailsVersion\"') > 0;", con, transaction))
+                            {
+                                raw.Parameters.AddWithValue("@provider", provider);
+                                raw.Parameters.AddWithValue("@external", external);
+                                raw.Parameters.AddWithValue("@json", f.RawJson);
+                                raw.Parameters.AddWithValue("@updated", now);
+                                raw.ExecuteNonQuery();
+                            }
+                        }
                     }
                     transaction.Commit();
                 }
@@ -423,7 +436,11 @@ namespace KoaZa.Data
 
         private static string CreateStableFixtureId(string provider, FixtureRecord fixture)
         {
-            string identity = (provider ?? "") + "|" + (fixture.League ?? "") + "|" + (fixture.KickoffUtc ?? "") + "|" +
+            DateTime kickoff;
+            string dateKey = DateTime.TryParse(fixture.KickoffUtc, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out kickoff)
+                ? kickoff.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : (fixture.KickoffUtc ?? "").Trim();
+            string identity = (provider ?? "").Trim().ToUpperInvariant() + "|" + dateKey + "|" +
                 (fixture.HomeTeam ?? "").Trim().ToUpperInvariant() + "|" + (fixture.AwayTeam ?? "").Trim().ToUpperInvariant();
             using (var sha = SHA256.Create())
                 return "generated-" + BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(identity))).Replace("-", "");
