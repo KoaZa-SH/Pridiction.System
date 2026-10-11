@@ -1377,7 +1377,30 @@ namespace KoaZa.Services
                         .Select(x => FirstString(x, "key")).Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                     foreach (string key in keys)
                     {
-                        try { all.AddRange(FetchTheOddsApi(key)); }
+                        try
+                        {
+                            var events = FetchTheOddsApi(key);
+                            // Event endpoint supplies teams and kickoff only. Store the odds payload too
+                            // when the account's quota/markets permit it.
+                            try
+                            {
+                                string oddsUrl = "https://api.the-odds-api.com/v4/sports/" + Uri.EscapeDataString(key) +
+                                    "/odds?regions=uk&markets=h2h,totals,spreads&oddsFormat=decimal&apiKey=" + Uri.EscapeDataString(config.Key);
+                                var oddsRows = ToRows(new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(Request(oddsUrl, null, null)));
+                                foreach (var oddsItem in oddsRows)
+                                {
+                                    string eventId = FirstString(oddsItem, "id");
+                                    var fixture = events.FirstOrDefault(x => string.Equals(x.ExternalId, eventId, StringComparison.OrdinalIgnoreCase));
+                                    if (fixture == null) continue;
+                                    var wrapper = new Dictionary<string, object>();
+                                    wrapper["event"] = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(fixture.RawJson);
+                                    wrapper["odds"] = oddsItem;
+                                    fixture.RawJson = SerializePayload(wrapper);
+                                }
+                            }
+                            catch (Exception oddsError) { errors.Add(key + " odds: " + oddsError.Message); }
+                            all.AddRange(events);
+                        }
                         catch (Exception ex) { errors.Add(key + ": " + ex.Message); }
                     }
                 }
