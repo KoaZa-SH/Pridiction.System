@@ -155,19 +155,59 @@ namespace KoaZa.Services
         public int? AwayYellowCards { get; set; }
         public string Referee { get; set; }
         public int? VarReviews { get; set; }
+        // Provider-native fixture/event JSON is retained so fields not yet mapped to columns are not lost.
+        public string RawJson { get; set; }
     }
 
     public static class FootballDataService
     {
 
-        // Bulk refresh: API-SPORTS date queries return fixtures across all competitions covered by the account.
-        // The provider's coverage and quota still determine which competitions/data are available.
+        // Automatic import policy: rebuild a rolling 365-day history and include the next 30 days.
+        // Individual APIs may have shorter history, competition coverage, paging or quota restrictions.
+        public static List<FixtureRecord> FetchAutomatically(string provider)
+        {
+            DateTime today = DateTime.UtcNow.Date;
+            DateTime fromDate = today.AddDays(-365);
+            DateTime toDate = today.AddDays(30);
+            int season = today.Month >= 7 ? today.Year : today.Year - 1;
+            if (string.IsNullOrWhiteSpace(provider) || provider == "Auto")
+                return FetchAllUpcoming(season, fromDate);
+            List<FixtureRecord> rows;
+            if (provider == "ApiFootball" || provider == "ApiSports")
+                rows = FetchApiFootballRange("all", fromDate, toDate);
+            else if (provider == "FiveDollarFootballAPI")
+                rows = FetchFiveDollarRange("all", fromDate, toDate);
+            else if (provider == "FootballData")
+                rows = FetchFootballDataBulk(season, fromDate, toDate);
+            else if (provider == "TheOddsAPI")
+                rows = FetchTheOddsApiAll();
+            else if (provider == "TheSportsDB")
+                rows = FetchTheSportsDb("4328", season);
+            else if (provider == "AllSportsApi")
+                rows = FetchAllSportsApi("all", fromDate, toDate);
+            else if (provider == "ScoreBat")
+                rows = FetchScoreBat();
+            else if (provider == "SportsAPI360")
+                rows = FetchSportsApi360("all");
+            else if (provider == "OpenLigaDB")
+                rows = FetchOpenLigaAll(season);
+            else if (provider == "FootballCharts")
+                rows = FetchFootballCharts("premier", season);
+            else
+            {
+                var config = ApiProviderStore.Load().FirstOrDefault(p => p.Enabled && p.Provider == provider);
+                if (config == null) throw new InvalidOperationException("Enable and configure this provider in API Settings first.");
+                rows = FetchCustom(config);
+            }
+            return rows;
+        }
+
+        // Legacy overload retained for callers; the import window now uses FetchAutomatically.
         public static List<FixtureRecord> FetchAllUpcoming(int season, DateTime startDate)
         {
             DateTime fromDate = startDate.Date;
             DateTime today = DateTime.UtcNow.Date;
-            if (fromDate > today) throw new ArgumentOutOfRangeException("startDate", "Start date cannot be in the future.");
-            DateTime toDate = today.AddDays(7);
+            DateTime toDate = today.AddDays(30);
             string from = fromDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             string to = toDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
@@ -191,19 +231,19 @@ namespace KoaZa.Services
 
             if (providers.Any(p => p.Enabled && p.Provider == "FootballData" && !string.IsNullOrWhiteSpace(p.Key)))
             {
-                try { combined.AddRange(FetchFootballDataBulk(season, fromDate)); }
+                try { combined.AddRange(FetchFootballDataBulk(season, fromDate, toDate)); }
                 catch (Exception ex) { errors.Add("football-data.org: " + ex.Message); }
             }
 
             if (providers.Any(p => p.Enabled && p.Provider == "OpenLigaDB"))
             {
-                try { combined.AddRange(FetchOpenLiga("bl1", season)); }
+                try { combined.AddRange(FetchOpenLigaAll(season)); }
                 catch (Exception ex) { errors.Add("OpenLigaDB: " + ex.Message); }
             }
 
             if (providers.Any(p => p.Enabled && p.Provider == "TheOddsAPI" && !string.IsNullOrWhiteSpace(p.Key)))
             {
-                try { combined.AddRange(FetchTheOddsApi("soccer_epl")); }
+                try { combined.AddRange(FetchTheOddsApiAll()); }
                 catch (Exception ex) { errors.Add("The Odds API: " + ex.Message); }
             }
 
@@ -1444,12 +1484,12 @@ namespace KoaZa.Services
             throw new InvalidOperationException("All enabled API-Football keys failed or returned no fixtures. Check key validity, league ID and quota.", last);
         }
 
-        private static List<FixtureRecord> FetchFootballDataBulk(int season, DateTime startDate)
+        private static List<FixtureRecord> FetchFootballDataBulk(int season, DateTime startDate, DateTime? endDate = null)
         {
             var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "FootballData" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
             if (configs.Count == 0) return new List<FixtureRecord>();
             string from = startDate.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            string to = DateTime.UtcNow.Date.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            string to = (endDate ?? DateTime.UtcNow.Date.AddDays(30)).Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             Exception last = null;
             foreach (var config in configs)
             {
