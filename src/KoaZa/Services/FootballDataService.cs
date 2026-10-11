@@ -1505,9 +1505,15 @@ namespace KoaZa.Services
             throw new InvalidOperationException("The Odds API event request failed. Use a valid sport key such as soccer_epl; this adapter imports events, not bookmaker odds.", last);
         }
 
+        private static string GetTheSportsDbKey()
+        {
+            var config = ApiProviderStore.Load().FirstOrDefault(p => p.Enabled && p.Provider == "TheSportsDB" && !string.IsNullOrWhiteSpace(p.Key));
+            return config == null ? "123" : config.Key.Trim();
+        }
+
         private static List<FixtureRecord> FetchTheSportsDbAll(int season)
         {
-            string json = Request("https://www.thesportsdb.com/api/v1/json/123/all_leagues.php", null, null);
+            string json = Request("https://www.thesportsdb.com/api/v1/json/" + Uri.EscapeDataString(GetTheSportsDbKey()) + "/all_leagues.php", null, null);
             var root = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(json);
             var map = root as Dictionary<string, object>;
             var leagues = map == null ? new List<object>() : GetList(map, "leagues");
@@ -1526,7 +1532,7 @@ namespace KoaZa.Services
         {
             string id = string.IsNullOrWhiteSpace(leagueId) || leagueId.Equals("all", StringComparison.OrdinalIgnoreCase) ? "4328" : leagueId.Trim();
             string seasonName = season.ToString(CultureInfo.InvariantCulture) + "-" + (season + 1).ToString(CultureInfo.InvariantCulture);
-            string url = "https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=" + Uri.EscapeDataString(id) +
+            string url = "https://www.thesportsdb.com/api/v1/json/" + Uri.EscapeDataString(GetTheSportsDbKey()) + "/eventsseason.php?id=" + Uri.EscapeDataString(id) +
                 "&s=" + Uri.EscapeDataString(seasonName);
             object parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(Request(url, null, null));
             var root = parsed as Dictionary<string, object>;
