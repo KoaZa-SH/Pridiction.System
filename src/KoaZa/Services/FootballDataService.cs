@@ -1025,7 +1025,7 @@ namespace KoaZa.Services
                     Referee = GetString(item, "referee", GetString(item, "referee_name", "")),
                     VarReviews = events.Count == 0 ? (int?)null : varCount,
                     Status = GetString(item, "status", ""),
-                    ExternalId = GetString(item, "id", "")
+                    ExternalId = GetString(item, "id", ""), RawJson = SerializePayload(item)
                 });
             }
             return output;
@@ -1140,7 +1140,7 @@ namespace KoaZa.Services
                             HomeTeam = GetString(item, "participant1Name", "Home"),
                             AwayTeam = GetString(item, "participant2Name", "Away"),
                             Status = GetString(item, "statusName", ""),
-                            ExternalId = GetString(item, "fixtureId", "")
+                            ExternalId = GetString(item, "fixtureId", ""), RawJson = SerializePayload(item)
                         });
                     }
                     return output;
@@ -1327,7 +1327,7 @@ namespace KoaZa.Services
                             Provider = "TheOddsAPI", League = selectedSport,
                             KickoffUtc = FirstString(item, "commence_time"),
                             HomeTeam = home, AwayTeam = away,
-                            Status = "scheduled", ExternalId = FirstString(item, "id")
+                            Status = "scheduled", ExternalId = FirstString(item, "id"), RawJson = SerializePayload(item)
                         });
                     }
                     if (output.Count == 0) throw new InvalidOperationException("The Odds API response did not contain home_team/away_team fields.");
@@ -1517,7 +1517,7 @@ namespace KoaZa.Services
                             HomeGoals = GetNullableInt(fullTime, "home"),
                             AwayGoals = GetNullableInt(fullTime, "away"),
                             Status = GetString(item, "status", ""),
-                            ExternalId = GetString(item, "id", "")
+                            ExternalId = GetString(item, "id", ""), RawJson = SerializePayload(item)
                         });
                     }
                     return output;
@@ -1557,7 +1557,7 @@ namespace KoaZa.Services
                             HomeGoals = GetNullableInt(fullTime, "home"),
                             AwayGoals = GetNullableInt(fullTime, "away"),
                             Status = GetString(item, "status", ""),
-                            ExternalId = GetString(item, "id", "")
+                            ExternalId = GetString(item, "id", ""), RawJson = SerializePayload(item)
                         });
                     }
                     return output;
@@ -1607,7 +1607,7 @@ namespace KoaZa.Services
                     HomeGoals = hg,
                     AwayGoals = ag,
                     Status = GetString(match, "matchIsFinished", "").ToLowerInvariant() == "true" ? "FINISHED" : "SCHEDULED",
-                    ExternalId = GetString(match, "matchID", "")
+                    ExternalId = GetString(match, "matchID", ""), RawJson = SerializePayload(match)
                 });
             }
             return output;
