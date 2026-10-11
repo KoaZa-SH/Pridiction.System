@@ -182,7 +182,7 @@ namespace KoaZa.Services
             else if (provider == "TheOddsAPI")
                 rows = FetchTheOddsApiAll();
             else if (provider == "TheSportsDB")
-                rows = FetchTheSportsDb("4328", season);
+                rows = FetchTheSportsDbAll(season);
             else if (provider == "AllSportsApi")
                 rows = FetchAllSportsApi("all", fromDate, toDate);
             else if (provider == "ScoreBat")
@@ -1137,6 +1137,36 @@ namespace KoaZa.Services
                 return reader.ReadToEnd();
         }
 
+        private static List<FixtureRecord> FetchOddsPapiAll()
+        {
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "OddsPapi" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+            if (configs.Count == 0) throw new InvalidOperationException("Add an enabled OddsPapi API key in API Settings.");
+            var all = new List<FixtureRecord>();
+            var errors = new List<string>();
+            foreach (var config in configs)
+            {
+                try
+                {
+                    string url = "https://api.oddspapi.io/v4/tournaments?sportId=10&apiKey=" + Uri.EscapeDataString(config.Key);
+                    var tournaments = ToRows(new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(Request(url, null, null)));
+                    var ids = tournaments.Where(t => FirstString(t, "tournamentId").Length > 0 &&
+                        (IntValue(FirstString(t, "futureFixtures")) > 0 || IntValue(FirstString(t, "upcomingFixtures")) > 0 || IntValue(FirstString(t, "liveFixtures")) > 0))
+                        .Select(t => FirstString(t, "tournamentId")).Distinct(StringComparer.OrdinalIgnoreCase).Take(40).ToList();
+                    foreach (string id in ids)
+                    {
+                        try { all.AddRange(FetchOddsPapi(id)); }
+                        catch (Exception ex) { errors.Add(id + ": " + ex.Message); }
+                    }
+                }
+                catch (Exception ex) { errors.Add(ex.Message); }
+            }
+            var unique = all.GroupBy(FixtureDeduplicationKey).Select(g => g.First()).ToList();
+            if (unique.Count == 0) throw new InvalidOperationException("OddsPapi tournament discovery returned no fixtures. " + string.Join(" | ", errors.Take(5)));
+            return unique;
+        }
+
+        private static int IntValue(string value) { int result; return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out result) ? result : 0; }
+
         private static List<FixtureRecord> FetchOddsPapi(string tournamentId)
         {
             var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "OddsPapi" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
@@ -1386,6 +1416,23 @@ namespace KoaZa.Services
                 catch (Exception ex) { last = ex; }
             }
             throw new InvalidOperationException("The Odds API event request failed. Use a valid sport key such as soccer_epl; this adapter imports events, not bookmaker odds.", last);
+        }
+
+        private static List<FixtureRecord> FetchTheSportsDbAll(int season)
+        {
+            string json = Request("https://www.thesportsdb.com/api/v1/json/123/all_leagues.php", null, null);
+            var root = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(json);
+            var map = root as Dictionary<string, object>;
+            var leagues = map == null ? new List<object>() : GetList(map, "leagues");
+            var soccerIds = leagues.Where(x => FirstString(x, "strSport").Equals("Soccer", StringComparison.OrdinalIgnoreCase))
+                .Select(x => FirstString(x, "idLeague")).Where(x => x.Length > 0).Distinct().Take(10).ToList();
+            var all = new List<FixtureRecord>();
+            foreach (string id in soccerIds)
+            {
+                try { all.AddRange(FetchTheSportsDb(id, season)); } catch { }
+            }
+            if (all.Count == 0) all.AddRange(FetchTheSportsDb("4328", season));
+            return all.GroupBy(FixtureDeduplicationKey).Select(g => g.First()).ToList();
         }
 
         private static List<FixtureRecord> FetchTheSportsDb(string leagueId, int season)
