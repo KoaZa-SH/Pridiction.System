@@ -1097,7 +1097,7 @@ namespace KoaZa.Services
                             KickoffUtc = GetString(item, "kickoff_utc", GetString(item, "date", GetString(item, "kickoff", GetString(item, "utcDate", GetString(item, "match_date", GetString(item, "datetime", "")))))),
                             HomeTeam = home, AwayTeam = away, HomeGoals = hg, AwayGoals = ag,
                             Status = GetString(item, "status", kind == "results" ? "FINISHED" : "SCHEDULED"),
-                            ExternalId = GetString(item, "slug", GetString(item, "id", GetString(item, "footballcharts_id", "")))
+                            ExternalId = GetString(item, "slug", GetString(item, "id", GetString(item, "footballcharts_id", ""))), RawJson = SerializePayload(item)
                         });
                     }
                 }
@@ -1188,7 +1188,7 @@ namespace KoaZa.Services
                                     HomeGoals = GetNullableInt(GetMap(match, "homeScore"), "current"),
                                     AwayGoals = GetNullableInt(GetMap(match, "awayScore"), "current"),
                                     Status = GetString(GetMap(match, "status"), "type", ""),
-                                    ExternalId = GetString(match, "id", "")
+                                    ExternalId = GetString(match, "id", ""), RawJson = SerializePayload(match)
                                 });
                             }
                         }
