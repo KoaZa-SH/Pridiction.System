@@ -2361,7 +2361,7 @@ namespace KoaZa.Services
             // on the same newest fixtures forever.
             var pending = completed.Where(f => {
                 string cached = db.GetFixtureDetails(f.Provider, f.ExternalId);
-                return string.IsNullOrWhiteSpace(cached) || cached.IndexOf("\\"detailsVersion\\"", StringComparison.OrdinalIgnoreCase) < 0;
+                return string.IsNullOrWhiteSpace(cached) || cached.IndexOf("\"detailsVersion\"", StringComparison.OrdinalIgnoreCase) < 0;
             }).ToList();
             var candidates = pending.Where(f => f.Provider == "FiveDollarFootballAPI").Take(10)
                 .Concat(pending.Where(f => f.Provider != "FiveDollarFootballAPI").Take(5)).ToList();
