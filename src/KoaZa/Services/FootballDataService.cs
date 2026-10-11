@@ -394,6 +394,8 @@ namespace KoaZa.Services
             return output;
         }
 
+        private static string SerializePayload(object payload) { return payload == null ? null : new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.Serialize(payload); }
+
         private static string FixtureDeduplicationKey(FixtureRecord fixture)
         {
             DateTime kickoff;
@@ -429,7 +431,7 @@ namespace KoaZa.Services
                     HomeGoals = GetNullableInt(goals, "home"),
                     AwayGoals = GetNullableInt(goals, "away"),
                     Status = GetString(GetMap(fixture, "status"), "short", ""),
-                    ExternalId = GetString(fixture, "id", ""),
+                    ExternalId = GetString(fixture, "id", ""), RawJson = SerializePayload(item),
                     Referee = GetString(fixture, "referee", "")
                 });
             }
