@@ -772,6 +772,10 @@ namespace KoaZa.Services
             if (provider == "FootballData") return FetchFootballData(league, season);
             if (provider == "OpenLigaDB") return FetchOpenLiga(league, season);
             if (provider == "OddsPapi") return FetchOddsPapi(league);
+            if (provider == "TheOddsAPI") return FetchTheOddsApi(league);
+            if (provider == "TheSportsDB") return FetchTheSportsDb(league, season);
+            if (provider == "AllSportsApi") return FetchAllSportsApi(league);
+            if (provider == "ScoreBat") return FetchScoreBat();
             if (provider == "SportsAPI360") return FetchSportsApi360(league);
             if (provider == "FiveDollarFootballAPI") return FetchFiveDollarRange(league, DateTime.UtcNow.Date.AddDays(-7), DateTime.UtcNow.Date.AddDays(7));
             if (provider == "FootballCharts") return FetchFootballCharts(league, season);
@@ -1124,44 +1128,240 @@ namespace KoaZa.Services
             throw new InvalidOperationException("SportsAPI360 schedule request failed. Check API key and tournament ID (or use 'all').", last);
         }
 
-        // Custom endpoints should return a JSON array, or an object containing response/matches/fixtures/data.
-        // Each row should provide homeTeam, awayTeam, date (or kickoff/date fields), and optional league/homeGoals/awayGoals.
+        // Generic endpoint adapter. Supports common REST envelopes and camel/snake-case fixture schemas.
         private static List<FixtureRecord> FetchCustom(ApiProviderConfig config)
         {
+            if (string.IsNullOrWhiteSpace(config.BaseUrl))
+                throw new InvalidOperationException(config.Provider + " requires its documented HTTPS fixtures/events endpoint in API Settings.");
             string json = Request(config.BaseUrl, string.IsNullOrWhiteSpace(config.HeaderName) ? "x-api-key" : config.HeaderName, config.Key);
-            object parsed = new JavaScriptSerializer().DeserializeObject(json);
+            object parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(json);
             var rootMap = parsed as Dictionary<string, object>;
             object rowsObject = parsed;
             if (rootMap != null)
             {
-                rowsObject = rootMap.ContainsKey("response") ? rootMap["response"] :
-                    rootMap.ContainsKey("matches") ? rootMap["matches"] :
-                    rootMap.ContainsKey("fixtures") ? rootMap["fixtures"] :
-                    rootMap.ContainsKey("data") ? rootMap["data"] : parsed;
+                string[] envelopeKeys = { "response", "matches", "fixtures", "events", "data", "result", "results", "items" };
+                rowsObject = null;
+                foreach (string key in envelopeKeys)
+                    if (rootMap.ContainsKey(key) && rootMap[key] != null) { rowsObject = rootMap[key]; break; }
+                if (rowsObject == null) rowsObject = parsed;
             }
-            var rows = rowsObject as System.Collections.ArrayList;
-            if (rows == null && rowsObject is object[]) rows = new System.Collections.ArrayList((object[])rowsObject);
-            if (rows == null) throw new InvalidOperationException("Custom provider response must be a JSON array or contain response/matches/fixtures/data array.");
+            var rows = ToRows(rowsObject);
+            if (rows.Count == 0)
+                throw new InvalidOperationException(config.Provider + " response did not contain a fixture/event array. Check the endpoint path, API plan and JSON envelope; an API error object is not a fixtures response.");
             var output = new List<FixtureRecord>();
             foreach (var item in rows)
             {
-                string home = GetString(item, "homeTeam", "");
-                string away = GetString(item, "awayTeam", "");
-                if (string.IsNullOrWhiteSpace(home) || home.IndexOf("Dictionary", StringComparison.OrdinalIgnoreCase) >= 0) home = GetString(GetMap(item, "homeTeam"), "name", "");
-                if (string.IsNullOrWhiteSpace(away) || away.IndexOf("Dictionary", StringComparison.OrdinalIgnoreCase) >= 0) away = GetString(GetMap(item, "awayTeam"), "name", "");
-                if (string.IsNullOrWhiteSpace(home) || string.IsNullOrWhiteSpace(away)) continue;
+                var teams = GetMap(item, "teams");
+                var homeMap = GetMap(item, "home");
+                var awayMap = GetMap(item, "away");
+                if (homeMap.Count == 0) homeMap = GetMap(teams, "home");
+                if (awayMap.Count == 0) awayMap = GetMap(teams, "away");
+                string home = FirstString(item, "homeTeam", "home_team", "strHomeTeam", "event_home_team");
+                string away = FirstString(item, "awayTeam", "away_team", "strAwayTeam", "event_away_team");
+                if (home.Length == 0) home = FirstString(homeMap, "name", "teamName", "displayName");
+                if (away.Length == 0) away = FirstString(awayMap, "name", "teamName", "displayName");
+                if (home.Length == 0 || away.Length == 0) continue;
+                string kickoff = FirstString(item, "date", "kickoff", "utcDate", "commence_time", "startTime", "matchDateTimeUTC", "event_date", "kickoff_utc", "dateEvent", "strTimestamp");
+                string leagueName = FirstString(item, "league", "competition", "league_name", "strLeague", "tournamentName");
                 output.Add(new FixtureRecord {
                     Provider = config.Provider,
-                    League = GetString(item, "league", GetString(item, "competition", config.Provider)),
-                    KickoffUtc = GetString(item, "date", GetString(item, "kickoff", GetString(item, "utcDate", ""))),
+                    League = leagueName.Length == 0 ? config.Provider : leagueName,
+                    KickoffUtc = kickoff,
                     HomeTeam = home, AwayTeam = away,
-                    HomeGoals = GetNullableInt(item, "homeGoals"),
-                    AwayGoals = GetNullableInt(item, "awayGoals"),
-                    Status = GetString(item, "status", ""),
-                    ExternalId = GetString(item, "id", "")
+                    HomeGoals = FirstNullableInt(item, "homeGoals", "home_goals", "intHomeScore"),
+                    AwayGoals = FirstNullableInt(item, "awayGoals", "away_goals", "intAwayScore"),
+                    Status = FirstString(item, "status", "event_status", "strStatus"),
+                    ExternalId = FirstString(item, "id", "fixtureId", "event_key", "idEvent")
+                });
+            }
+            if (output.Count == 0)
+                throw new InvalidOperationException(config.Provider + " returned " + rows.Count + " rows but none had recognizable home/away team names. The response schema or endpoint may not be a fixture feed.");
+            return output;
+        }
+
+        private static List<object> ToRows(object value)
+        {
+            var list = value as System.Collections.ArrayList;
+            if (list != null) return list.Cast<object>().ToList();
+            var array = value as object[];
+            if (array != null) return array.ToList();
+            var map = value as Dictionary<string, object>;
+            if (map != null) return map.Values.Where(v => v != null).ToList();
+            return new List<object>();
+        }
+
+        private static string FirstString(object source, params string[] keys)
+        {
+            foreach (string key in keys)
+            {
+                string value = GetString(source, key, "");
+                if (value.Length > 0 && !value.Equals("null", StringComparison.OrdinalIgnoreCase)) return value;
+            }
+            return "";
+        }
+
+        private static int? FirstNullableInt(object source, params string[] keys)
+        {
+            foreach (string key in keys)
+            {
+                int? value = GetNullableInt(source, key);
+                if (value.HasValue) return value;
+            }
+            return null;
+        }
+
+        private static List<FixtureRecord> FetchTheOddsApi(string sportKey)
+        {
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "TheOddsAPI" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+            if (configs.Count == 0) throw new InvalidOperationException("Add an enabled The Odds API key in API Settings.");
+            string selectedSport = string.IsNullOrWhiteSpace(sportKey) || sportKey.Equals("all", StringComparison.OrdinalIgnoreCase)
+                ? "soccer_epl" : sportKey.Trim();
+            Exception last = null;
+            foreach (var config in configs)
+            {
+                try
+                {
+                    string url = "https://api.the-odds-api.com/v4/sports/" + Uri.EscapeDataString(selectedSport) +
+                        "/events?apiKey=" + Uri.EscapeDataString(config.Key);
+                    object parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(Request(url, null, null));
+                    var rows = ToRows(parsed);
+                    if (rows.Count == 0)
+                    {
+                        var error = parsed as Dictionary<string, object>;
+                        string message = error == null ? "" : FirstString(error, "message", "error", "detail");
+                        throw new InvalidOperationException(message.Length == 0 ? "The Odds API returned no events for sport key '" + selectedSport + "'." : "The Odds API: " + message);
+                    }
+                    var output = new List<FixtureRecord>();
+                    foreach (var item in rows)
+                    {
+                        string home = FirstString(item, "home_team");
+                        string away = FirstString(item, "away_team");
+                        if (home.Length == 0 || away.Length == 0) continue;
+                        output.Add(new FixtureRecord {
+                            Provider = "TheOddsAPI", League = selectedSport,
+                            KickoffUtc = FirstString(item, "commence_time"),
+                            HomeTeam = home, AwayTeam = away,
+                            Status = "scheduled", ExternalId = FirstString(item, "id")
+                        });
+                    }
+                    if (output.Count == 0) throw new InvalidOperationException("The Odds API response did not contain home_team/away_team fields.");
+                    return output;
+                }
+                catch (Exception ex) { last = ex; }
+            }
+            throw new InvalidOperationException("The Odds API event request failed. Use a valid sport key such as soccer_epl; this adapter imports events, not bookmaker odds.", last);
+        }
+
+        private static List<FixtureRecord> FetchTheSportsDb(string leagueId, int season)
+        {
+            string id = string.IsNullOrWhiteSpace(leagueId) || leagueId.Equals("all", StringComparison.OrdinalIgnoreCase) ? "4328" : leagueId.Trim();
+            string seasonName = season.ToString(CultureInfo.InvariantCulture) + "-" + (season + 1).ToString(CultureInfo.InvariantCulture);
+            string url = "https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=" + Uri.EscapeDataString(id) +
+                "&s=" + Uri.EscapeDataString(seasonName);
+            object parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(Request(url, null, null));
+            var root = parsed as Dictionary<string, object>;
+            var rows = root == null ? new List<object>() : GetList(root, "events");
+            if (rows.Count == 0) throw new InvalidOperationException("TheSportsDB returned no events. Use a valid league ID; the default is English Premier League (4328).");
+            var output = new List<FixtureRecord>();
+            foreach (var item in rows)
+            {
+                string home = FirstString(item, "strHomeTeam"), away = FirstString(item, "strAwayTeam");
+                if (home.Length == 0 || away.Length == 0) continue;
+                output.Add(new FixtureRecord {
+                    Provider = "TheSportsDB", League = FirstString(item, "strLeague"),
+                    KickoffUtc = FirstString(item, "strTimestamp", "dateEvent", "dateEventLocal"),
+                    HomeTeam = home, AwayTeam = away,
+                    HomeGoals = FirstNullableInt(item, "intHomeScore"),
+                    AwayGoals = FirstNullableInt(item, "intAwayScore"),
+                    Status = FirstString(item, "strStatus"), ExternalId = FirstString(item, "idEvent")
                 });
             }
             return output;
+        }
+
+        private static List<FixtureRecord> FetchAllSportsApi(string league)
+        {
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "AllSportsApi" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+            if (configs.Count == 0) throw new InvalidOperationException("Add an enabled AllSportsApi key in API Settings.");
+            DateTime from = DateTime.UtcNow.Date.AddDays(-7), to = DateTime.UtcNow.Date.AddDays(7);
+            Exception last = null;
+            foreach (var config in configs)
+            {
+                try
+                {
+                    string url = "https://apiv2.allsportsapi.com/football/?met=Fixtures&APIkey=" + Uri.EscapeDataString(config.Key) +
+                        "&from=" + from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) +
+                        "&to=" + to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                    object parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(Request(url, null, null));
+                    var root = parsed as Dictionary<string, object>;
+                    if (root == null || GetString(root, "success", "") != "1")
+                        throw new InvalidOperationException("AllSportsApi returned an error or a response without success=1.");
+                    var rows = root.ContainsKey("result") ? ToRows(root["result"]) : new List<object>();
+                    var output = new List<FixtureRecord>();
+                    foreach (var item in rows)
+                    {
+                        string home = FirstString(item, "event_home_team");
+                        string away = FirstString(item, "event_away_team");
+                        if (home.Length == 0 || away.Length == 0) continue;
+                        string score = FirstString(item, "event_final_result");
+                        int? hg = null, ag = null;
+                        if (score.Contains("-"))
+                        {
+                            string[] parts = score.Split('-');
+                            int h, a;
+                            if (parts.Length == 2 && int.TryParse(parts[0].Trim(), out h) && int.TryParse(parts[1].Trim(), out a)) { hg = h; ag = a; }
+                        }
+                        output.Add(new FixtureRecord {
+                            Provider = "AllSportsApi", League = FirstString(item, "league_name"),
+                            KickoffUtc = FirstString(item, "event_date") + (FirstString(item, "event_time").Length > 0 ? "T" + FirstString(item, "event_time") + "Z" : ""),
+                            HomeTeam = home, AwayTeam = away, HomeGoals = hg, AwayGoals = ag,
+                            Status = FirstString(item, "event_status"), ExternalId = FirstString(item, "event_key")
+                        });
+                    }
+                    if (output.Count == 0) throw new InvalidOperationException("AllSportsApi returned no recognizable fixtures in the selected date window.");
+                    return output;
+                }
+                catch (Exception ex) { last = ex; }
+            }
+            throw new InvalidOperationException("AllSportsApi fixture request failed. Check key, free-plan coverage and quota.", last);
+        }
+
+        private static List<FixtureRecord> FetchScoreBat()
+        {
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "ScoreBat" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+            if (configs.Count == 0) throw new InvalidOperationException("Add a ScoreBat API token in API Settings.");
+            Exception last = null;
+            foreach (var config in configs)
+            {
+                try
+                {
+                    string url = "https://www.scorebat.com/video-api/v3/feed/?token=" + Uri.EscapeDataString(config.Key);
+                    object parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(Request(url, null, null));
+                    var root = parsed as Dictionary<string, object>;
+                    var rows = root == null ? new List<object>() : GetList(root, "response");
+                    var output = new List<FixtureRecord>();
+                    foreach (var item in rows)
+                    {
+                        string title = FirstString(item, "title");
+                        string delimiter = title.IndexOf(" vs ", StringComparison.OrdinalIgnoreCase) >= 0 ? " vs " : " v ";
+                        int split = title.IndexOf(delimiter, StringComparison.OrdinalIgnoreCase);
+                        if (split < 1) continue;
+                        string home = title.Substring(0, split).Trim();
+                        string away = title.Substring(split + delimiter.Length).Trim();
+                        if (home.Length == 0 || away.Length == 0) continue;
+                        output.Add(new FixtureRecord {
+                            Provider = "ScoreBat", League = FirstString(item, "competition"),
+                            KickoffUtc = FirstString(item, "date"),
+                            HomeTeam = home, AwayTeam = away, Status = "video available",
+                            ExternalId = FirstString(item, "matchviewUrl")
+                        });
+                    }
+                    if (output.Count > 0) return output;
+                    throw new InvalidOperationException("ScoreBat returned no titles that could be parsed as 'Home vs Away'.");
+                }
+                catch (Exception ex) { last = ex; }
+            }
+            throw new InvalidOperationException("ScoreBat request failed. Check API token and free-plan access.", last);
         }
 
         private static List<FixtureRecord> FetchApiFootball(string league, int season)
@@ -1435,7 +1635,16 @@ namespace KoaZa.Services
             _providerBox.Items.Add(new ProviderChoice("FootballData", "Football-Data (football-data.org)"));
             _providerBox.Items.Add(new ProviderChoice("Sportmonks", "Sportmonks"));
             _providerBox.Items.Add(new ProviderChoice("TheOddsAPI", "The Odds API"));
-            _providerBox.Items.Add(new ProviderChoice("TheRundown", "TheRundown.io"));
+            _providerBox.Items.Add(new ProviderChoice("TheRundown", "TheRundown.io (custom endpoint)"));
+            _providerBox.Items.Add(new ProviderChoice("TheSportsDB", "TheSportsDB"));
+            _providerBox.Items.Add(new ProviderChoice("AllSportsApi", "AllSportsApi"));
+            _providerBox.Items.Add(new ProviderChoice("FootballBettingOdds", "Football Betting Odds (RapidAPI/custom endpoint)"));
+            _providerBox.Items.Add(new ProviderChoice("Betfair", "Betfair API (custom endpoint/session required)"));
+            _providerBox.Items.Add(new ProviderChoice("Sportradar", "Sportradar (custom endpoint)"));
+            _providerBox.Items.Add(new ProviderChoice("SportsDataIO", "SportsDataIO (custom endpoint)"));
+            _providerBox.Items.Add(new ProviderChoice("ScoreBat", "ScoreBat Video API"));
+            _providerBox.Items.Add(new ProviderChoice("BallDontLie", "BALLDONTLIE (custom endpoint)"));
+            _providerBox.Items.Add(new ProviderChoice("PremierLeagueStats", "Premier League Stats (RapidAPI/custom endpoint)"));
             _providerBox.Items.Add(new ProviderChoice("Custom", LocalizationService.T("Add provider manually", "افزودن دستی")));
             _providerBox.SelectedIndex = 0;
             _providerBox.SelectionChanged += ProviderBox_SelectionChanged;
@@ -1714,7 +1923,7 @@ namespace KoaZa.Services
             _baseUrlBox.Text = "HTTPS endpoint";
             _headerBox.Text = "x-api-key";
             _customNameBox.IsEnabled = choice.Id == "Custom";
-            _baseUrlBox.IsEnabled = choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData" || choice.Id == "Sportmonks" || choice.Id == "TheOddsAPI" || choice.Id == "TheRundown";
+            _baseUrlBox.IsEnabled = choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData" || choice.Id == "Sportmonks" || choice.Id == "TheRundown" || choice.Id == "FootballBettingOdds" || choice.Id == "Betfair" || choice.Id == "Sportradar" || choice.Id == "SportsDataIO" || choice.Id == "BallDontLie" || choice.Id == "PremierLeagueStats";
             _keyBox.ToolTip = choice.Id == "OpenLigaDB" ? "This provider does not require a key." : choice.Id == "FootballCharts" ? "Optional bearer key for the higher daily request limit; no key is required to start." : "Paste the token/key from this provider's official account.";
         }
 
@@ -1728,7 +1937,7 @@ namespace KoaZa.Services
             string headerName = string.IsNullOrWhiteSpace(_headerBox.Text) ? "x-api-key" : _headerBox.Text.Trim();
             if (choice.Id == "Custom")
                 providerId = (_customNameBox.Text == "Custom name" ? "" : (_customNameBox.Text ?? "").Trim());
-            if (choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData" || choice.Id == "Sportmonks" || choice.Id == "TheOddsAPI" || choice.Id == "TheRundown")
+            if (choice.Id == "Custom" || choice.Id == "Floodlight" || choice.Id == "SportsOpenData" || choice.Id == "Sportmonks" || choice.Id == "TheRundown" || choice.Id == "FootballBettingOdds" || choice.Id == "Betfair" || choice.Id == "Sportradar" || choice.Id == "SportsDataIO" || choice.Id == "BallDontLie" || choice.Id == "PremierLeagueStats")
             {
                 if ((choice.Id == "Custom" && providerId.Length == 0) || baseUrl.Length == 0 || !baseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                 {
@@ -1736,7 +1945,7 @@ namespace KoaZa.Services
                     return;
                 }
             }
-            if (choice.Id != "OpenLigaDB" && choice.Id != "FootballCharts" && key.Length == 0)
+            if (choice.Id != "OpenLigaDB" && choice.Id != "FootballCharts" && choice.Id != "TheSportsDB" && key.Length == 0)
             {
                 MessageBox.Show(this, LocalizationService.T("This provider requires an API key/token.", "این سرویس به کلید API یا توکن نیاز دارد."), LocalizationService.T("API settings", "تنظیمات API"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
@@ -1851,7 +2060,16 @@ namespace KoaZa.Services
             _providerBox.Items.Add(new ProviderChoice("Sportmonks", "Sportmonks"));
             _providerBox.Items.Add(new ProviderChoice("TheOddsAPI", "The Odds API"));
             _providerBox.Items.Add(new ProviderChoice("TheRundown", "TheRundown.io"));
-            foreach (var configured in ApiProviderStore.Load().Where(p => p.Enabled && p.Provider != "ApiFootball" && p.Provider != "ApiSports" && p.Provider != "FootballData" && p.Provider != "OpenLigaDB" && p.Provider != "OddsPapi" && p.Provider != "Floodlight" && p.Provider != "SportsOpenData" && p.Provider != "SportsAPI360" && p.Provider != "FiveDollarFootballAPI" && p.Provider != "FootballCharts" && p.Provider != "Sportmonks" && p.Provider != "TheOddsAPI" && p.Provider != "TheRundown"))
+            _providerBox.Items.Add(new ProviderChoice("TheSportsDB", "TheSportsDB"));
+            _providerBox.Items.Add(new ProviderChoice("AllSportsApi", "AllSportsApi"));
+            _providerBox.Items.Add(new ProviderChoice("FootballBettingOdds", "Football Betting Odds"));
+            _providerBox.Items.Add(new ProviderChoice("Betfair", "Betfair API"));
+            _providerBox.Items.Add(new ProviderChoice("Sportradar", "Sportradar"));
+            _providerBox.Items.Add(new ProviderChoice("SportsDataIO", "SportsDataIO"));
+            _providerBox.Items.Add(new ProviderChoice("ScoreBat", "ScoreBat"));
+            _providerBox.Items.Add(new ProviderChoice("BallDontLie", "BALLDONTLIE"));
+            _providerBox.Items.Add(new ProviderChoice("PremierLeagueStats", "Premier League Stats"));
+            foreach (var configured in ApiProviderStore.Load().Where(p => p.Enabled && p.Provider != "ApiFootball" && p.Provider != "ApiSports" && p.Provider != "FootballData" && p.Provider != "OpenLigaDB" && p.Provider != "OddsPapi" && p.Provider != "Floodlight" && p.Provider != "SportsOpenData" && p.Provider != "SportsAPI360" && p.Provider != "FiveDollarFootballAPI" && p.Provider != "FootballCharts" && p.Provider != "Sportmonks" && p.Provider != "TheOddsAPI" && p.Provider != "TheRundown" && p.Provider != "TheSportsDB" && p.Provider != "AllSportsApi" && p.Provider != "FootballBettingOdds" && p.Provider != "Betfair" && p.Provider != "Sportradar" && p.Provider != "SportsDataIO" && p.Provider != "ScoreBat" && p.Provider != "BallDontLie" && p.Provider != "PremierLeagueStats"))
                 _providerBox.Items.Add(new ProviderChoice(configured.Provider, configured.Provider));
             _providerBox.SelectedIndex = 0;
             _providerBox.SelectionChanged += ProviderChanged;
