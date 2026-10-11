@@ -256,13 +256,13 @@ namespace KoaZa.Services
 
             if (providers.Any(p => p.Enabled && p.Provider == "TheSportsDB"))
             {
-                try { combined.AddRange(FetchTheSportsDb("4328", season)); }
+                try { combined.AddRange(FetchTheSportsDbAll(season)); }
                 catch (Exception ex) { errors.Add("TheSportsDB: " + ex.Message); }
             }
 
             if (providers.Any(p => p.Enabled && p.Provider == "AllSportsApi" && !string.IsNullOrWhiteSpace(p.Key)))
             {
-                try { combined.AddRange(FetchAllSportsApi("all")); }
+                try { combined.AddRange(FetchAllSportsApi("all", fromDate, toDate)); }
                 catch (Exception ex) { errors.Add("AllSportsApi: " + ex.Message); }
             }
 
@@ -270,6 +270,12 @@ namespace KoaZa.Services
             {
                 try { combined.AddRange(FetchScoreBat()); }
                 catch (Exception ex) { errors.Add("ScoreBat: " + ex.Message); }
+            }
+
+            if (providers.Any(p => p.Enabled && p.Provider == "FootballCharts"))
+            {
+                try { combined.AddRange(FetchFootballCharts("premier", season)); }
+                catch (Exception ex) { errors.Add("Football-Charts: " + ex.Message); }
             }
 
             foreach (var config in providers.Where(p => p.Provider == "SportsAPI360" && !string.IsNullOrWhiteSpace(p.Key)))
