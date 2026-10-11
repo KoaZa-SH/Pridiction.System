@@ -176,7 +176,7 @@ namespace KoaZa.Services
             if (provider == "ApiFootball" || provider == "ApiSports")
                 rows = FetchApiFootballRollingRange(fromDate, toDate, null);
             else if (provider == "FiveDollarFootballAPI")
-                rows = FetchFiveDollarRange("all", fromDate, toDate);
+                rows = FetchFiveDollarRange("all", fromDate < today.AddDays(-90) ? today.AddDays(-90) : fromDate, toDate);
             else if (provider == "FootballData")
                 rows = FetchFootballDataBulk(season, fromDate, toDate);
             else if (provider == "TheOddsAPI")
@@ -187,6 +187,8 @@ namespace KoaZa.Services
                 rows = FetchAllSportsApi("all", fromDate, toDate);
             else if (provider == "ScoreBat")
                 rows = FetchScoreBat();
+            else if (provider == "OddsPapi")
+                rows = FetchOddsPapiAll();
             else if (provider == "SportsAPI360")
                 rows = FetchSportsApi360("all");
             else if (provider == "OpenLigaDB")
@@ -240,6 +242,12 @@ namespace KoaZa.Services
                 catch (Exception ex) { errors.Add("OpenLigaDB: " + ex.Message); }
             }
 
+            if (providers.Any(p => p.Enabled && p.Provider == "OddsPapi" && !string.IsNullOrWhiteSpace(p.Key)))
+            {
+                try { combined.AddRange(FetchOddsPapiAll()); }
+                catch (Exception ex) { errors.Add("OddsPapi: " + ex.Message); }
+            }
+
             if (providers.Any(p => p.Enabled && p.Provider == "TheOddsAPI" && !string.IsNullOrWhiteSpace(p.Key)))
             {
                 try { combined.AddRange(FetchTheOddsApiAll()); }
@@ -272,7 +280,7 @@ namespace KoaZa.Services
 
             if (providers.Any(p => p.Provider == "FiveDollarFootballAPI" && !string.IsNullOrWhiteSpace(p.Key)))
             {
-                try { combined.AddRange(FetchFiveDollarRange("all", fromDate, toDate)); }
+                try { combined.AddRange(FetchFiveDollarRange("all", fromDate < today.AddDays(-90) ? today.AddDays(-90) : fromDate, toDate)); }
                 catch (Exception ex) { errors.Add("5DollarFootballAPI: " + ex.Message); }
             }
 
@@ -1212,7 +1220,7 @@ namespace KoaZa.Services
             {
                 try
                 {
-                    for (int day = 0; day < 7; day++)
+                    for (int day = -30; day <= 14; day++)
                     {
                         string date = DateTime.UtcNow.Date.AddDays(day).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                         string url = "https://apiv3.sportsapi360.com/football/api/v1/matches/schedule?date=" + date;
