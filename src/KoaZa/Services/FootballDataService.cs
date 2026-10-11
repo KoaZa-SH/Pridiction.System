@@ -2353,6 +2353,24 @@ namespace KoaZa.Services
         {
             if (fixtures == null) return 0;
             var db = new KoaZa.Data.DatabaseService();
+            // Normalize any statistics that providers embed directly in their fixture/event response.
+            foreach (var row in fixtures.Where(f => f != null && !string.IsNullOrWhiteSpace(f.RawJson)))
+            {
+                try
+                {
+                    var parsed = MatchStatisticsParser.ParseFiveDollarOrGeneric(row.RawJson, row);
+                    if (parsed != null && (parsed.HomeShots.HasValue || parsed.AwayShots.HasValue ||
+                        parsed.HomeShotsOnTarget.HasValue || parsed.AwayShotsOnTarget.HasValue ||
+                        parsed.HomeCorners.HasValue || parsed.AwayCorners.HasValue ||
+                        parsed.HomeYellowCards.HasValue || parsed.AwayYellowCards.HasValue ||
+                        parsed.HomeRedCards.HasValue || parsed.AwayRedCards.HasValue ||
+                        parsed.HomeFouls.HasValue || parsed.AwayFouls.HasValue ||
+                        parsed.HomePossession.HasValue || parsed.AwayPossession.HasValue ||
+                        !string.IsNullOrWhiteSpace(parsed.Referee)))
+                        db.SaveMatchStatistics(parsed);
+                }
+                catch { /* A provider-specific raw shape must not stop other fixture imports. */ }
+            }
             var completed = fixtures.Where(f => f.HomeGoals.HasValue && f.AwayGoals.HasValue &&
                 new[] { "FT", "AET", "PEN", "FINISHED", "MATCH FINISHED", "FULL TIME", "AFTER EXTRA TIME", "AFTER PENALTIES" }.Contains((f.Status ?? "").Trim().ToUpperInvariant()) &&
                 (f.Provider == "API-Football" || f.Provider == "ApiFootball" || f.Provider == "ApiSports" || f.Provider == "FiveDollarFootballAPI"))
