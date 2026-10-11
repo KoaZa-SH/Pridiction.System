@@ -1192,6 +1192,10 @@ namespace KoaZa.Services
                 if (awayMap.Count == 0) awayMap = GetMap(teams, "away");
                 string home = FirstString(item, "homeTeam", "home_team", "strHomeTeam", "event_home_team");
                 string away = FirstString(item, "awayTeam", "away_team", "strAwayTeam", "event_away_team");
+                if (home.IndexOf("Dictionary", StringComparison.OrdinalIgnoreCase) >= 0)
+                    home = FirstString(GetMap(item, "homeTeam"), "name", "teamName", "displayName");
+                if (away.IndexOf("Dictionary", StringComparison.OrdinalIgnoreCase) >= 0)
+                    away = FirstString(GetMap(item, "awayTeam"), "name", "teamName", "displayName");
                 if (home.Length == 0) home = FirstString(homeMap, "name", "teamName", "displayName");
                 if (away.Length == 0) away = FirstString(awayMap, "name", "teamName", "displayName");
                 if (home.Length == 0 || away.Length == 0) continue;
