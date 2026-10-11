@@ -194,7 +194,7 @@ namespace KoaZa.Services
             else if (provider == "OpenLigaDB")
                 rows = FetchOpenLigaAll(season);
             else if (provider == "FootballCharts")
-                rows = FetchFootballCharts("premier", season);
+                rows = FetchFootballChartsAll(season);
             else
             {
                 var config = ApiProviderStore.Load().FirstOrDefault(p => p.Enabled && p.Provider == provider);
@@ -274,7 +274,7 @@ namespace KoaZa.Services
 
             if (providers.Any(p => p.Enabled && p.Provider == "FootballCharts"))
             {
-                try { combined.AddRange(FetchFootballCharts("premier", season)); }
+                try { combined.AddRange(FetchFootballChartsAll(season)); }
                 catch (Exception ex) { errors.Add("Football-Charts: " + ex.Message); }
             }
 
@@ -1064,6 +1064,32 @@ namespace KoaZa.Services
                 });
             }
             return output;
+        }
+
+        private static List<FixtureRecord> FetchFootballChartsAll(int season)
+        {
+            string key = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "FootballCharts")
+                .Select(p => p.Key).FirstOrDefault(k => !string.IsNullOrWhiteSpace(k));
+            var request = (HttpWebRequest)WebRequest.Create("https://footballcharts-backend.onrender.com/api/v1/leagues/");
+            request.Method = "GET"; request.Accept = "application/json"; request.Timeout = 25000; request.ReadWriteTimeout = 25000;
+            if (!string.IsNullOrWhiteSpace(key)) request.Headers[HttpRequestHeader.Authorization] = "Bearer " + key;
+            var parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(ReadResponse(request));
+            var root = parsed as Dictionary<string, object>;
+            var leagues = ToRows(parsed);
+            if (leagues.Count == 0 && root != null) leagues = ToRows(GetList(root, "leagues"));
+            var slugs = leagues.Select(x => FirstString(x, "slug", "league_slug", "league", "id"))
+                .Where(x => x.Length > 0 && !x.Contains(" ")).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (slugs.Count == 0) throw new InvalidOperationException("Football-Charts did not return a discoverable league catalog.");
+            var all = new List<FixtureRecord>();
+            var errors = new List<string>();
+            foreach (string slug in slugs)
+            {
+                try { all.AddRange(FetchFootballCharts(slug, season)); }
+                catch (Exception ex) { errors.Add(slug + ": " + ex.Message); }
+            }
+            var rows = all.GroupBy(x => (x.Provider ?? "") + "|" + (x.ExternalId ?? "") + "|" + (x.KickoffUtc ?? ""), StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
+            if (rows.Count == 0) throw new InvalidOperationException("No fixtures/results were returned from discovered Football-Charts leagues. " + string.Join(" | ", errors.Take(4)));
+            return rows;
         }
 
         private static List<FixtureRecord> FetchFootballCharts(string league, int season)
