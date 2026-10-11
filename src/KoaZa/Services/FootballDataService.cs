@@ -277,7 +277,7 @@ namespace KoaZa.Services
 
             if (providers.Any(p => p.Enabled && p.Provider == "FootballCharts"))
             {
-                try { combined.AddRange(FetchFootballChartsAll(season)); }
+                try { combined.AddRange(FetchFootballCharts("premier", season)); }
                 catch (Exception ex) { errors.Add("Football-Charts: " + ex.Message); }
             }
 
@@ -1276,7 +1276,7 @@ namespace KoaZa.Services
             {
                 try
                 {
-                    for (int day = -30; day <= 14; day++)
+                    for (int day = -7; day <= 7; day++)
                     {
                         string date = DateTime.UtcNow.Date.AddDays(day).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                         string url = "https://apiv3.sportsapi360.com/football/api/v1/matches/schedule?date=" + date;
@@ -1430,25 +1430,28 @@ namespace KoaZa.Services
                         try
                         {
                             var events = FetchTheOddsApi(key);
-                            // Event endpoint supplies teams and kickoff only. Store the odds payload too
-                            // when the account's quota/markets permit it.
-                            try
+                            // Odds credits are limited on free plans: retain events for every discovered
+                            // soccer competition, and request the richer markets for the main EPL feed.
+                            if (key.Equals("soccer_epl", StringComparison.OrdinalIgnoreCase))
                             {
-                                string oddsUrl = "https://api.the-odds-api.com/v4/sports/" + Uri.EscapeDataString(key) +
-                                    "/odds?regions=uk&markets=h2h,totals,spreads&oddsFormat=decimal&apiKey=" + Uri.EscapeDataString(config.Key);
-                                var oddsRows = ToRows(new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(Request(oddsUrl, null, null)));
-                                foreach (var oddsItem in oddsRows)
+                                try
                                 {
-                                    string eventId = FirstString(oddsItem, "id");
-                                    var fixture = events.FirstOrDefault(x => string.Equals(x.ExternalId, eventId, StringComparison.OrdinalIgnoreCase));
-                                    if (fixture == null) continue;
-                                    var wrapper = new Dictionary<string, object>();
-                                    wrapper["event"] = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(fixture.RawJson);
-                                    wrapper["odds"] = oddsItem;
-                                    fixture.RawJson = SerializePayload(wrapper);
+                                    string oddsUrl = "https://api.the-odds-api.com/v4/sports/" + Uri.EscapeDataString(key) +
+                                        "/odds?regions=uk&markets=h2h,totals,spreads&oddsFormat=decimal&apiKey=" + Uri.EscapeDataString(config.Key);
+                                    var oddsRows = ToRows(new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(Request(oddsUrl, null, null)));
+                                    foreach (var oddsItem in oddsRows)
+                                    {
+                                        string eventId = FirstString(oddsItem, "id");
+                                        var fixture = events.FirstOrDefault(x => string.Equals(x.ExternalId, eventId, StringComparison.OrdinalIgnoreCase));
+                                        if (fixture == null) continue;
+                                        var wrapper = new Dictionary<string, object>();
+                                        wrapper["event"] = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(fixture.RawJson);
+                                        wrapper["odds"] = oddsItem;
+                                        fixture.RawJson = SerializePayload(wrapper);
+                                    }
                                 }
+                                catch (Exception oddsError) { errors.Add(key + " odds: " + oddsError.Message); }
                             }
-                            catch (Exception oddsError) { errors.Add(key + " odds: " + oddsError.Message); }
                             all.AddRange(events);
                         }
                         catch (Exception ex) { errors.Add(key + ": " + ex.Message); }
