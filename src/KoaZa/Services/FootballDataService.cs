@@ -29,7 +29,8 @@ namespace KoaZa.Services
                     Provider == "FootballData" ? "Football-Data (football-data.org)" :
                     Provider == "OpenLigaDB" ? "OpenLigaDB (no key)" :
                     Provider == "OddsPapi" ? "OddsPapi" : Provider == "Floodlight" ? "Floodlight" :
-                    Provider == "SportsOpenData" ? "Sports Open Data" : Provider == "SportsAPI360" ? "SportsAPI360" : Provider == "FiveDollarFootballAPI" ? "5DollarFootballAPI" : Provider == "FootballCharts" ? "Football-Charts" : Provider == "Sportmonks" ? "Sportmonks" : Provider == "TheOddsAPI" ? "The Odds API" : Provider == "TheRundown" ? "TheRundown.io" : Provider;
+                    Provider == "SportsOpenData" ? "Sports Open Data" : Provider == "SportsAPI360" ? "SportsAPI360" : Provider == "FiveDollarFootballAPI" ? "5DollarFootballAPI" : Provider == "FootballCharts" ? "Football-Charts" : Provider == "Sportmonks" ? "Sportmonks" : Provider == "TheOddsAPI" ? "The Odds API" : Provider == "TheRundown" ? "TheRundown.io" :
+                    Provider == "TheSportsDB" ? "TheSportsDB" : Provider == "AllSportsApi" ? "AllSportsApi" : Provider == "FootballBettingOdds" ? "Football Betting Odds" : Provider == "Betfair" ? "Betfair API" : Provider == "Sportradar" ? "Sportradar" : Provider == "SportsDataIO" ? "SportsDataIO" : Provider == "ScoreBat" ? "ScoreBat" : Provider == "BallDontLie" ? "BALLDONTLIE" : Provider == "PremierLeagueStats" ? "Premier League Stats" : Provider;
                 return label + (string.IsNullOrEmpty(Key) ? "" : " • " + Mask(Key)) +
                     (Enabled ? LocalizationService.T(" • enabled", " • فعال") : LocalizationService.T(" • disabled", " • غیرفعال"));
             }
@@ -275,6 +276,8 @@ namespace KoaZa.Services
                 rows = FetchFiveDollarRange(league, fromDate, toDate);
             else if (provider == "FootballCharts")
                 rows = FetchFootballCharts(league, season);
+            else if (provider == "AllSportsApi")
+                rows = FetchAllSportsApi(league, fromDate, toDate);
             else if (provider == "FootballData" && (string.IsNullOrWhiteSpace(league) || league.Trim().Equals("all", StringComparison.OrdinalIgnoreCase)))
                 rows = FetchFootballDataBulk(season, fromDate);
             else
@@ -1303,11 +1306,12 @@ namespace KoaZa.Services
             return output;
         }
 
-        private static List<FixtureRecord> FetchAllSportsApi(string league)
+        private static List<FixtureRecord> FetchAllSportsApi(string league, DateTime? fromDate = null, DateTime? toDate = null)
         {
             var configs = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "AllSportsApi" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
             if (configs.Count == 0) throw new InvalidOperationException("Add an enabled AllSportsApi key in API Settings.");
-            DateTime from = DateTime.UtcNow.Date.AddDays(-7), to = DateTime.UtcNow.Date.AddDays(7);
+            DateTime from = (fromDate ?? DateTime.UtcNow.Date.AddDays(-7)).Date;
+            DateTime to = (toDate ?? DateTime.UtcNow.Date.AddDays(7)).Date;
             Exception last = null;
             foreach (var config in configs)
             {
