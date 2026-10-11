@@ -200,6 +200,30 @@ namespace KoaZa.Services
                 catch (Exception ex) { errors.Add("OpenLigaDB: " + ex.Message); }
             }
 
+            if (providers.Any(p => p.Enabled && p.Provider == "TheOddsAPI" && !string.IsNullOrWhiteSpace(p.Key)))
+            {
+                try { combined.AddRange(FetchTheOddsApi("soccer_epl")); }
+                catch (Exception ex) { errors.Add("The Odds API: " + ex.Message); }
+            }
+
+            if (providers.Any(p => p.Enabled && p.Provider == "TheSportsDB"))
+            {
+                try { combined.AddRange(FetchTheSportsDb("4328", season)); }
+                catch (Exception ex) { errors.Add("TheSportsDB: " + ex.Message); }
+            }
+
+            if (providers.Any(p => p.Enabled && p.Provider == "AllSportsApi" && !string.IsNullOrWhiteSpace(p.Key)))
+            {
+                try { combined.AddRange(FetchAllSportsApi("all")); }
+                catch (Exception ex) { errors.Add("AllSportsApi: " + ex.Message); }
+            }
+
+            if (providers.Any(p => p.Enabled && p.Provider == "ScoreBat" && !string.IsNullOrWhiteSpace(p.Key)))
+            {
+                try { combined.AddRange(FetchScoreBat()); }
+                catch (Exception ex) { errors.Add("ScoreBat: " + ex.Message); }
+            }
+
             foreach (var config in providers.Where(p => p.Provider == "SportsAPI360" && !string.IsNullOrWhiteSpace(p.Key)))
             {
                 try { combined.AddRange(FetchSportsApi360("all")); }
