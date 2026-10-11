@@ -2352,13 +2352,19 @@ namespace KoaZa.Services
         public static int ImportHistoricalStatistics(List<FixtureRecord> fixtures)
         {
             if (fixtures == null) return 0;
+            var db = new KoaZa.Data.DatabaseService();
             var completed = fixtures.Where(f => f.HomeGoals.HasValue && f.AwayGoals.HasValue &&
                 new[] { "FT", "AET", "PEN", "FINISHED", "MATCH FINISHED", "FULL TIME", "AFTER EXTRA TIME", "AFTER PENALTIES" }.Contains((f.Status ?? "").Trim().ToUpperInvariant()) &&
                 (f.Provider == "API-Football" || f.Provider == "ApiFootball" || f.Provider == "ApiSports" || f.Provider == "FiveDollarFootballAPI"))
                 .OrderByDescending(f => f.KickoffUtc).ToList();
-            var candidates = completed.Where(f => f.Provider == "FiveDollarFootballAPI").Take(10)
-                .Concat(completed.Where(f => f.Provider != "FiveDollarFootballAPI").Take(5)).ToList();
-            var db = new KoaZa.Data.DatabaseService();
+            // Process the next un-enriched matches on each refresh instead of repeatedly spending quota
+            // on the same newest fixtures forever.
+            var pending = completed.Where(f => {
+                string cached = db.GetFixtureDetails(f.Provider, f.ExternalId);
+                return string.IsNullOrWhiteSpace(cached) || cached.IndexOf("\\"detailsVersion\\"", StringComparison.OrdinalIgnoreCase) < 0;
+            }).ToList();
+            var candidates = pending.Where(f => f.Provider == "FiveDollarFootballAPI").Take(10)
+                .Concat(pending.Where(f => f.Provider != "FiveDollarFootballAPI").Take(5)).ToList();
             int imported = 0;
             foreach (var fixture in candidates)
             {
