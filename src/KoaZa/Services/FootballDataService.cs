@@ -1380,7 +1380,7 @@ namespace KoaZa.Services
             {
                 try
                 {
-                    string url = "https://www.scorebat.com/video-api/v3/feed/?token=" + Uri.EscapeDataString(config.Key);
+                    string url = "https://www.scorebat.com/video-api/v3/free-feed/?token=" + Uri.EscapeDataString(config.Key);
                     object parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(Request(url, null, null));
                     var root = parsed as Dictionary<string, object>;
                     var rows = root == null ? new List<object>() : GetList(root, "response");
@@ -1388,11 +1388,20 @@ namespace KoaZa.Services
                     foreach (var item in rows)
                     {
                         string title = FirstString(item, "title");
-                        string delimiter = title.IndexOf(" vs ", StringComparison.OrdinalIgnoreCase) >= 0 ? " vs " : " v ";
-                        int split = title.IndexOf(delimiter, StringComparison.OrdinalIgnoreCase);
-                        if (split < 1) continue;
-                        string home = title.Substring(0, split).Trim();
-                        string away = title.Substring(split + delimiter.Length).Trim();
+                        string home = FirstString(GetMap(item, "homeTeam"), "name");
+                        string away = FirstString(GetMap(item, "awayTeam"), "name");
+                        if (home.Length == 0 || away.Length == 0)
+                        {
+                            string[] delimiters = { " vs ", " v ", " - " };
+                            foreach (string delimiter in delimiters)
+                            {
+                                int split = title.IndexOf(delimiter, StringComparison.OrdinalIgnoreCase);
+                                if (split <= 0) continue;
+                                home = title.Substring(0, split).Trim();
+                                away = title.Substring(split + delimiter.Length).Trim();
+                                break;
+                            }
+                        }
                         if (home.Length == 0 || away.Length == 0) continue;
                         output.Add(new FixtureRecord {
                             Provider = "ScoreBat", League = FirstString(item, "competition"),
