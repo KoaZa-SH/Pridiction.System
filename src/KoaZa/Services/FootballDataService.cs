@@ -237,7 +237,11 @@ namespace KoaZa.Services
                 catch (Exception ex) { errors.Add("5DollarFootballAPI: " + ex.Message); }
             }
 
-            foreach (var config in providers.Where(p => !string.IsNullOrWhiteSpace(p.BaseUrl)))
+            foreach (var config in providers.Where(p => !string.IsNullOrWhiteSpace(p.BaseUrl) &&
+                p.Provider != "ApiFootball" && p.Provider != "ApiSports" && p.Provider != "FootballData" &&
+                p.Provider != "OpenLigaDB" && p.Provider != "OddsPapi" && p.Provider != "SportsAPI360" &&
+                p.Provider != "FiveDollarFootballAPI" && p.Provider != "FootballCharts" &&
+                p.Provider != "TheOddsAPI" && p.Provider != "TheSportsDB" && p.Provider != "AllSportsApi" && p.Provider != "ScoreBat"))
             {
                 try { combined.AddRange(FetchCustom(config)); }
                 catch (Exception ex) { errors.Add(config.Provider + ": " + ex.Message); }
@@ -1330,7 +1334,7 @@ namespace KoaZa.Services
                 {
                     string url = "https://apiv2.allsportsapi.com/football/?met=Fixtures&APIkey=" + Uri.EscapeDataString(config.Key) +
                         "&from=" + from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) +
-                        "&to=" + to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                        "&to=" + to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "&timezone=UTC";
                     object parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(Request(url, null, null));
                     var root = parsed as Dictionary<string, object>;
                     if (root == null || GetString(root, "success", "") != "1")
