@@ -377,9 +377,9 @@ namespace KoaZa
                 var probabilities = PoissonModel.Analyze(homeRate, awayRate);
                 AddHistoricalStatMarkets(probabilities, baselineMatches, homeMatches, awayMatches, fixture);
                 if (!hasReliableHistory)
-                    dataWarning = LocalizationService.T(
-                        "Limited historical data. Orange chart: estimates use available team results and/or competition averages; confidence is low.",
-                        "داده تاریخی محدود است. نمودار نارنجی: تخمین‌ها از نتایج موجود تیم‌ها و/یا میانگین رقابت استفاده می‌کنند؛ اطمینان پایین است.");
+                    dataWarning = LocalizationService.IsPersian
+                        ? "داده تاریخی محدود است (میزبان: " + homeMatches.Count + " بازی، میهمان: " + awayMatches.Count + " بازی، رقابت: " + baselineMatches.Count + " بازی). درصدها با ترکیب سابقه موجود و میانگین پایه محاسبه شده‌اند و اطمینان پایین است."
+                        : "Limited history (home: " + homeMatches.Count + " matches, away: " + awayMatches.Count + ", competition baseline: " + baselineMatches.Count + "). Estimates blend observed results with a baseline and have low confidence.";
                 // Do not force the entire chart orange merely because corner/card data is absent.
                 // The goal model is shown normally when team and competition history is sufficient;
                 // unsupported corner/card rows remain individually orange and explicitly unavailable.
