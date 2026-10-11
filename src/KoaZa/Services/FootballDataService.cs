@@ -201,7 +201,10 @@ namespace KoaZa.Services
                 if (config == null) throw new InvalidOperationException("Enable and configure this provider in API Settings first.");
                 rows = FetchCustom(config);
             }
-            return rows;
+            return FilterFixturesByDate(rows, fromDate, toDate)
+                .GroupBy(x => (x.Provider ?? "") + "|" + (string.IsNullOrWhiteSpace(x.ExternalId) ? FixtureDeduplicationKey(x) : x.ExternalId.Trim()), StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderByDescending(x => !string.IsNullOrWhiteSpace(x.RawJson)).First())
+                .ToList();
         }
 
         // Legacy overload retained for callers; the import window now uses FetchAutomatically.
