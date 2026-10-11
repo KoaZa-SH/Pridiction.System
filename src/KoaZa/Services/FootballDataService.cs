@@ -1164,8 +1164,8 @@ namespace KoaZa.Services
         {
             if (string.IsNullOrWhiteSpace(config.BaseUrl))
                 throw new InvalidOperationException(config.Provider + " requires its documented HTTPS fixtures/events endpoint in API Settings.");
-            if (config.Provider == "Betfair")
-                throw new InvalidOperationException("Betfair's native API uses session authentication and JSON-RPC POST. Configure an HTTPS proxy that exposes a GET fixtures endpoint, or use a dedicated Betfair session adapter.");
+            if (config.Provider == "Betfair" && config.BaseUrl.IndexOf("betfair.com", StringComparison.OrdinalIgnoreCase) >= 0)
+                throw new InvalidOperationException("Betfair's native API uses session authentication and JSON-RPC POST. Configure an HTTPS proxy on your own endpoint that exposes a GET fixtures feed, or use a dedicated Betfair session adapter.");
             string endpoint = config.BaseUrl;
             string header = string.IsNullOrWhiteSpace(config.HeaderName) ? "x-api-key" : config.HeaderName;
             if (config.Provider == "Sportradar" && !string.IsNullOrWhiteSpace(config.Key) &&
@@ -1266,13 +1266,15 @@ namespace KoaZa.Services
                     string url = "https://api.the-odds-api.com/v4/sports/" + Uri.EscapeDataString(selectedSport) +
                         "/events?apiKey=" + Uri.EscapeDataString(config.Key);
                     object parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(Request(url, null, null));
+                    var error = parsed as Dictionary<string, object>;
+                    if (error != null)
+                    {
+                        string message = FirstString(error, "message", "error", "detail");
+                        throw new InvalidOperationException("The Odds API returned an error object" + (message.Length == 0 ? "." : ": " + message));
+                    }
                     var rows = ToRows(parsed);
                     if (rows.Count == 0)
-                    {
-                        var error = parsed as Dictionary<string, object>;
-                        string message = error == null ? "" : FirstString(error, "message", "error", "detail");
-                        throw new InvalidOperationException(message.Length == 0 ? "The Odds API returned no events for sport key '" + selectedSport + "'." : "The Odds API: " + message);
-                    }
+                        throw new InvalidOperationException("The Odds API returned no events for sport key '" + selectedSport + "'.");
                     var output = new List<FixtureRecord>();
                     foreach (var item in rows)
                     {
