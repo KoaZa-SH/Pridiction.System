@@ -289,8 +289,8 @@ namespace KoaZa
                     dataWarning = LocalizationService.T(
                         "No historical results are saved. Orange chart: neutral baseline only, not a team-specific prediction. Import past results to improve it.",
                         "نتیجه تاریخی ذخیره نشده است. نمودار نارنجی: فقط میانگین پایه و نه پیش‌بینی اختصاصی این دو تیم. برای بهبود، نتایج بازی‌های گذشته را دریافت و ذخیره کن.");
-                    var priorProbabilities = PoissonModel.Analyze(homeRate, awayRate);
-                    SetMarketRows(priorProbabilities, false, dataWarning);
+                    MarketsList.ItemsSource = BuildUnavailableMarketRows(dataWarning);
+                    SetMarketChartState(false, dataWarning);
                     ModelStatusText.Text = dataWarning;
                     UpdateMultiMarketPredictions(fixture);
                     return;
@@ -323,6 +323,18 @@ namespace KoaZa
                     awayRate = awayMatches.Count > 0
                         ? Clamp(Average(awayMatches, fixture.AwayTeam, true, null))
                         : Clamp(MeanAwayGoals(baselineMatches));
+                }
+                // Empirical-Bayes shrinkage: small team samples are pulled toward the competition
+                // baseline, while each team's observed results still change its own estimates.
+                // This avoids presenting the same hard-coded 1.35/1.10 rates for unrelated fixtures.
+                if (baselineMatches.Count >= 3)
+                {
+                    double priorHome = baselineMatches.Average(m => (double)m.HomeGoals.Value);
+                    double priorAway = baselineMatches.Average(m => (double)m.AwayGoals.Value);
+                    double homeWeight = homeMatches.Count / (homeMatches.Count + 5.0);
+                    double awayWeight = awayMatches.Count / (awayMatches.Count + 5.0);
+                    homeRate = Clamp(homeWeight * homeRate + (1.0 - homeWeight) * priorHome);
+                    awayRate = Clamp(awayWeight * awayRate + (1.0 - awayWeight) * priorAway);
                 }
                 // Head-to-head is a capped supporting signal, not a replacement for recent form.
                 var headToHead = _database.GetRecentCompletedMatches(fixture.League, 100)
@@ -562,8 +574,8 @@ namespace KoaZa
                     : hasSufficientData ? (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%" :
                         (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% • " + LocalizationService.T("low confidence", "اطمینان پایین"),
                 HasData = hasSufficientData,
-                BarBrush = m.Market == "Match result" && m.Outcome == "Draw"
-                    ? System.Windows.Media.Brushes.DarkOrange : System.Windows.Media.Brushes.SeaGreen,
+                BarBrush = !hasSufficientData ? System.Windows.Media.Brushes.DarkOrange :
+                    (m.Market == "Match result" && m.Outcome == "Draw" ? System.Windows.Media.Brushes.DarkOrange : System.Windows.Media.Brushes.SeaGreen),
                 Reason = reason
             }).ToList();
             string unavailable = LocalizationService.T("Not calculated: this app has no reliable historical event statistics for this market yet.", "محاسبه نشده: هنوز آمار تاریخی قابل‌اعتماد برای این بازار در برنامه موجود نیست.");
