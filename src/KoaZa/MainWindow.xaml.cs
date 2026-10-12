@@ -7,6 +7,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using KoaZa.Data;
 using KoaZa.Services;
 
@@ -20,6 +21,9 @@ namespace KoaZa
         private bool _settingLanguage;
         private bool _suppressFixtureSelection;
         private string _newsCompetition;
+        private DispatcherTimer _rssRefreshTimer;
+        private DispatcherTimer _csvRefreshTimer;
+        private bool _csvSyncInProgress;
 
         public MainWindow()
         {
@@ -38,6 +42,8 @@ namespace KoaZa
                 LocalizationService.Apply(this);
                 ThemeService.Apply(this);
                 LoadLatestNews();
+                StartRssRefreshTimer();
+                StartCsvRefreshTimer();
             }
             catch (Exception ex)
             {
@@ -138,7 +144,7 @@ namespace KoaZa
             if (selectedRow != null)
             {
                 AnalyzeFixture(selectedRow.Fixture);
-                LoadLatestNews(selectedRow.Fixture.League);
+                LoadLatestNews(selectedRow.Fixture);
             }
             else
             {
@@ -146,7 +152,7 @@ namespace KoaZa
                 SetMarketChartState(false, LocalizationService.T("No fixture matches the current filters.", "با فیلترهای فعلی مسابقه‌ای پیدا نشد."));
                 MatchTitleText.Text = LocalizationService.T("Select a match from the list", "یک مسابقه انتخاب کن");
                 ModelStatusText.Text = LocalizationService.T("No fixture matches the current filters.", "با فیلترهای فعلی مسابقه‌ای پیدا نشد.");
-                LoadLatestNews(null);
+                LoadLatestNews((FixtureRecord)null);
             }
         }
 
@@ -165,19 +171,20 @@ namespace KoaZa
         private void RefreshNews_Click(object sender, RoutedEventArgs e)
         {
             var row = FixturesGrid.SelectedItem as FixtureRow;
-            LoadLatestNews(row == null ? null : row.Fixture.League, true);
+            LoadLatestNews(row == null ? null : row.Fixture, true);
         }
 
         private void LoadLatestNews()
         {
             var row = FixturesGrid == null ? null : FixturesGrid.SelectedItem as FixtureRow;
-            LoadLatestNews(row == null ? null : row.Fixture.League, false);
+            LoadLatestNews(row == null ? null : row.Fixture, false);
         }
 
-        private async void LoadLatestNews(string competition, bool force = false)
+        private async void LoadLatestNews(FixtureRecord fixture, bool force = false)
         {
-            string target = (competition ?? "").Trim();
-            if (target.Length == 0)
+            string competition = fixture == null ? "" : (fixture.League ?? "").Trim();
+            string target = fixture == null ? "" : competition + "|" + (fixture.HomeTeam ?? "") + "|" + (fixture.AwayTeam ?? "");
+            if (target.Length == 0 || competition.Length == 0)
             {
                 _newsCompetition = null;
                 NewsList.ItemsSource = new List<NewsItem>();
@@ -186,15 +193,15 @@ namespace KoaZa
             }
             if (!force && string.Equals(_newsCompetition, target, StringComparison.OrdinalIgnoreCase)) return;
             _newsCompetition = target;
-            NewsStatusText.Text = LocalizationService.T("Loading news for ", "در حال دریافت اخبار رقابت ") + LocalizationService.League(target) + "...";
+            NewsStatusText.Text = LocalizationService.T("Loading news for ", "در حال دریافت اخبار رقابت ") + LocalizationService.League(competition) + "...";
             try
             {
-                var news = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchLatestNews(target));
+                var news = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchMatchNewsForCompetition(competition, fixture.HomeTeam, fixture.AwayTeam));
                 if (!string.Equals(_newsCompetition, target, StringComparison.OrdinalIgnoreCase)) return;
                 NewsList.ItemsSource = news;
                 NewsStatusText.Text = news.Count == 0
                     ? LocalizationService.T("No news found for this competition. Try refreshing later.", "خبر مرتبطی برای این رقابت پیدا نشد؛ بعداً دوباره نوسازی کن.")
-                    : LocalizationService.T("Competition-specific headlines for: ", "اخبار مرتبط با رقابت: ") + LocalizationService.League(target) + " (" + news.Count + ")";
+                    : LocalizationService.T("Competition-specific headlines for: ", "اخبار مرتبط با رقابت: ") + LocalizationService.League(competition) + " (" + news.Count + ")";
             }
             catch (Exception ex)
             {
@@ -203,11 +210,67 @@ namespace KoaZa
             }
         }
 
+        private void OpenDataSources_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new DataSourcesWindow(_database) { Owner = this };
+            window.ShowDialog();
+            LoadFixtureList();
+        }
+
+        private void StartRssRefreshTimer()
+        {
+            if (_rssRefreshTimer != null) return;
+            _rssRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(2) };
+            _rssRefreshTimer.Tick += async (sender, args) =>
+            {
+                try
+                {
+                    await System.Threading.Tasks.Task.Run(() => RssNewsService.FetchAll());
+                    var selected = FixturesGrid.SelectedItem as FixtureRow;
+                    if (selected != null) LoadLatestNews(selected.Fixture, true);
+                }
+                catch { }
+            };
+            _rssRefreshTimer.Start();
+            System.Threading.Tasks.Task.Run(() => { try { RssNewsService.FetchAll(); } catch { } });
+        }
+
+        private void StartCsvRefreshTimer()
+        {
+            if (_csvRefreshTimer != null) { _csvRefreshTimer.Stop(); _csvRefreshTimer = null; }
+            var settings = CsvAutoSyncService.LoadSettings();
+            if (!settings.Enabled || string.IsNullOrWhiteSpace(settings.Urls) || _database == null) return;
+            _csvRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(Math.Max(5, settings.IntervalMinutes)) };
+            _csvRefreshTimer.Tick += async (sender, args) => await RunScheduledCsvSyncAsync();
+            _csvRefreshTimer.Start();
+            _ = RunScheduledCsvSyncAsync();
+        }
+
+        private async System.Threading.Tasks.Task RunScheduledCsvSyncAsync()
+        {
+            if (_csvSyncInProgress || _database == null) return;
+            var settings = CsvAutoSyncService.LoadSettings();
+            if (!settings.Enabled || string.IsNullOrWhiteSpace(settings.Urls)) return;
+            _csvSyncInProgress = true;
+            try
+            {
+                var result = await System.Threading.Tasks.Task.Run(() => CsvAutoSyncService.SyncConfigured(_database));
+                if (result.Imported > 0)
+                    FixtureStatusText.Text = LocalizationService.T("Scheduled CSV sync saved historical rows: ", "همگام‌سازی زمان‌بندی‌شده CSV؛ ردیف‌های تاریخی ذخیره‌شده: ") + result.Imported;
+            }
+            catch (Exception ex)
+            {
+                FixtureStatusText.Text = LocalizationService.T("Scheduled CSV sync warning: ", "هشدار همگام‌سازی CSV: ") + ex.Message;
+            }
+            finally { _csvSyncInProgress = false; }
+        }
+
         private void OpenApiSettings_Click(object sender, RoutedEventArgs e)
         {
             var window = new ApiSettingsWindow { Owner = this };
             window.ShowDialog();
             ThemeService.Apply(this);
+            StartCsvRefreshTimer();
             LoadFixtureList();
         }
 
@@ -243,7 +306,7 @@ namespace KoaZa
             var row = FixturesGrid.SelectedItem as FixtureRow;
             if (row == null || _database == null) return;
             AnalyzeFixture(row.Fixture);
-            LoadLatestNews(row.Fixture.League);
+            LoadLatestNews(row.Fixture);
         }
 
         private void AnalyzeFixture(FixtureRecord fixture)

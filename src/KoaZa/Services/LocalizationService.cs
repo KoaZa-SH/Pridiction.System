@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 
 namespace KoaZa.Services
@@ -160,7 +161,7 @@ namespace KoaZa.Services
     {
         private static readonly string ThemePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KoaZa", "theme.txt");
-        public static string Mode { get; private set; } = "System";
+        public static string Mode { get; private set; } = "LightSage";
 
         public static void Load()
         {
@@ -169,15 +170,15 @@ namespace KoaZa.Services
                 if (File.Exists(ThemePath))
                 {
                     string value = File.ReadAllText(ThemePath).Trim();
-                    if (value == "Light" || value == "Dark" || value == "System") Mode = value;
+                    if (new[] { "LightSage", "LightPearl", "LightOcean", "LightRose", "DarkMidnight", "DarkOcean", "DarkAmethyst", "DarkEmerald" }.Contains(value)) Mode = value;
                 }
             }
-            catch { Mode = "System"; }
+            catch { Mode = "LightSage"; }
         }
 
         public static void SetMode(string mode)
         {
-            Mode = mode == "Light" || mode == "Dark" ? mode : "System";
+            Mode = new[] { "LightSage", "LightPearl", "LightOcean", "LightRose", "DarkMidnight", "DarkOcean", "DarkAmethyst", "DarkEmerald" }.Contains(mode) ? mode : "LightSage";
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(ThemePath));
@@ -188,8 +189,8 @@ namespace KoaZa.Services
 
         private static bool IsDark()
         {
-            if (Mode == "Dark") return true;
-            if (Mode == "Light") return false;
+            if (Mode.StartsWith("Dark", StringComparison.Ordinal)) return true;
+            if (Mode.StartsWith("Light", StringComparison.Ordinal)) return false;
             try
             {
                 using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
@@ -206,9 +207,35 @@ namespace KoaZa.Services
         {
             if (window == null) return;
             bool dark = IsDark();
-            Color background = dark ? Color.FromRgb(24, 30, 28) : Color.FromRgb(244, 247, 245);
-            window.Background = new SolidColorBrush(background);
+            Color background = dark ? Color.FromRgb(18, 22, 36) : Color.FromRgb(250, 249, 247);
+            Color accentStart, accentEnd;
+            switch (Mode)
+            {
+                case "LightSage": accentStart = Color.FromRgb(250, 252, 248); accentEnd = Color.FromRgb(215, 236, 222); break;
+                case "LightPearl": accentStart = Color.FromRgb(255, 250, 242); accentEnd = Color.FromRgb(239, 224, 207); break;
+                case "LightOcean": accentStart = Color.FromRgb(244, 251, 255); accentEnd = Color.FromRgb(204, 229, 242); break;
+                case "LightRose": accentStart = Color.FromRgb(255, 247, 249); accentEnd = Color.FromRgb(244, 216, 226); break;
+                case "DarkMidnight": accentStart = Color.FromRgb(17, 24, 50); accentEnd = Color.FromRgb(57, 38, 91); break;
+                case "DarkOcean": accentStart = Color.FromRgb(7, 45, 73); accentEnd = Color.FromRgb(10, 86, 108); break;
+                case "DarkAmethyst": accentStart = Color.FromRgb(39, 25, 66); accentEnd = Color.FromRgb(91, 47, 115); break;
+                case "DarkEmerald": accentStart = Color.FromRgb(12, 48, 43); accentEnd = Color.FromRgb(17, 93, 76); break;
+                default: accentStart = Color.FromRgb(245, 248, 246); accentEnd = Color.FromRgb(224, 234, 228); break;
+            }
+            window.Background = new LinearGradientBrush(accentStart, accentEnd, 35);
             ApplyTo(window, dark);
+            var fixturesGrid = window.FindName("FixturesGrid") as DataGrid;
+            if (fixturesGrid != null)
+            {
+                fixturesGrid.ColumnHeaderStyle = new Style(typeof(DataGridColumnHeader))
+                {
+                    Setters = {
+                        new Setter(Control.BackgroundProperty, new SolidColorBrush(dark ? Color.FromRgb(42, 48, 68) : Color.FromRgb(234, 241, 236))),
+                        new Setter(Control.ForegroundProperty, new SolidColorBrush(dark ? Color.FromRgb(245, 247, 252) : Color.FromRgb(35, 45, 58))),
+                        new Setter(Control.FontWeightProperty, FontWeights.SemiBold),
+                        new Setter(Control.PaddingProperty, new Thickness(8, 10, 8, 10))
+                    }
+                };
+            }
             var chart = window.FindName("MarketChartFrame") as Border;
             var reason = window.FindName("MarketChartReasonText") as TextBlock;
             if (chart != null && (reason == null || reason.Visibility != Visibility.Visible))
@@ -224,17 +251,21 @@ namespace KoaZa.Services
                 {
                     var border = element as Border;
                     if (border != null && IsLightSurface(border.Background))
-                        border.Background = new SolidColorBrush(dark ? Color.FromRgb(34, 42, 39) : Color.FromRgb(255, 255, 255));
+                        border.Background = border.CornerRadius.TopLeft >= 20 ? Brushes.Transparent :
+                            new SolidColorBrush(dark ? Color.FromRgb(30, 35, 52) : Color.FromRgb(255, 255, 255));
 
                     var text = element as TextBlock;
-                    if (text != null && IsDefaultTextColor(text.Foreground))
-                        text.Foreground = new SolidColorBrush(dark ? Color.FromRgb(226, 233, 229) : Color.FromRgb(36, 52, 44));
+                    if (text != null && !string.Equals(Convert.ToString(text.Tag), "ThemePreview", StringComparison.Ordinal))
+                    {
+                        text.Foreground = new SolidColorBrush(dark ? Color.FromRgb(242, 245, 252) : Color.FromRgb(35, 45, 58));
+                    }
 
                     var grid = element as DataGrid;
                     if (grid != null)
                     {
-                        grid.Background = new SolidColorBrush(dark ? Color.FromRgb(34, 42, 39) : Colors.White);
-                        grid.Foreground = new SolidColorBrush(dark ? Color.FromRgb(226, 233, 229) : Color.FromRgb(36, 52, 44));
+                        grid.Background = new SolidColorBrush(dark ? Color.FromRgb(30, 35, 52) : Colors.White);
+                        grid.Foreground = new SolidColorBrush(dark ? Color.FromRgb(242, 245, 252) : Color.FromRgb(35, 45, 58));
+                        grid.AlternatingRowBackground = new SolidColorBrush(dark ? Color.FromRgb(37, 43, 61) : Color.FromRgb(246, 249, 247));
                         grid.GridLinesVisibility = DataGridGridLinesVisibility.Horizontal;
                         grid.HorizontalGridLinesBrush = new SolidColorBrush(dark ? Color.FromRgb(64, 76, 70) : Color.FromRgb(228, 235, 230));
                     }
@@ -268,7 +299,8 @@ namespace KoaZa.Services
             var solid = brush as SolidColorBrush;
             if (solid == null) return false;
             return solid.Color == Colors.White || solid.Color == Color.FromRgb(244, 247, 245) ||
-                   solid.Color == Color.FromRgb(255, 255, 255);
+                   solid.Color == Color.FromRgb(255, 255, 255) ||
+                   ((int)solid.Color.R + solid.Color.G + solid.Color.B) / 3 >= 220;
         }
 
         private static bool IsDefaultTextColor(Brush brush)
