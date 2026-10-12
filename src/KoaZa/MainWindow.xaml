@@ -35,7 +35,6 @@
         <ComboBox x:Name="LanguageBox" Width="105" Margin="0,0,8,0" Padding="6" SelectionChanged="LanguageBox_SelectionChanged"><ComboBoxItem Content="فارسی" Tag="fa"/><ComboBoxItem Content="English" Tag="en"/></ComboBox>
         <Button Content="Refresh list / نوسازی" Click="Refresh_Click" Padding="12,7" Margin="0,0,8,0"/>
         <Button Content="Import fixtures / دریافت بازی‌ها" Click="OpenFixtures_Click" Padding="12,7" Margin="0,0,8,0" Background="#163B2B" Foreground="White" BorderThickness="0"/>
-        <Button Content="CSV &amp; Persian RSS" Click="OpenDataSources_Click" Padding="12,7" Margin="0,0,8,0" Background="#DCECE3" Foreground="#163B2B" BorderThickness="0"/>
         <Button Content="Settings / تنظیمات" Click="OpenApiSettings_Click" Padding="12,7" Background="#16865B" Foreground="White" BorderThickness="0"/>
       </StackPanel>
       <StackPanel>
@@ -52,9 +51,7 @@
         <TextBlock x:Name="FixtureCountText" VerticalAlignment="Center" Foreground="#5E6E65" Margin="18,0,0,0"/>
       </StackPanel>
     </Border>
-    <TabControl Grid.Row="2">
-      <TabItem Header="Dashboard / پیش‌بینی">
-      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
       <StackPanel>
       <Grid Height="620">
       <Grid.ColumnDefinitions><ColumnDefinition Width="1.08*"/><ColumnDefinition Width="1.45*"/></Grid.ColumnDefinitions>
@@ -138,11 +135,6 @@
         </Grid>
       </Border>
       </Grid>
-      </StackPanel>
-      </ScrollViewer>
-      </TabItem>
-      <TabItem Header="News / اخبار">
-      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
       <Border Height="430" Background="White" CornerRadius="10" Padding="12" Margin="0,12,0,0">
         <Grid>
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -169,9 +161,8 @@
           </ScrollViewer>
         </Grid>
       </Border>
-      </ScrollViewer>
-      </TabItem>
-      </TabControl>
+      </StackPanel>
+    </ScrollViewer>
     <TextBlock Grid.Row="3" Text="KoaZa • Local SQLite • Historical Poisson baseline" Foreground="#7A8980" Margin="0,12,0,0" HorizontalAlignment="Right"/>
   </Grid>
   </Border>
