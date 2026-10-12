@@ -1988,7 +1988,8 @@ namespace KoaZa.Services
         {
             int season;
             string raw = (_seasonBox.Text ?? "").Trim();
-            if (raw.Length == 4 && raw.All(char.IsDigit))
+            if (raw.Length == 4 && raw.StartsWith("20", StringComparison.Ordinal) && int.TryParse(raw, out season) && season >= 2000 && season <= 2100) { }
+            else if (raw.Length == 4 && raw.All(char.IsDigit))
             {
                 int first;
                 if (!int.TryParse(raw.Substring(0, 2), NumberStyles.Integer, CultureInfo.InvariantCulture, out first))
@@ -1998,7 +1999,6 @@ namespace KoaZa.Services
                 }
                 season = 2000 + first;
             }
-            else if (int.TryParse(raw, out season) && season >= 2000 && season <= 2100) { }
             else
             {
                 _status.Text = LocalizationService.T("Enter a valid season such as 2425 or start year 2024.", "فصل معتبر مانند 2425 یا سال آغاز مانند 2024 وارد کن.");
