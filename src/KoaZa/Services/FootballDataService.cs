@@ -1949,179 +1949,90 @@ namespace KoaZa.Services
 
     public sealed class FixturesWindow : Window
     {
-        private readonly ComboBox _providerBox;
-        private readonly TextBox _leagueBox;
         private readonly TextBox _seasonBox;
-        private readonly TextBox _startDateBox;
-        private readonly TextBox _endDateBox;
-        private readonly DataGrid _grid;
         private readonly TextBlock _status;
+        private readonly Button _saveButton;
 
         public FixturesWindow()
         {
-            Title = LocalizationService.T("KoaZa — Fixture Import", "KoaZa — دریافت مسابقات");
-            Width = 1000; Height = 650; MinWidth = 780; MinHeight = 480;
+            Title = LocalizationService.T("KoaZa — Receive and save data", "KoaZa — دریافت و ذخیره اطلاعات");
+            Width = 760; Height = 440; MinWidth = 620; MinHeight = 360;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Background = new SolidColorBrush(Color.FromRgb(244, 247, 245));
-            var root = new Grid { Margin = new Thickness(18) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var top = new Grid { Margin = new Thickness(0, 0, 0, 12) };
-            top.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            top.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.25, GridUnitType.Star) });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.9, GridUnitType.Star) });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.55, GridUnitType.Star) });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.85, GridUnitType.Star) });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.85, GridUnitType.Star) });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            string[] fieldLabels = {
-                LocalizationService.T("Provider / سرویس", "سرویس دریافت"),
-                LocalizationService.T("League or tournament ID", "شناسه لیگ یا تورنمنت"),
-                LocalizationService.T("Season / فصل", "فصل"),
-                LocalizationService.T("From date / از تاریخ", "از تاریخ"),
-                LocalizationService.T("To date / تا تاریخ", "تا تاریخ"),
-                LocalizationService.T("Action / اجرا", "اجرا")
+            var root = new StackPanel { Margin = new Thickness(28) };
+            root.Children.Add(new TextBlock { Text = LocalizationService.T("Season data refresh", "به‌روزرسانی اطلاعات فصل"), FontSize = 24, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 8) });
+            root.Children.Add(new TextBlock {
+                Text = LocalizationService.T("Choose a season such as 2425, then fetch and save data from every enabled API provider and the configured internet CSV sources.", "فصل را مانند 2425 وارد کن؛ سپس اطلاعات سرویس‌های API فعال و منابع CSV اینترنتی تنظیم‌شده دریافت و ذخیره می‌شوند."),
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 20)
+            });
+            root.Children.Add(new TextBlock { Text = LocalizationService.T("Season (YYZZ or start year)", "فصل (مانند 2425 یا سال آغاز)"), FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
+            int year = DateTime.UtcNow.Month >= 7 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
+            _seasonBox = new TextBox { Text = (year % 100).ToString("00", CultureInfo.InvariantCulture) + ((year + 1) % 100).ToString("00", CultureInfo.InvariantCulture), Width = 180, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(10), FontSize = 16, Margin = new Thickness(0, 0, 0, 18) };
+            root.Children.Add(_seasonBox);
+            _saveButton = new Button {
+                Content = LocalizationService.T("Fetch and save all data", "دریافت و ذخیره همه اطلاعات"),
+                Padding = new Thickness(18, 11, 18, 11), HorizontalAlignment = HorizontalAlignment.Left,
+                Background = new LinearGradientBrush(Color.FromRgb(0, 145, 110), Color.FromRgb(0, 65, 75), 35),
+                Foreground = Brushes.White, BorderThickness = new Thickness(0)
             };
-            for (int i = 0; i < fieldLabels.Length; i++)
-            {
-                var label = new TextBlock { Text = fieldLabels[i], FontWeight = FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(Color.FromRgb(22, 59, 43)), Margin = new Thickness(0, 0, 8, 4) };
-                Grid.SetColumn(label, i); Grid.SetRow(label, 0); top.Children.Add(label);
-            }
-            _providerBox = new ComboBox { Padding = new Thickness(6), Margin = new Thickness(0, 0, 8, 0) };
-            _providerBox.Items.Add(new ProviderChoice("Auto", LocalizationService.T("Auto fallback (recommended)", "انتخاب خودکار سرویس")));
-            _providerBox.Items.Add(new ProviderChoice("OddsPapi", "OddsPapi"));
-            _providerBox.Items.Add(new ProviderChoice("Floodlight", "Floodlight"));
-            _providerBox.Items.Add(new ProviderChoice("SportsOpenData", "Sports Open Data"));
-            _providerBox.Items.Add(new ProviderChoice("OpenLigaDB", "OpenLigaDB"));
-            _providerBox.Items.Add(new ProviderChoice("ApiSports", "API-SPORTS"));
-            _providerBox.Items.Add(new ProviderChoice("SportsAPI360", "SportsAPI360"));
-            _providerBox.Items.Add(new ProviderChoice("FiveDollarFootballAPI", "5DollarFootballAPI"));
-            _providerBox.Items.Add(new ProviderChoice("FootballCharts", "Football-Charts"));
-            _providerBox.Items.Add(new ProviderChoice("FootballData", "football-data.org"));
-            foreach (var configured in ApiProviderStore.Load().Where(p => p.Enabled && p.Provider != "ApiFootball" && p.Provider != "ApiSports" && p.Provider != "FootballData" && p.Provider != "OpenLigaDB" && p.Provider != "OddsPapi" && p.Provider != "Floodlight" && p.Provider != "SportsOpenData" && p.Provider != "SportsAPI360" && p.Provider != "FiveDollarFootballAPI" && p.Provider != "FootballCharts"))
-                _providerBox.Items.Add(new ProviderChoice(configured.Provider, configured.Provider));
-            _providerBox.SelectedIndex = 0;
-            _providerBox.SelectionChanged += ProviderChanged;
-            Grid.SetColumn(_providerBox, 0); Grid.SetRow(_providerBox, 1); top.Children.Add(_providerBox);
-            _leagueBox = new TextBox { Text = "all", Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "API-SPORTS: enter 'all' for every competition covered by the key, or a numeric league ID; football-data.org: competition code such as PL; OpenLigaDB: shortcut such as bl1" };
-            Grid.SetColumn(_leagueBox, 1); Grid.SetRow(_leagueBox, 1); top.Children.Add(_leagueBox);
-            _seasonBox = new TextBox { Text = DateTime.UtcNow.Month >= 7 ? DateTime.UtcNow.Year.ToString() : (DateTime.UtcNow.Year - 1).ToString(), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "Season year (for providers that require it)" };
-            Grid.SetColumn(_seasonBox, 2); Grid.SetRow(_seasonBox, 1); top.Children.Add(_seasonBox);
-            _startDateBox = new TextBox { Text = DateTime.UtcNow.Date.AddDays(-7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "Start date, format yyyy-MM-dd." };
-            Grid.SetColumn(_startDateBox, 3); Grid.SetRow(_startDateBox, 1); top.Children.Add(_startDateBox);
-            _endDateBox = new TextBox { Text = DateTime.UtcNow.Date.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), Padding = new Thickness(8), Margin = new Thickness(0, 0, 8, 0), ToolTip = "End date, format yyyy-MM-dd. Maximum: 7 days in the future." };
-            Grid.SetColumn(_endDateBox, 4); Grid.SetRow(_endDateBox, 1); top.Children.Add(_endDateBox);
-            var fetch = new Button { Content = "Fetch & save from date", Padding = new Thickness(14, 8, 14, 8), Background = new SolidColorBrush(Color.FromRgb(22, 134, 91)), Foreground = Brushes.White, BorderThickness = new Thickness(0), ToolTip = "Fetch fixtures/results between the selected dates and save them locally." };
-            fetch.Content = LocalizationService.T("Fetch & save", "دریافت و ذخیره");
-            fetch.Click += Fetch_Click; Grid.SetColumn(fetch, 5); Grid.SetRow(fetch, 1); top.Children.Add(fetch);
-            root.Children.Add(top); Grid.SetRow(top, 0);
-
-            _grid = new DataGrid { IsReadOnly = true, AutoGenerateColumns = false, CanUserAddRows = false, Margin = new Thickness(0, 0, 0, 10) };
-            _grid.Columns.Add(new System.Windows.Controls.DataGridTextColumn { Header = LocalizationService.T("Competition", "رقابت"), Binding = new System.Windows.Data.Binding("League"), Width = new DataGridLength(1.2, DataGridLengthUnitType.Star) });
-            _grid.Columns.Add(new System.Windows.Controls.DataGridTextColumn { Header = LocalizationService.T("Kickoff", "زمان شروع"), Binding = new System.Windows.Data.Binding("Kickoff"), Width = new DataGridLength(1.3, DataGridLengthUnitType.Star) });
-            _grid.Columns.Add(new System.Windows.Controls.DataGridTextColumn { Header = LocalizationService.T("Home team", "میزبان"), Binding = new System.Windows.Data.Binding("HomeTeam"), Width = new DataGridLength(1.2, DataGridLengthUnitType.Star) });
-            _grid.Columns.Add(new System.Windows.Controls.DataGridTextColumn { Header = LocalizationService.T("Away team", "میهمان"), Binding = new System.Windows.Data.Binding("AwayTeam"), Width = new DataGridLength(1.2, DataGridLengthUnitType.Star) });
-            _grid.Columns.Add(new System.Windows.Controls.DataGridTextColumn { Header = LocalizationService.T("Home goals", "گل میزبان"), Binding = new System.Windows.Data.Binding("HomeGoals"), Width = new DataGridLength(0.7, DataGridLengthUnitType.Star) });
-            _grid.Columns.Add(new System.Windows.Controls.DataGridTextColumn { Header = LocalizationService.T("Away goals", "گل میهمان"), Binding = new System.Windows.Data.Binding("AwayGoals"), Width = new DataGridLength(0.7, DataGridLengthUnitType.Star) });
-            root.Children.Add(_grid); Grid.SetRow(_grid, 1);
-            _status = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromRgb(65, 84, 73)) };
-            root.Children.Add(_status); Grid.SetRow(_status, 2);
+            _saveButton.Click += FetchAndSave_Click;
+            root.Children.Add(_saveButton);
+            _status = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 16, 0, 0), Foreground = new SolidColorBrush(Color.FromRgb(65, 84, 73)) };
+            root.Children.Add(_status);
             Content = root;
-            ProviderChanged(null, null);
             LocalizationService.Apply(this);
+            ThemeService.Apply(this);
         }
 
-        private void ProviderChanged(object sender, SelectionChangedEventArgs e)
+        private async void FetchAndSave_Click(object sender, RoutedEventArgs e)
         {
-            var choice = _providerBox.SelectedItem as ProviderChoice;
-            if (choice == null) return;
-            _leagueBox.Text = choice.Id == "Auto" ? "all" : choice.Id == "ApiFootball" || choice.Id == "ApiSports" ? "39" : choice.Id == "FootballData" ? "PL" : choice.Id == "OpenLigaDB" ? "bl1" : choice.Id == "FootballCharts" ? "premier" : "all";
-            _leagueBox.ToolTip = choice.Id == "Auto" ? "Bulk refresh: all competitions available from enabled compatible feeds for the next 7 days plus live matches. The field is informational in Auto mode." :
-                choice.Id == "ApiFootball" || choice.Id == "ApiSports" ? "Enter an API-Sports numeric league ID (e.g. 39 for Premier League)." :
-                choice.Id == "FootballData" ? "Enter competition code (e.g. PL, PD, BL1, SA, FL1)." :
-                choice.Id == "OpenLigaDB" ? "Enter OpenLigaDB league shortcut (e.g. bl1)." :
-                choice.Id == "OddsPapi" ? "Enter the OddsPapi tournamentId (not the API-Sports league ID)." :
-                choice.Id == "SportsAPI360" ? "Enter tournamentId, tournament name, or 'all' for the next 7 days." :
-                choice.Id == "FiveDollarFootballAPI" ? "Enter a numeric league ID or 'all'. Historical coverage depends on your plan." :
-                choice.Id == "FootballCharts" ? "Enter a Football-Charts league slug (e.g. premier, germany3). No key is required." :
-                "For Floodlight, Sports Open Data or custom providers, configure the HTTPS fixtures endpoint in API Settings.";
-        }
-
-        private async void Fetch_Click(object sender, RoutedEventArgs e)
-        {
-            var choice = _providerBox.SelectedItem as ProviderChoice;
             int season;
-            DateTime startDate;
-            DateTime endDate;
-            if (choice == null || !int.TryParse(_seasonBox.Text.Trim(), out season) || season < 2000 || season > 2100)
+            string raw = (_seasonBox.Text ?? "").Trim();
+            if (raw.Length == 4 && raw.All(char.IsDigit))
             {
-                MessageBox.Show(this, LocalizationService.T("Enter a valid season year.", "سال فصل معتبر وارد کن."), LocalizationService.T("Fixture import", "دریافت مسابقات"), MessageBoxButton.OK, MessageBoxImage.Information);
+                int first;
+                if (!int.TryParse(raw.Substring(0, 2), NumberStyles.Integer, CultureInfo.InvariantCulture, out first))
+                {
+                    _status.Text = LocalizationService.T("Enter a season such as 2425.", "فصل را مانند 2425 وارد کن.");
+                    return;
+                }
+                season = 2000 + first;
+            }
+            else if (int.TryParse(raw, out season) && season >= 2000 && season <= 2100) { }
+            else
+            {
+                _status.Text = LocalizationService.T("Enter a valid season such as 2425 or start year 2024.", "فصل معتبر مانند 2425 یا سال آغاز مانند 2024 وارد کن.");
                 return;
             }
-            if (!DateTime.TryParseExact(_startDateBox.Text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out startDate) || startDate.Date > DateTime.UtcNow.Date)
-            {
-                MessageBox.Show(this, LocalizationService.T("Enter a valid From date in yyyy-MM-dd format; it cannot be in the future.", "تاریخ «از» را با قالب yyyy-MM-dd وارد کن؛ تاریخ شروع نباید در آینده باشد."), LocalizationService.T("Fixture import", "دریافت مسابقات"), MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            if (!DateTime.TryParseExact(_endDateBox.Text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out endDate) ||
-                endDate.Date < startDate.Date || endDate.Date > DateTime.UtcNow.Date.AddDays(7))
-            {
-                MessageBox.Show(this, LocalizationService.T("Enter a valid To date on or after the From date and no more than 7 days in the future.", "تاریخ «تا» باید معتبر، هم‌زمان یا بعد از تاریخ شروع و حداکثر تا ۷ روز آینده باشد."), LocalizationService.T("Fixture import", "دریافت مسابقات"), MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            var fetchButton = sender as Button;
-            if (fetchButton != null) fetchButton.IsEnabled = false;
-            string competition = _leagueBox.Text.Trim();
+
+            _saveButton.IsEnabled = false;
             try
             {
-                _status.Text = LocalizationService.T("Requesting fixture data. Please wait...", "در حال دریافت مسابقات...");
-                _status.Text = LocalizationService.IsPersian
-                    ? "در حال دریافت مسابقات از " + startDate.ToString("yyyy-MM-dd") + " تا " + endDate.ToString("yyyy-MM-dd") + "..."
-                    : "Fetching fixtures/results from " + startDate.ToString("yyyy-MM-dd") + " through " + endDate.ToString("yyyy-MM-dd") + "...";
-                var records = await System.Threading.Tasks.Task.Run(() =>
-                    FootballDataService.FetchFromDate(choice.Id, competition, season, startDate, endDate));
-                DatabaseServiceProxy.SaveFixtures(records);
-                _grid.ItemsSource = records.Select(r => new FixtureImportRow(r)).ToList();
-                _status.Text = LocalizationService.T("Fixtures saved. Importing detailed stats for up to 10 completed matches...", "مسابقات ذخیره شد؛ در حال دریافت آمار تفصیلی حداکثر ۱۰ بازی تمام‌شده...");
-                int statsImported = await System.Threading.Tasks.Task.Run(() => DatabaseServiceProxy.ImportHistoricalStatistics(records));
-                _status.Text = LocalizationService.IsPersian
-                    ? records.Count + " مسابقه از " + startDate.ToString("yyyy-MM-dd") + " تا " + endDate.ToString("yyyy-MM-dd") + " دریافت و ذخیره شد؛ آمار ساختاریافته برای " + statsImported + " مسابقه وارد شد. داده‌های قبلی حفظ می‌شوند؛ پوشش به سرویس و سهمیه وابسته است."
-                    : "Received and saved " + records.Count + " fixtures/results from " + startDate.ToString("yyyy-MM-dd") + " through " + endDate.ToString("yyyy-MM-dd") + "; structured event stats imported for " + statsImported + " matches. Existing local data is retained; coverage depends on provider and quota.";
+                _status.Text = LocalizationService.T("Fetching all enabled API providers…", "در حال دریافت اطلاعات از همه سرویس‌های API فعال...");
+                var records = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchAllProvidersForSeason(season));
+                await System.Threading.Tasks.Task.Run(() => DatabaseServiceProxy.SaveFixtures(records));
+                _status.Text = LocalizationService.T("Saved API records: ", "رکوردهای API ذخیره‌شده: ") + records.Count +
+                    Environment.NewLine + LocalizationService.T("Importing structured statistics…", "در حال واردکردن آمار ساختاریافته...");
+                int stats = await System.Threading.Tasks.Task.Run(() => DatabaseServiceProxy.ImportHistoricalStatistics(records));
+                var csvSettings = CsvAutoSyncService.LoadSettings();
+                if (!string.IsNullOrWhiteSpace(csvSettings.Urls))
+                {
+                    _status.Text += Environment.NewLine + LocalizationService.T("Downloading configured CSV sources…", "در حال دریافت منابع CSV تنظیم‌شده...");
+                    try
+                    {
+                        var csv = await System.Threading.Tasks.Task.Run(() => CsvAutoSyncService.SyncConfigured(new DatabaseService()));
+                        _status.Text += Environment.NewLine + LocalizationService.T("CSV imported: ", "CSV واردشده: ") + csv.Imported + ", skipped: " + csv.Skipped;
+                    }
+                    catch (Exception ex) { _status.Text += Environment.NewLine + LocalizationService.T("CSV warning: ", "هشدار CSV: ") + ex.Message; }
+                }
+                else _status.Text += Environment.NewLine + LocalizationService.T("No internet CSV URLs configured. Add them under Settings > CSV import.", "نشانی CSV اینترنتی تنظیم نشده؛ از تنظیمات > ورود CSV آن‌ها را اضافه کن.");
+                _status.Text += Environment.NewLine + LocalizationService.T("Season data saved. Structured statistics updated: ", "اطلاعات فصل ذخیره شد. مسابقات دارای آمار ساختاریافته: ") + stats;
             }
-            catch (Exception ex) { _status.Text = LocalizationService.T("Import failed: ", "دریافت ناموفق بود: ") + ex.Message; }
-            finally { if (fetchButton != null) fetchButton.IsEnabled = true; }
-        }
-
-        private sealed class FixtureImportRow
-        {
-            public string League { get; private set; }
-            public string Kickoff { get; private set; }
-            public string HomeTeam { get; private set; }
-            public string AwayTeam { get; private set; }
-            public string HomeGoals { get; private set; }
-            public string AwayGoals { get; private set; }
-            public FixtureImportRow(FixtureRecord r)
+            catch (Exception ex)
             {
-                League = LocalizationService.League(r.League);
-                DateTime dt;
-                Kickoff = DateTime.TryParse(r.KickoffUtc, out dt) ? dt.ToLocalTime().ToString(LocalizationService.IsPersian ? "yyyy/MM/dd HH:mm" : "dd MMM HH:mm", CultureInfo.CurrentCulture) : r.KickoffUtc;
-                HomeTeam = LocalizationService.Team(r.HomeTeam);
-                AwayTeam = LocalizationService.Team(r.AwayTeam);
-                HomeGoals = r.HomeGoals.HasValue ? r.HomeGoals.Value.ToString() : "—";
-                AwayGoals = r.AwayGoals.HasValue ? r.AwayGoals.Value.ToString() : "—";
+                _status.Text = LocalizationService.T("Some providers may be unavailable; details: ", "برخی سرویس‌ها ممکن است در دسترس نباشند؛ جزئیات: ") + ex.Message;
             }
-        }
-
-        private sealed class ProviderChoice
-        {
-            public string Id { get; private set; }
-            public string Label { get; private set; }
-            public ProviderChoice(string id, string label) { Id = id; Label = label; }
-            public override string ToString() { return Label; }
+            finally { _saveButton.IsEnabled = true; }
         }
     }
 
