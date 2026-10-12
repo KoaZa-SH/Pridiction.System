@@ -160,7 +160,7 @@ namespace KoaZa.Services
     {
         private static readonly string ThemePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KoaZa", "theme.txt");
-        public static string Mode { get; private set; } = "System";
+        public static string Mode { get; private set; } = "LightSage";
 
         public static void Load()
         {
@@ -172,12 +172,12 @@ namespace KoaZa.Services
                     if (new[] { "LightSage", "LightPearl", "LightOcean", "LightRose", "DarkMidnight", "DarkOcean", "DarkAmethyst", "DarkEmerald" }.Contains(value)) Mode = value;
                 }
             }
-            catch { Mode = "System"; }
+            catch { Mode = "LightSage"; }
         }
 
         public static void SetMode(string mode)
         {
-            Mode = new[] { "LightSage", "LightPearl", "LightOcean", "LightRose", "DarkMidnight", "DarkOcean", "DarkAmethyst", "DarkEmerald" }.Contains(mode) ? mode : "System";
+            Mode = new[] { "LightSage", "LightPearl", "LightOcean", "LightRose", "DarkMidnight", "DarkOcean", "DarkAmethyst", "DarkEmerald" }.Contains(mode) ? mode : "LightSage";
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(ThemePath));
@@ -249,8 +249,9 @@ namespace KoaZa.Services
                     var grid = element as DataGrid;
                     if (grid != null)
                     {
-                        grid.Background = new SolidColorBrush(dark ? Color.FromRgb(34, 42, 39) : Colors.White);
-                        grid.Foreground = new SolidColorBrush(dark ? Color.FromRgb(226, 233, 229) : Color.FromRgb(36, 52, 44));
+                        grid.Background = new SolidColorBrush(dark ? Color.FromRgb(30, 35, 52) : Colors.White);
+                        grid.Foreground = new SolidColorBrush(dark ? Color.FromRgb(242, 245, 252) : Color.FromRgb(35, 45, 58));
+                        grid.AlternatingRowBackground = new SolidColorBrush(dark ? Color.FromRgb(37, 43, 61) : Color.FromRgb(246, 249, 247));
                         grid.GridLinesVisibility = DataGridGridLinesVisibility.Horizontal;
                         grid.HorizontalGridLinesBrush = new SolidColorBrush(dark ? Color.FromRgb(64, 76, 70) : Color.FromRgb(228, 235, 230));
                     }
