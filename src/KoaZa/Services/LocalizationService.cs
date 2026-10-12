@@ -222,6 +222,19 @@ namespace KoaZa.Services
             }
             window.Background = new LinearGradientBrush(accentStart, accentEnd, 35);
             ApplyTo(window, dark);
+            var fixturesGrid = window.FindName("FixturesGrid") as DataGrid;
+            if (fixturesGrid != null)
+            {
+                fixturesGrid.ColumnHeaderStyle = new Style(typeof(DataGridColumnHeader))
+                {
+                    Setters = {
+                        new Setter(Control.BackgroundProperty, new SolidColorBrush(dark ? Color.FromRgb(42, 48, 68) : Color.FromRgb(234, 241, 236))),
+                        new Setter(Control.ForegroundProperty, new SolidColorBrush(dark ? Color.FromRgb(245, 247, 252) : Color.FromRgb(35, 45, 58))),
+                        new Setter(Control.FontWeightProperty, FontWeights.SemiBold),
+                        new Setter(Control.PaddingProperty, new Thickness(8, 10, 8, 10))
+                    }
+                };
+            }
             var chart = window.FindName("MarketChartFrame") as Border;
             var reason = window.FindName("MarketChartReasonText") as TextBlock;
             if (chart != null && (reason == null || reason.Visibility != Visibility.Visible))
