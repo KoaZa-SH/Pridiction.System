@@ -133,6 +133,86 @@ namespace KoaZa.Services
         }
     }
 
+    public sealed class CsvAutoSyncSettings
+    {
+        public bool Enabled { get; set; }
+        public int IntervalMinutes { get; set; }
+        public string Urls { get; set; }
+    }
+
+    public static class CsvAutoSyncService
+    {
+        private static readonly string SettingsPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KoaZa", "csv-sync.txt");
+
+        public static CsvAutoSyncSettings LoadSettings()
+        {
+            try
+            {
+                if (File.Exists(SettingsPath))
+                {
+                    var lines = File.ReadAllLines(SettingsPath, Encoding.UTF8);
+                    int interval;
+                    return new CsvAutoSyncSettings {
+                        Enabled = lines.Length > 0 && lines[0].Trim() == "1",
+                        IntervalMinutes = lines.Length > 1 && int.TryParse(lines[1], out interval) ? Math.Max(5, Math.Min(10080, interval)) : 60,
+                        Urls = lines.Length > 2 ? string.Join(Environment.NewLine, lines.Skip(2)) : ""
+                    };
+                }
+            }
+            catch { }
+            return new CsvAutoSyncSettings { Enabled = false, IntervalMinutes = 60, Urls = "" };
+        }
+
+        public static void SaveSettings(bool enabled, int intervalMinutes, string urls)
+        {
+            intervalMinutes = Math.Max(5, Math.Min(10080, intervalMinutes));
+            var cleanUrls = (urls ?? "").Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim()).Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            foreach (string url in cleanUrls)
+            {
+                Uri uri;
+                if (!Uri.TryCreate(url, UriKind.Absolute, out uri) ||
+                    (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+                    throw new InvalidOperationException("CSV sources must be valid HTTP or HTTPS URLs.");
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath));
+            File.WriteAllLines(SettingsPath, new[] { enabled ? "1" : "0", intervalMinutes.ToString(CultureInfo.InvariantCulture) }.Concat(cleanUrls), Encoding.UTF8);
+        }
+
+        public static ImportedCsvResult SyncConfigured(DatabaseService database)
+        {
+            if (database == null) throw new ArgumentNullException("database");
+            var settings = LoadSettings();
+            var urls = (settings.Urls ?? "").Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim()).Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (urls.Count == 0) throw new InvalidOperationException("Add at least one public CSV URL in Settings > CSV import.");
+            var total = new ImportedCsvResult();
+            foreach (string url in urls)
+            {
+                string tempPath = Path.Combine(Path.GetTempPath(), "koaza-csv-" + Guid.NewGuid().ToString("N") + ".csv");
+                try
+                {
+                    var request = (HttpWebRequest)WebRequest.Create(url);
+                    request.UserAgent = "KoaZaFootballAnalytics/1.0";
+                    request.Timeout = 30000; request.ReadWriteTimeout = 30000;
+                    request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+                    using (var response = (HttpWebResponse)request.GetResponse())
+                    using (var stream = response.GetResponseStream())
+                    using (var output = File.Create(tempPath)) stream.CopyTo(output);
+                    var result = HistoricalCsvImporter.Import(tempPath, database);
+                    total.Imported += result.Imported; total.Skipped += result.Skipped;
+                    total.Warnings.Add("Source " + new Uri(url).Host + ": imported " + result.Imported + ", skipped " + result.Skipped + ".");
+                    total.Warnings.AddRange(result.Warnings.Take(Math.Max(0, 30 - total.Warnings.Count)));
+                }
+                catch (Exception ex) { total.Warnings.Add("CSV source " + url + ": " + ex.Message); }
+                finally { try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { } }
+            }
+            if (total.Imported == 0 && total.Warnings.Count == 0) throw new InvalidOperationException("No CSV rows were imported.");
+            return total;
+        }
+    }
+
     public static class RssNewsService
     {
         public static readonly string[] DefaultFeeds = {
