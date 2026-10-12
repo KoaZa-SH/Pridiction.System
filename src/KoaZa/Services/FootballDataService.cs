@@ -1599,17 +1599,17 @@ namespace KoaZa.Services
             foreach (var theme in themes)
             {
                 var card = new Border { Width = 205, Height = 92, Margin = new Thickness(0, 0, 12, 12), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(2), BorderBrush = new SolidColorBrush(Colors.Transparent), Background = new LinearGradientBrush(theme.A, theme.B, 35), Padding = new Thickness(12), Cursor = System.Windows.Input.Cursors.Hand, Tag = theme.Id };
-                var label = new TextBlock { Text = theme.Name, Foreground = new SolidColorBrush(theme.Ink), FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+                var label = new TextBlock { Text = theme.Name, Foreground = new SolidColorBrush(theme.Ink), Tag = "ThemePreview", FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
                 card.Child = label;
                 card.MouseLeftButtonUp += (sender, args) => {
                     var chosen = (string)((Border)sender).Tag;
                     ThemeService.SetMode(chosen);
-                    foreach (Border c in cards.Children.OfType<Border>()) c.BorderBrush = new SolidColorBrush((string)c.Tag == chosen ? Color.FromRgb(255, 255, 255) : Colors.Transparent);
+                    foreach (Border c in cards.Children.OfType<Border>()) c.BorderBrush = new SolidColorBrush((string)c.Tag == chosen ? (chosen.StartsWith("Dark", StringComparison.Ordinal) ? Colors.White : Color.FromRgb(35, 80, 58)) : Colors.Transparent);
                     selectedText.Text = LocalizationService.T("Selected: ", "انتخاب‌شده: ") + theme.Name;
                     ThemeService.Apply(this);
                     ThemeService.Apply(this.Owner);
                 };
-                if (theme.Id == ThemeService.Mode) card.BorderBrush = new SolidColorBrush(Colors.White);
+                if (theme.Id == ThemeService.Mode) card.BorderBrush = new SolidColorBrush(theme.Id.StartsWith("Dark", StringComparison.Ordinal) ? Colors.White : Color.FromRgb(35, 80, 58));
                 cards.Children.Add(card);
             }
             panel.Children.Add(cards);
