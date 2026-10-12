@@ -52,7 +52,9 @@
         <TextBlock x:Name="FixtureCountText" VerticalAlignment="Center" Foreground="#5E6E65" Margin="18,0,0,0"/>
       </StackPanel>
     </Border>
-    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <TabControl Grid.Row="2">
+      <TabItem Header="Dashboard / پیش‌بینی">
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
       <StackPanel>
       <Grid Height="620">
       <Grid.ColumnDefinitions><ColumnDefinition Width="1.08*"/><ColumnDefinition Width="1.45*"/></Grid.ColumnDefinitions>
@@ -136,6 +138,11 @@
         </Grid>
       </Border>
       </Grid>
+      </StackPanel>
+      </ScrollViewer>
+      </TabItem>
+      <TabItem Header="News / اخبار">
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
       <Border Height="430" Background="White" CornerRadius="10" Padding="12" Margin="0,12,0,0">
         <Grid>
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -162,8 +169,9 @@
           </ScrollViewer>
         </Grid>
       </Border>
-      </StackPanel>
-    </ScrollViewer>
+      </ScrollViewer>
+      </TabItem>
+      </TabControl>
     <TextBlock Grid.Row="3" Text="KoaZa • Local SQLite • Historical Poisson baseline" Foreground="#7A8980" Margin="0,12,0,0" HorizontalAlignment="Right"/>
   </Grid>
   </Border>
