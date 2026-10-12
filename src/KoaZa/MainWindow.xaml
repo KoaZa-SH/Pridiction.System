@@ -34,6 +34,7 @@
         <ComboBox x:Name="LanguageBox" Width="105" Margin="0,0,8,0" Padding="6" SelectionChanged="LanguageBox_SelectionChanged"><ComboBoxItem Content="فارسی" Tag="fa"/><ComboBoxItem Content="English" Tag="en"/></ComboBox>
         <Button Content="Refresh list / نوسازی" Click="Refresh_Click" Padding="12,7" Margin="0,0,8,0"/>
         <Button Content="Import fixtures / دریافت بازی‌ها" Click="OpenFixtures_Click" Padding="12,7" Margin="0,0,8,0" Background="#163B2B" Foreground="White" BorderThickness="0"/>
+        <Button Content="CSV &amp; Persian RSS" Click="OpenDataSources_Click" Padding="12,7" Margin="0,0,8,0" Background="#DCECE3" Foreground="#163B2B" BorderThickness="0"/>
         <Button Content="Settings / تنظیمات" Click="OpenApiSettings_Click" Padding="12,7" Background="#16865B" Foreground="White" BorderThickness="0"/>
       </StackPanel>
       <StackPanel>

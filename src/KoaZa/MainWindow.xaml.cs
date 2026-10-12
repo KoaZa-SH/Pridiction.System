@@ -7,6 +7,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using KoaZa.Data;
 using KoaZa.Services;
 
@@ -20,6 +21,7 @@ namespace KoaZa
         private bool _settingLanguage;
         private bool _suppressFixtureSelection;
         private string _newsCompetition;
+        private DispatcherTimer _rssRefreshTimer;
 
         public MainWindow()
         {
@@ -38,6 +40,7 @@ namespace KoaZa
                 LocalizationService.Apply(this);
                 ThemeService.Apply(this);
                 LoadLatestNews();
+                StartRssRefreshTimer();
             }
             catch (Exception ex)
             {
@@ -201,6 +204,26 @@ namespace KoaZa
                 if (!string.Equals(_newsCompetition, target, StringComparison.OrdinalIgnoreCase)) return;
                 NewsStatusText.Text = LocalizationService.T("News feed unavailable: ", "خبرخوان در دسترس نیست: ") + ex.Message;
             }
+        }
+
+        private void OpenDataSources_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new DataSourcesWindow(_database) { Owner = this };
+            window.ShowDialog();
+            LoadFixtureList();
+        }
+
+        private void StartRssRefreshTimer()
+        {
+            if (_rssRefreshTimer != null) return;
+            _rssRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) };
+            _rssRefreshTimer.Tick += async (sender, args) =>
+            {
+                try { await System.Threading.Tasks.Task.Run(() => RssNewsService.FetchAll()); }
+                catch { }
+            };
+            _rssRefreshTimer.Start();
+            System.Threading.Tasks.Task.Run(() => { try { RssNewsService.FetchAll(); } catch { } });
         }
 
         private void OpenApiSettings_Click(object sender, RoutedEventArgs e)
