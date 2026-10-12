@@ -144,7 +144,7 @@ namespace KoaZa
             if (selectedRow != null)
             {
                 AnalyzeFixture(selectedRow.Fixture);
-                LoadLatestNews(selectedRow.Fixture.League);
+                LoadLatestNews(selectedRow.Fixture);
             }
             else
             {
