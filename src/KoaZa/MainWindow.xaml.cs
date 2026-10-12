@@ -193,7 +193,7 @@ namespace KoaZa
             }
             if (!force && string.Equals(_newsCompetition, target, StringComparison.OrdinalIgnoreCase)) return;
             _newsCompetition = target;
-            NewsStatusText.Text = LocalizationService.T("Loading news for ", "در حال دریافت اخبار رقابت ") + LocalizationService.League(target) + "...";
+            NewsStatusText.Text = LocalizationService.T("Loading news for ", "در حال دریافت اخبار رقابت ") + LocalizationService.League(competition) + "...";
             try
             {
                 var news = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchMatchNews(competition, fixture.HomeTeam, fixture.AwayTeam));
@@ -201,7 +201,7 @@ namespace KoaZa
                 NewsList.ItemsSource = news;
                 NewsStatusText.Text = news.Count == 0
                     ? LocalizationService.T("No news found for this competition. Try refreshing later.", "خبر مرتبطی برای این رقابت پیدا نشد؛ بعداً دوباره نوسازی کن.")
-                    : LocalizationService.T("Competition-specific headlines for: ", "اخبار مرتبط با رقابت: ") + LocalizationService.League(target) + " (" + news.Count + ")";
+                    : LocalizationService.T("Competition-specific headlines for: ", "اخبار مرتبط با رقابت: ") + LocalizationService.League(competition) + " (" + news.Count + ")";
             }
             catch (Exception ex)
             {
