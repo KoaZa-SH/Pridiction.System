@@ -222,7 +222,12 @@ namespace KoaZa
             _rssRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(2) };
             _rssRefreshTimer.Tick += async (sender, args) =>
             {
-                try { await System.Threading.Tasks.Task.Run(() => RssNewsService.FetchAll()); }
+                try
+                {
+                    await System.Threading.Tasks.Task.Run(() => RssNewsService.FetchAll());
+                    var selected = FixturesGrid.SelectedItem as FixtureRow;
+                    if (selected != null) LoadLatestNews(selected.Fixture.League, true);
+                }
                 catch { }
             };
             _rssRefreshTimer.Start();
