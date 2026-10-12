@@ -35,6 +35,8 @@
     <Compile Include="App.xaml.cs"><DependentUpon>App.xaml</DependentUpon></Compile>
     <Page Include="MainWindow.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
     <Compile Include="MainWindow.xaml.cs"><DependentUpon>MainWindow.xaml</DependentUpon></Compile>
+    <Compile Include="DataSourcesWindow.cs" />
+    <Compile Include="Services\DataIngestionServices.cs" />
     <Compile Include="Services\LocalizationService.cs" /><Compile Include="Services\PoissonModel.cs" /><Compile Include="Services\ApiKeyManager.cs" /><Compile Include="Services\FootballDataService.cs" /><Compile Include="Services\HistoricalStatsService.cs" /><Compile Include="Data\DatabaseService.cs" />
     <None Include="Data\schema.sql" /><None Include="packages.config" />
     <Content Include="Data\koaza.ico" Condition="Exists('Data\koaza.ico')"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
