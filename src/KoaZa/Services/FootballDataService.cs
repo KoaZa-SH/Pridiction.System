@@ -1489,21 +1489,21 @@ namespace KoaZa.Services
             panel.Children.Add(new TextBlock { Text = LocalizationService.T("Choose your colour mood", "رنگ‌بندی دلخواه را انتخاب کن"), FontSize = 22, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 8) });
             panel.Children.Add(new TextBlock { Text = LocalizationService.T("Elegant gradient palettes are applied across the application.", "پالت‌های گرادیانی و چشم‌نواز در برنامه اعمال می‌شوند."), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 16) });
             var themes = new[] {
-                new { Id = "System", Name = LocalizationService.T("Follow Windows", "مطابق ویندوز"), A = Color.FromRgb(95, 110, 103), B = Color.FromRgb(42, 58, 50) },
-                new { Id = "Light", Name = LocalizationService.T("Classic light", "روشن کلاسیک"), A = Color.FromRgb(240, 248, 244), B = Color.FromRgb(205, 232, 218) },
-                new { Id = "Dark", Name = LocalizationService.T("Classic dark", "تیره کلاسیک"), A = Color.FromRgb(48, 58, 53), B = Color.FromRgb(22, 30, 27) },
-                new { Id = "Midnight", Name = LocalizationService.T("Midnight violet", "بنفش نیمه‌شب"), A = Color.FromRgb(25, 31, 68), B = Color.FromRgb(74, 45, 112) },
-                new { Id = "Ocean", Name = LocalizationService.T("Deep ocean", "اقیانوس عمیق"), A = Color.FromRgb(0, 119, 182), B = Color.FromRgb(3, 37, 76) },
-                new { Id = "Amethyst", Name = LocalizationService.T("Royal amethyst", "آمتیست سلطنتی"), A = Color.FromRgb(131, 56, 236), B = Color.FromRgb(58, 12, 163) },
-                new { Id = "Emerald", Name = LocalizationService.T("Emerald", "زمردی"), A = Color.FromRgb(0, 145, 110), B = Color.FromRgb(0, 65, 75) },
-                new { Id = "Sunset", Name = LocalizationService.T("Velvet sunset", "غروب مخملی"), A = Color.FromRgb(244, 96, 54), B = Color.FromRgb(122, 44, 92) }
+                new { Id = "LightSage", Name = LocalizationService.T("Sage silk · Light", "سبز مریم‌گلی · روشن"), A = Color.FromRgb(250, 252, 248), B = Color.FromRgb(215, 236, 222), Ink = Color.FromRgb(32, 57, 45) },
+                new { Id = "LightPearl", Name = LocalizationService.T("Pearl champagne · Light", "مروارید شامپاینی · روشن"), A = Color.FromRgb(255, 250, 242), B = Color.FromRgb(239, 224, 207), Ink = Color.FromRgb(75, 53, 39) },
+                new { Id = "LightOcean", Name = LocalizationService.T("Glacier blue · Light", "آبی یخی · روشن"), A = Color.FromRgb(244, 251, 255), B = Color.FromRgb(204, 229, 242), Ink = Color.FromRgb(24, 55, 78) },
+                new { Id = "LightRose", Name = LocalizationService.T("Rose quartz · Light", "رز کوارتز · روشن"), A = Color.FromRgb(255, 247, 249), B = Color.FromRgb(244, 216, 226), Ink = Color.FromRgb(83, 43, 60) },
+                new { Id = "DarkMidnight", Name = LocalizationService.T("Midnight iris · Dark", "زنبق نیمه‌شب · تیره"), A = Color.FromRgb(17, 24, 50), B = Color.FromRgb(57, 38, 91), Ink = Colors.White },
+                new { Id = "DarkOcean", Name = LocalizationService.T("Abyss ocean · Dark", "اقیانوس ژرف · تیره"), A = Color.FromRgb(7, 45, 73), B = Color.FromRgb(10, 86, 108), Ink = Colors.White },
+                new { Id = "DarkAmethyst", Name = LocalizationService.T("Amethyst velvet · Dark", "مخمل آمتیست · تیره"), A = Color.FromRgb(39, 25, 66), B = Color.FromRgb(91, 47, 115), Ink = Colors.White },
+                new { Id = "DarkEmerald", Name = LocalizationService.T("Emerald forest · Dark", "جنگل زمردی · تیره"), A = Color.FromRgb(12, 48, 43), B = Color.FromRgb(17, 93, 76), Ink = Colors.White }
             };
             var cards = new WrapPanel { Margin = new Thickness(0, 4, 0, 16) };
             var selectedText = new TextBlock { Margin = new Thickness(0, 4, 0, 0), FontWeight = FontWeights.SemiBold };
             foreach (var theme in themes)
             {
                 var card = new Border { Width = 205, Height = 92, Margin = new Thickness(0, 0, 12, 12), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(2), BorderBrush = new SolidColorBrush(Colors.Transparent), Background = new LinearGradientBrush(theme.A, theme.B, 35), Padding = new Thickness(12), Cursor = System.Windows.Input.Cursors.Hand, Tag = theme.Id };
-                var label = new TextBlock { Text = theme.Name, Foreground = theme.Id == "Light" || theme.Id == "System" ? new SolidColorBrush(Color.FromRgb(28, 48, 38)) : Brushes.White, FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+                var label = new TextBlock { Text = theme.Name, Foreground = new SolidColorBrush(theme.Ink), FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
                 card.Child = label;
                 card.MouseLeftButtonUp += (sender, args) => {
                     var chosen = (string)((Border)sender).Tag;
@@ -1517,7 +1517,7 @@ namespace KoaZa.Services
                 cards.Children.Add(card);
             }
             panel.Children.Add(cards);
-            selectedText.Text = LocalizationService.T("Current theme: ", "رنگ‌بندی فعلی: ") + themes.FirstOrDefault(t => t.Id == ThemeService.Mode).Name;
+            selectedText.Text = LocalizationService.T("Current theme: ", "رنگ‌بندی فعلی: ") + (themes.FirstOrDefault(t => t.Id == ThemeService.Mode) ?? themes[0]).Name;
             panel.Children.Add(selectedText);
             return new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         }
