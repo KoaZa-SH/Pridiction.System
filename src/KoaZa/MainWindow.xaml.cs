@@ -22,6 +22,8 @@ namespace KoaZa
         private bool _suppressFixtureSelection;
         private string _newsCompetition;
         private DispatcherTimer _rssRefreshTimer;
+        private DispatcherTimer _csvRefreshTimer;
+        private bool _csvSyncInProgress;
 
         public MainWindow()
         {
@@ -41,6 +43,7 @@ namespace KoaZa
                 ThemeService.Apply(this);
                 LoadLatestNews();
                 StartRssRefreshTimer();
+                StartCsvRefreshTimer();
             }
             catch (Exception ex)
             {
@@ -216,7 +219,7 @@ namespace KoaZa
         private void StartRssRefreshTimer()
         {
             if (_rssRefreshTimer != null) return;
-            _rssRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) };
+            _rssRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(2) };
             _rssRefreshTimer.Tick += async (sender, args) =>
             {
                 try { await System.Threading.Tasks.Task.Run(() => RssNewsService.FetchAll()); }
@@ -226,11 +229,42 @@ namespace KoaZa
             System.Threading.Tasks.Task.Run(() => { try { RssNewsService.FetchAll(); } catch { } });
         }
 
+        private void StartCsvRefreshTimer()
+        {
+            if (_csvRefreshTimer != null) { _csvRefreshTimer.Stop(); _csvRefreshTimer = null; }
+            var settings = CsvAutoSyncService.LoadSettings();
+            if (!settings.Enabled || string.IsNullOrWhiteSpace(settings.Urls) || _database == null) return;
+            _csvRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(Math.Max(5, settings.IntervalMinutes)) };
+            _csvRefreshTimer.Tick += async (sender, args) => await RunScheduledCsvSyncAsync();
+            _csvRefreshTimer.Start();
+            _ = RunScheduledCsvSyncAsync();
+        }
+
+        private async System.Threading.Tasks.Task RunScheduledCsvSyncAsync()
+        {
+            if (_csvSyncInProgress || _database == null) return;
+            var settings = CsvAutoSyncService.LoadSettings();
+            if (!settings.Enabled || string.IsNullOrWhiteSpace(settings.Urls)) return;
+            _csvSyncInProgress = true;
+            try
+            {
+                var result = await System.Threading.Tasks.Task.Run(() => CsvAutoSyncService.SyncConfigured(_database));
+                if (result.Imported > 0)
+                    FixtureStatusText.Text = LocalizationService.T("Scheduled CSV sync saved historical rows: ", "همگام‌سازی زمان‌بندی‌شده CSV؛ ردیف‌های تاریخی ذخیره‌شده: ") + result.Imported;
+            }
+            catch (Exception ex)
+            {
+                FixtureStatusText.Text = LocalizationService.T("Scheduled CSV sync warning: ", "هشدار همگام‌سازی CSV: ") + ex.Message;
+            }
+            finally { _csvSyncInProgress = false; }
+        }
+
         private void OpenApiSettings_Click(object sender, RoutedEventArgs e)
         {
             var window = new ApiSettingsWindow { Owner = this };
             window.ShowDialog();
             ThemeService.Apply(this);
+            StartCsvRefreshTimer();
             LoadFixtureList();
         }
 
