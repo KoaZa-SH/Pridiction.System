@@ -1475,6 +1475,7 @@ namespace KoaZa.Services
             tabs.Items.Add(new TabItem { Header = LocalizationService.T("API providers", "سرویس‌های API"), Content = root });
             tabs.Items.Add(new TabItem { Header = LocalizationService.T("Competitions to display", "رقابت‌های قابل نمایش"), Content = BuildCompetitionTab() });
             tabs.Items.Add(new TabItem { Header = LocalizationService.T("Themes / رنگ‌بندی", "رنگ‌بندی"), Content = BuildThemeTab() });
+            tabs.Items.Add(new TabItem { Header = LocalizationService.T("CSV import / ورود CSV", "ورود CSV"), Content = BuildCsvTab() });
             tabs.Items.Add(new TabItem { Header = LocalizationService.T("General settings", "تنظیمات عمومی"), Content = BuildGeneralTab() });
             Content = tabs;
             ProviderBox_SelectionChanged(null, null);
@@ -1519,6 +1520,64 @@ namespace KoaZa.Services
             panel.Children.Add(cards);
             selectedText.Text = LocalizationService.T("Current theme: ", "رنگ‌بندی فعلی: ") + (themes.FirstOrDefault(t => t.Id == ThemeService.Mode) ?? themes[0]).Name;
             panel.Children.Add(selectedText);
+            return new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        }
+
+        private UIElement BuildCsvTab()
+        {
+            var settings = CsvAutoSyncService.LoadSettings();
+            var panel = new StackPanel { Margin = new Thickness(24), Orientation = Orientation.Vertical };
+            panel.Children.Add(new TextBlock { Text = LocalizationService.T("Internet CSV sources", "منابع CSV اینترنتی"), FontSize = 21, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 8) });
+            panel.Children.Add(new TextBlock { Text = LocalizationService.T("Add one direct CSV download URL per line. CSV columns must include HomeTeam, AwayTeam, FTHG and FTAG. Scheduled sync runs while the application is open.", "در هر خط یک نشانی مستقیم فایل CSV وارد کن. ستون‌های HomeTeam، AwayTeam، FTHG و FTAG الزامی‌اند. دریافت زمان‌بندی‌شده هنگام باز بودن برنامه اجرا می‌شود."), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
+            var urls = new TextBox { Text = settings.Urls ?? "", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MinHeight = 110, MaxHeight = 180, Padding = new Thickness(8), Margin = new Thickness(0, 0, 0, 12) };
+            panel.Children.Add(urls);
+            var enabled = new CheckBox { Content = LocalizationService.T("Enable automatic CSV refresh", "فعال‌سازی دریافت خودکار CSV"), IsChecked = settings.Enabled, Margin = new Thickness(0, 0, 0, 10) };
+            panel.Children.Add(enabled);
+            var intervalRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 12) };
+            intervalRow.Children.Add(new TextBlock { Text = LocalizationService.T("Refresh interval", "فاصلهٔ به‌روزرسانی"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
+            var interval = new ComboBox { Width = 190, Padding = new Thickness(7) };
+            interval.Items.Add(new ProviderChoice("5", LocalizationService.T("Every 5 minutes", "هر ۵ دقیقه")));
+            interval.Items.Add(new ProviderChoice("15", LocalizationService.T("Every 15 minutes", "هر ۱۵ دقیقه")));
+            interval.Items.Add(new ProviderChoice("30", LocalizationService.T("Every 30 minutes", "هر ۳۰ دقیقه")));
+            interval.Items.Add(new ProviderChoice("60", LocalizationService.T("Every hour", "هر ساعت")));
+            interval.Items.Add(new ProviderChoice("360", LocalizationService.T("Every 6 hours", "هر ۶ ساعت")));
+            interval.Items.Add(new ProviderChoice("1440", LocalizationService.T("Daily", "روزانه")));
+            interval.SelectedItem = interval.Items.Cast<ProviderChoice>().FirstOrDefault(x => x.Id == settings.IntervalMinutes.ToString(CultureInfo.InvariantCulture)) ?? interval.Items.Cast<ProviderChoice>().First(x => x.Id == "60");
+            intervalRow.Children.Add(interval); panel.Children.Add(intervalRow);
+            var status = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
+            var buttons = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
+            var save = new Button { Content = LocalizationService.T("Save CSV schedule", "ذخیره زمان‌بندی CSV"), Padding = new Thickness(14, 8, 14, 8), Margin = new Thickness(0, 0, 8, 8) };
+            save.Click += (sender, args) => {
+                try {
+                    var selected = interval.SelectedItem as ProviderChoice;
+                    CsvAutoSyncService.SaveSettings(enabled.IsChecked == true, selected == null ? 60 : int.Parse(selected.Id, CultureInfo.InvariantCulture), urls.Text);
+                    status.Text = LocalizationService.T("CSV schedule saved. Automatic refresh works while KoaZa is running.", "زمان‌بندی CSV ذخیره شد؛ دریافت خودکار هنگام اجرای KoaZa فعال است.");
+                } catch (Exception ex) { status.Text = ex.Message; }
+            };
+            var sync = new Button { Content = LocalizationService.T("Download and save CSV now", "دریافت و ذخیره CSV اکنون"), Padding = new Thickness(14, 8, 14, 8), Margin = new Thickness(0, 0, 8, 8) };
+            sync.Click += async (sender, args) => {
+                try {
+                    CsvAutoSyncService.SaveSettings(enabled.IsChecked == true, int.Parse(((interval.SelectedItem as ProviderChoice) ?? new ProviderChoice("60", "60")).Id, CultureInfo.InvariantCulture), urls.Text);
+                    sync.IsEnabled = false;
+                    status.Text = LocalizationService.T("Downloading CSV sources…", "در حال دریافت فایل‌های CSV...");
+                    var result = await System.Threading.Tasks.Task.Run(() => CsvAutoSyncService.SyncConfigured(new DatabaseService()));
+                    status.Text = LocalizationService.T("CSV sync complete. Imported: ", "دریافت CSV تمام شد. واردشده: ") + result.Imported + ", skipped: " + result.Skipped + Environment.NewLine + string.Join(Environment.NewLine, result.Warnings.Take(8));
+                } catch (Exception ex) { status.Text = LocalizationService.T("CSV sync failed: ", "دریافت CSV ناموفق بود: ") + ex.Message; }
+                finally { sync.IsEnabled = true; }
+            };
+            var local = new Button { Content = LocalizationService.T("Import local CSV file…", "ورود فایل CSV از رایانه…"), Padding = new Thickness(14, 8, 14, 8), Margin = new Thickness(0, 0, 8, 8) };
+            local.Click += async (sender, args) => {
+                var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Select historical football CSV", Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*", Multiselect = false };
+                if (dialog.ShowDialog(this) != true) return;
+                try {
+                    local.IsEnabled = false;
+                    var result = await System.Threading.Tasks.Task.Run(() => HistoricalCsvImporter.Import(dialog.FileName, new DatabaseService()));
+                    status.Text = LocalizationService.T("Local CSV import complete. Imported: ", "ورود فایل CSV تمام شد. واردشده: ") + result.Imported + ", skipped: " + result.Skipped;
+                } catch (Exception ex) { status.Text = LocalizationService.T("CSV import failed: ", "ورود CSV ناموفق بود: ") + ex.Message; }
+                finally { local.IsEnabled = true; }
+            };
+            buttons.Children.Add(save); buttons.Children.Add(sync); buttons.Children.Add(local);
+            panel.Children.Add(buttons); panel.Children.Add(status);
             return new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         }
 
