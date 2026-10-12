@@ -254,7 +254,7 @@ namespace KoaZa.Services
                             new SolidColorBrush(dark ? Color.FromRgb(30, 35, 52) : Color.FromRgb(255, 255, 255));
 
                     var text = element as TextBlock;
-                    if (text != null)
+                    if (text != null && !string.Equals(Convert.ToString(text.Tag), "ThemePreview", StringComparison.Ordinal))
                     {
                         text.Foreground = new SolidColorBrush(dark ? Color.FromRgb(242, 245, 252) : Color.FromRgb(35, 45, 58));
                     }
