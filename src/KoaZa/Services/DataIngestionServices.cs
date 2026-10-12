@@ -167,7 +167,7 @@ namespace KoaZa.Services
         public static void SaveSettings(bool enabled, int intervalMinutes, string urls)
         {
             intervalMinutes = Math.Max(5, Math.Min(10080, intervalMinutes));
-            var cleanUrls = (urls ?? "").Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries)
+            var cleanUrls = (urls ?? "").Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(x => x.Trim()).Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             foreach (string url in cleanUrls)
             {
@@ -184,7 +184,7 @@ namespace KoaZa.Services
         {
             if (database == null) throw new ArgumentNullException("database");
             var settings = LoadSettings();
-            var urls = (settings.Urls ?? "").Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries)
+            var urls = (settings.Urls ?? "").Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(x => x.Trim()).Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (urls.Count == 0) throw new InvalidOperationException("Add at least one public CSV URL in Settings > CSV import.");
             var total = new ImportedCsvResult();
