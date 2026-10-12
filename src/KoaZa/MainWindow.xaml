@@ -26,7 +26,8 @@
       <Setter Property="BorderBrush" Value="#DDE7E0"/>
     </Style>
   </Window.Resources>
-  <Grid Margin="20">
+  <Border CornerRadius="22" Margin="8" Padding="12" Background="#F4F7F5" BorderBrush="#DCE7E0" BorderThickness="1">
+  <Grid Margin="12">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <DockPanel Grid.Row="0" Margin="0,0,0,16">
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
@@ -165,4 +166,5 @@
     </ScrollViewer>
     <TextBlock Grid.Row="3" Text="KoaZa • Local SQLite • Historical Poisson baseline" Foreground="#7A8980" Margin="0,12,0,0" HorizontalAlignment="Right"/>
   </Grid>
+  </Border>
 </Window>
