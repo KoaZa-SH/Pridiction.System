@@ -781,6 +781,79 @@ namespace KoaZa.Services
         }
 
 
+        public static List<FixtureRecord> FetchAllProvidersForSeason(int season)
+        {
+            var configs = ApiProviderStore.Load().Where(p => p.Enabled).ToList();
+            if (configs.Count == 0) throw new InvalidOperationException("No enabled API providers are configured.");
+            var all = new List<FixtureRecord>();
+            var errors = new List<string>();
+            foreach (string provider in configs.Select(p => p.Provider).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    List<FixtureRecord> rows = new List<FixtureRecord>();
+                    if (provider == "ApiFootball" || provider == "ApiSports")
+                    {
+                        foreach (var config in configs.Where(p => (p.Provider == "ApiFootball" || p.Provider == "ApiSports") && !string.IsNullOrWhiteSpace(p.Key)))
+                        {
+                            try { rows.AddRange(FetchApiFootballPaged("/fixtures?season=" + season.ToString(CultureInfo.InvariantCulture), config.Key)); }
+                            catch (Exception ex) { errors.Add(provider + ": " + ex.Message); }
+                        }
+                    }
+                    else if (provider == "FootballData")
+                    {
+                        foreach (var config in configs.Where(p => p.Provider == "FootballData" && !string.IsNullOrWhiteSpace(p.Key)))
+                        {
+                            try
+                            {
+                                var root = Parse(Request("https://api.football-data.org/v4/matches?season=" + season.ToString(CultureInfo.InvariantCulture), "X-Auth-Token", config.Key));
+                                if (HasErrors(root)) throw new InvalidOperationException("API returned an error or the token does not cover this season.");
+                                foreach (var item in GetList(root, "matches"))
+                                {
+                                    var home = GetMap(item, "homeTeam"); var away = GetMap(item, "awayTeam");
+                                    var competition = GetMap(item, "competition"); var score = GetMap(GetMap(item, "score"), "fullTime");
+                                    rows.Add(new FixtureRecord {
+                                        Provider = "football-data.org", League = GetString(competition, "name", GetString(competition, "code", "Competition")),
+                                        KickoffUtc = GetString(item, "utcDate", ""), HomeTeam = GetString(home, "name", "Home"),
+                                        AwayTeam = GetString(away, "name", "Away"), HomeGoals = GetNullableInt(score, "home"),
+                                        AwayGoals = GetNullableInt(score, "away"), Status = GetString(item, "status", ""),
+                                        ExternalId = GetString(item, "id", "")
+                                    });
+                                }
+                            }
+                            catch (Exception ex) { errors.Add("football-data.org: " + ex.Message); }
+                        }
+                    }
+                    else if (provider == "OpenLigaDB")
+                    {
+                        foreach (string league in new[] { "bl1", "bl2", "bl3" })
+                            try { rows.AddRange(FetchOpenLiga(league, season)); } catch (Exception ex) { errors.Add("OpenLigaDB " + league + ": " + ex.Message); }
+                    }
+                    else if (provider == "FiveDollarFootballAPI")
+                    {
+                        rows.AddRange(FetchFiveDollarRange("all", DateTime.UtcNow.Date.AddDays(-7), DateTime.UtcNow.Date.AddDays(7)));
+                    }
+                    else if (provider == "SportsAPI360") rows.AddRange(FetchSportsApi360("all"));
+                    else if (provider == "FootballCharts") rows.AddRange(FetchFootballCharts("premier", season));
+                    else
+                    {
+                        var custom = configs.FirstOrDefault(p => p.Provider == provider && !string.IsNullOrWhiteSpace(p.BaseUrl));
+                        if (custom != null) rows.AddRange(FetchCustom(custom));
+                        else rows.AddRange(Fetch(provider, "all", season));
+                    }
+                    all.AddRange(rows ?? new List<FixtureRecord>());
+                    if (rows == null || rows.Count == 0) errors.Add(provider + ": no records returned for the selected season/coverage.");
+                }
+                catch (Exception ex) { errors.Add(provider + ": " + ex.Message); }
+            }
+            var unique = all.Where(x => x != null).GroupBy(FixtureDeduplicationKey)
+                .Select(g => g.OrderByDescending(x => !string.IsNullOrWhiteSpace(x.ExternalId))
+                    .ThenByDescending(x => !string.IsNullOrWhiteSpace(x.League)).First()).ToList();
+            if (unique.Count == 0)
+                throw new InvalidOperationException("No fixtures were returned by any enabled provider. " + string.Join(" | ", errors.Take(12)));
+            return unique;
+        }
+
         public static List<FixtureRecord> FetchAuto(string competition, int season)
         {
             string canonical = (competition ?? "").Trim().ToUpperInvariant();
