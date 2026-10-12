@@ -196,7 +196,7 @@ namespace KoaZa
             NewsStatusText.Text = LocalizationService.T("Loading news for ", "در حال دریافت اخبار رقابت ") + LocalizationService.League(competition) + "...";
             try
             {
-                var news = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchMatchNews(competition, fixture.HomeTeam, fixture.AwayTeam));
+                var news = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchMatchNewsForCompetition(competition, fixture.HomeTeam, fixture.AwayTeam));
                 if (!string.Equals(_newsCompetition, target, StringComparison.OrdinalIgnoreCase)) return;
                 NewsList.ItemsSource = news;
                 NewsStatusText.Text = news.Count == 0
