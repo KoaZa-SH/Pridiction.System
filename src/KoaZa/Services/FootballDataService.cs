@@ -157,9 +157,8 @@ namespace KoaZa.Services
     }
 
     public static class FootballDataService
-        public static string LastProviderSummary { get; private set; } = "";
-
     {
+        public static string LastProviderSummary { get; private set; } = "";
 
         // Bulk refresh: API-SPORTS date queries return fixtures across all competitions covered by the account.
         // The provider's coverage and quota still determine which competitions/data are available.
