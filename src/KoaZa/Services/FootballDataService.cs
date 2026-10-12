@@ -613,6 +613,23 @@ namespace KoaZa.Services
             return summary;
         }
 
+        public static List<NewsItem> FetchMatchNews(string competition, string homeTeam, string awayTeam)
+        {
+            var result = FetchLatestNews(competition);
+            string home = (homeTeam ?? "").Trim();
+            string away = (awayTeam ?? "").Trim();
+            string league = (competition ?? "").Trim();
+            if (home.Length > 0 && away.Length > 0)
+                FetchSiteNews(result, "\"" + home.Replace("\"", " ") + "\" \"" + away.Replace("\"", " ") + "\" football OR soccer OR فوتبال", "Match-specific RSS / اخبار همین مسابقه");
+            if (home.Length > 0 && league.Length > 0)
+                FetchSiteNews(result, "\"" + home.Replace("\"", " ") + "\" \"" + league.Replace("\"", " ") + "\" football OR فوتبال", "Home team / اخبار تیم میزبان");
+            if (away.Length > 0 && league.Length > 0)
+                FetchSiteNews(result, "\"" + away.Replace("\"", " ") + "\" \"" + league.Replace("\"", " ") + "\" football OR فوتبال", "Away team / اخبار تیم میهمان");
+            return result.GroupBy(n => string.IsNullOrWhiteSpace(n.Url) ? n.Title : n.Url, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderByDescending(n => ParseNewsDate(n.Published)).First())
+                .OrderByDescending(n => ParseNewsDate(n.Published)).Take(18).ToList();
+        }
+
         public static List<NewsItem> FetchLatestNews(string competition)
         {
             var result = new List<NewsItem>();
