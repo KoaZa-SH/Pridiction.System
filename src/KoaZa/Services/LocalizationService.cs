@@ -243,9 +243,7 @@ namespace KoaZa.Services
                     var text = element as TextBlock;
                     if (text != null)
                     {
-                        var solidText = text.Foreground as SolidColorBrush;
-                        bool explicitlyWhite = solidText != null && solidText.Color == Colors.White;
-                        text.Foreground = new SolidColorBrush(dark ? Colors.White : Color.FromRgb(35, 45, 58));
+                        text.Foreground = new SolidColorBrush(dark ? Color.FromRgb(242, 245, 252) : Color.FromRgb(35, 45, 58));
                     }
 
                     var grid = element as DataGrid;
@@ -286,7 +284,8 @@ namespace KoaZa.Services
             var solid = brush as SolidColorBrush;
             if (solid == null) return false;
             return solid.Color == Colors.White || solid.Color == Color.FromRgb(244, 247, 245) ||
-                   solid.Color == Color.FromRgb(255, 255, 255);
+                   solid.Color == Color.FromRgb(255, 255, 255) ||
+                   ((int)solid.Color.R + solid.Color.G + solid.Color.B) / 3 >= 220;
         }
 
         private static bool IsDefaultTextColor(Brush brush)
