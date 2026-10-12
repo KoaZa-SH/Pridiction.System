@@ -152,7 +152,7 @@ namespace KoaZa
                 SetMarketChartState(false, LocalizationService.T("No fixture matches the current filters.", "با فیلترهای فعلی مسابقه‌ای پیدا نشد."));
                 MatchTitleText.Text = LocalizationService.T("Select a match from the list", "یک مسابقه انتخاب کن");
                 ModelStatusText.Text = LocalizationService.T("No fixture matches the current filters.", "با فیلترهای فعلی مسابقه‌ای پیدا نشد.");
-                LoadLatestNews(null);
+                LoadLatestNews((FixtureRecord)null);
             }
         }
 
@@ -171,19 +171,20 @@ namespace KoaZa
         private void RefreshNews_Click(object sender, RoutedEventArgs e)
         {
             var row = FixturesGrid.SelectedItem as FixtureRow;
-            LoadLatestNews(row == null ? null : row.Fixture.League, true);
+            LoadLatestNews(row == null ? null : row.Fixture, true);
         }
 
         private void LoadLatestNews()
         {
             var row = FixturesGrid == null ? null : FixturesGrid.SelectedItem as FixtureRow;
-            LoadLatestNews(row == null ? null : row.Fixture.League, false);
+            LoadLatestNews(row == null ? null : row.Fixture, false);
         }
 
-        private async void LoadLatestNews(string competition, bool force = false)
+        private async void LoadLatestNews(FixtureRecord fixture, bool force = false)
         {
-            string target = (competition ?? "").Trim();
-            if (target.Length == 0)
+            string competition = fixture == null ? "" : (fixture.League ?? "").Trim();
+            string target = fixture == null ? "" : competition + "|" + (fixture.HomeTeam ?? "") + "|" + (fixture.AwayTeam ?? "");
+            if (target.Length == 0 || competition.Length == 0)
             {
                 _newsCompetition = null;
                 NewsList.ItemsSource = new List<NewsItem>();
@@ -195,7 +196,7 @@ namespace KoaZa
             NewsStatusText.Text = LocalizationService.T("Loading news for ", "در حال دریافت اخبار رقابت ") + LocalizationService.League(target) + "...";
             try
             {
-                var news = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchLatestNews(target));
+                var news = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchMatchNews(competition, fixture.HomeTeam, fixture.AwayTeam));
                 if (!string.Equals(_newsCompetition, target, StringComparison.OrdinalIgnoreCase)) return;
                 NewsList.ItemsSource = news;
                 NewsStatusText.Text = news.Count == 0
@@ -226,7 +227,7 @@ namespace KoaZa
                 {
                     await System.Threading.Tasks.Task.Run(() => RssNewsService.FetchAll());
                     var selected = FixturesGrid.SelectedItem as FixtureRow;
-                    if (selected != null) LoadLatestNews(selected.Fixture.League, true);
+                    if (selected != null) LoadLatestNews(selected.Fixture, true);
                 }
                 catch { }
             };
@@ -305,7 +306,7 @@ namespace KoaZa
             var row = FixturesGrid.SelectedItem as FixtureRow;
             if (row == null || _database == null) return;
             AnalyzeFixture(row.Fixture);
-            LoadLatestNews(row.Fixture.League);
+            LoadLatestNews(row.Fixture);
         }
 
         private void AnalyzeFixture(FixtureRecord fixture)
