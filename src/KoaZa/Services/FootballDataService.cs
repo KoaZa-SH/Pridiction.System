@@ -368,6 +368,25 @@ namespace KoaZa.Services
         public static string FetchFixtureDetails(FixtureRecord fixture)
         {
             if (fixture == null) throw new ArgumentNullException("fixture");
+            if (fixture.Provider == "FiveDollarFootballAPI")
+            {
+                var fiveDollarKeys = ApiProviderStore.Load().Where(p => p.Enabled && p.Provider == "FiveDollarFootballAPI" && !string.IsNullOrWhiteSpace(p.Key)).ToList();
+                if (fiveDollarKeys.Count == 0) throw new InvalidOperationException("Enable 5DollarFootballAPI and save its bearer key first.");
+                Exception lastFiveDollarError = null;
+                foreach (var config in fiveDollarKeys)
+                {
+                    try
+                    {
+                        string json = Request("https://api.5dollarfootballapi.com/v1/fixtures/" + Uri.EscapeDataString(fixture.ExternalId) + "?include=stats,events", "Authorization", "Bearer " + config.Key);
+                        var root = Parse(json);
+                        if (HasErrors(root)) throw new InvalidOperationException("5DollarFootballAPI returned an API/quota error.");
+                        root["detailsVersion"] = 2;
+                        return new JavaScriptSerializer().Serialize(root);
+                    }
+                    catch (Exception ex) { lastFiveDollarError = ex; }
+                }
+                throw new InvalidOperationException("Could not retrieve 5DollarFootballAPI fixture details.", lastFiveDollarError);
+            }
             if (fixture.Provider != "API-Football" && fixture.Provider != "ApiFootball" && fixture.Provider != "ApiSports")
                 throw new InvalidOperationException("Detailed statistics are currently available through the API-SPORTS/API-Football adapter. Other providers may not expose a compatible fixture-details endpoint.");
             int fixtureId;
@@ -539,6 +558,31 @@ namespace KoaZa.Services
             string summary = sb.ToString();
             return LocalizationService.IsPersian ? TranslateFixtureSummary(summary) : summary;
         }
+
+        public static string SummarizeFixtureDetails(string json, FixtureRecord fixture)
+        {
+            var root = Parse(json);
+            if (GetList(root, "response").Count > 0) return SummarizeFixtureDetails(json);
+            var s = MatchStatisticsParser.ParseFiveDollarOrGeneric(json, fixture);
+            if (s == null) return LocalizationService.T("No detailed statistics are available for this match yet.", "هنوز آمار تفصیلی برای این مسابقه منتشر نشده است.");
+            var sb = new StringBuilder();
+            sb.AppendLine("MATCH STATISTICS");
+            if (s.HomeShots.HasValue || s.AwayShots.HasValue) sb.AppendLine("Total shots: " + fixture.HomeTeam + " " + Value(s.HomeShots) + " — " + fixture.AwayTeam + " " + Value(s.AwayShots));
+            if (s.HomeShotsOnTarget.HasValue || s.AwayShotsOnTarget.HasValue) sb.AppendLine("Shots on target: " + fixture.HomeTeam + " " + Value(s.HomeShotsOnTarget) + " — " + fixture.AwayTeam + " " + Value(s.AwayShotsOnTarget));
+            if (s.HomeCorners.HasValue || s.AwayCorners.HasValue) sb.AppendLine("Corner kicks: " + fixture.HomeTeam + " " + Value(s.HomeCorners) + " — " + fixture.AwayTeam + " " + Value(s.AwayCorners));
+            if (s.HomeYellowCards.HasValue || s.AwayYellowCards.HasValue) sb.AppendLine("Yellow cards: " + fixture.HomeTeam + " " + Value(s.HomeYellowCards) + " — " + fixture.AwayTeam + " " + Value(s.AwayYellowCards));
+            if (s.HomeRedCards.HasValue || s.AwayRedCards.HasValue) sb.AppendLine("Red cards: " + fixture.HomeTeam + " " + Value(s.HomeRedCards) + " — " + fixture.AwayTeam + " " + Value(s.AwayRedCards));
+            if (s.HomeFouls.HasValue || s.AwayFouls.HasValue) sb.AppendLine("Fouls: " + fixture.HomeTeam + " " + Value(s.HomeFouls) + " — " + fixture.AwayTeam + " " + Value(s.AwayFouls));
+            if (!string.IsNullOrWhiteSpace(s.Referee)) sb.AppendLine("Referee: " + s.Referee);
+            if (sb.ToString().Trim().Equals("MATCH STATISTICS", StringComparison.OrdinalIgnoreCase))
+                return LocalizationService.T("The provider returned the match but no supported event-stat fields. Missing values are not assumed to be zero.", "سرویس مسابقه را برگرداند اما آمار رویدادی قابل‌استفاده‌ای نداشت؛ مقادیر ناموجود صفر فرض نمی‌شوند.");
+            sb.AppendLine();
+            sb.Append("Missing fields are not assumed to be zero.");
+            string summary = sb.ToString();
+            return LocalizationService.IsPersian ? TranslateFixtureSummary(summary) : summary;
+        }
+
+        private static string Value(int? value) { return value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : "—"; }
 
         private static string TranslateFixtureSummary(string summary)
         {
@@ -1885,9 +1929,11 @@ namespace KoaZa.Services
                     FootballDataService.FetchFromDate(choice.Id, competition, season, startDate, endDate));
                 DatabaseServiceProxy.SaveFixtures(records);
                 _grid.ItemsSource = records.Select(r => new FixtureImportRow(r)).ToList();
+                _status.Text = LocalizationService.T("Fixtures saved. Importing detailed stats for up to 10 completed matches...", "مسابقات ذخیره شد؛ در حال دریافت آمار تفصیلی حداکثر ۱۰ بازی تمام‌شده...");
+                int statsImported = await System.Threading.Tasks.Task.Run(() => DatabaseServiceProxy.ImportHistoricalStatistics(records));
                 _status.Text = LocalizationService.IsPersian
-                    ? records.Count + " مسابقه از " + startDate.ToString("yyyy-MM-dd") + " تا " + endDate.ToString("yyyy-MM-dd") + " دریافت و در پایگاه داده محلی ذخیره شد. داده‌های قبلی پاک نمی‌شوند؛ پوشش به سرویس و سهمیه وابسته است."
-                    : "Received and saved " + records.Count + " fixtures/results from " + startDate.ToString("yyyy-MM-dd") + " through " + endDate.ToString("yyyy-MM-dd") + ". Existing local records are retained; coverage depends on provider and quota.";
+                    ? records.Count + " مسابقه از " + startDate.ToString("yyyy-MM-dd") + " تا " + endDate.ToString("yyyy-MM-dd") + " دریافت و ذخیره شد؛ آمار ساختاریافته برای " + statsImported + " مسابقه وارد شد. داده‌های قبلی حفظ می‌شوند؛ پوشش به سرویس و سهمیه وابسته است."
+                    : "Received and saved " + records.Count + " fixtures/results from " + startDate.ToString("yyyy-MM-dd") + " through " + endDate.ToString("yyyy-MM-dd") + "; structured event stats imported for " + statsImported + " matches. Existing local data is retained; coverage depends on provider and quota.";
             }
             catch (Exception ex) { _status.Text = LocalizationService.T("Import failed: ", "دریافت ناموفق بود: ") + ex.Message; }
             finally { if (fetchButton != null) fetchButton.IsEnabled = true; }
@@ -1927,6 +1973,69 @@ namespace KoaZa.Services
         public static void SaveFixtures(List<FixtureRecord> fixtures)
         {
             new KoaZa.Data.DatabaseService().SaveFixtures(fixtures);
+        }
+
+        public static int ImportHistoricalStatistics(List<FixtureRecord> fixtures)
+        {
+            if (fixtures == null) return 0;
+            var completed = fixtures.Where(f => f.HomeGoals.HasValue && f.AwayGoals.HasValue &&
+                new[] { "FT", "AET", "PEN", "FINISHED", "MATCH FINISHED", "FULL TIME", "AFTER EXTRA TIME", "AFTER PENALTIES" }.Contains((f.Status ?? "").Trim().ToUpperInvariant()) &&
+                (f.Provider == "API-Football" || f.Provider == "ApiFootball" || f.Provider == "ApiSports" || f.Provider == "FiveDollarFootballAPI"))
+                .OrderByDescending(f => f.KickoffUtc).ToList();
+            var candidates = completed.Where(f => f.Provider == "FiveDollarFootballAPI").Take(10)
+                .Concat(completed.Where(f => f.Provider != "FiveDollarFootballAPI").Take(5)).ToList();
+            var db = new KoaZa.Data.DatabaseService();
+            int imported = 0;
+            foreach (var fixture in candidates)
+            {
+                try
+                {
+                    var baseline = new MatchStatisticsRecord
+                    {
+                        Provider = fixture.Provider, ExternalId = fixture.ExternalId, League = fixture.League,
+                        KickoffUtc = fixture.KickoffUtc, Status = fixture.Status, HomeTeam = fixture.HomeTeam, AwayTeam = fixture.AwayTeam,
+                        HomeGoals = fixture.HomeGoals, AwayGoals = fixture.AwayGoals, Referee = fixture.Referee,
+                        HomeShotsOnTarget = fixture.HomeShotsOnTarget, AwayShotsOnTarget = fixture.AwayShotsOnTarget,
+                        HomeCorners = fixture.HomeCorners, AwayCorners = fixture.AwayCorners,
+                        HomeYellowCards = fixture.HomeYellowCards, AwayYellowCards = fixture.AwayYellowCards,
+                        DataSource = fixture.Provider, UpdatedUtc = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)
+                    };
+                    if (baseline.HomeShotsOnTarget.HasValue || baseline.AwayShotsOnTarget.HasValue ||
+                        baseline.HomeCorners.HasValue || baseline.AwayCorners.HasValue ||
+                        baseline.HomeYellowCards.HasValue || baseline.AwayYellowCards.HasValue ||
+                        !string.IsNullOrWhiteSpace(baseline.Referee))
+                        db.SaveMatchStatistics(baseline);
+                    string json = FootballDataService.FetchFixtureDetails(fixture);
+                    if (string.IsNullOrWhiteSpace(json)) continue;
+                    db.SaveFixtureDetails(fixture.Provider, fixture.ExternalId, json);
+                    var normalized = fixture.Provider == "FiveDollarFootballAPI"
+                        ? MatchStatisticsParser.ParseFiveDollarOrGeneric(json, fixture)
+                        : MatchStatisticsParser.ParseApiFootball(json, fixture);
+                    if (normalized == null) continue;
+                    bool hasStats = normalized.HomeShots.HasValue || normalized.AwayShots.HasValue ||
+                        normalized.HomeShotsOnTarget.HasValue || normalized.AwayShotsOnTarget.HasValue ||
+                        normalized.HomeCorners.HasValue || normalized.AwayCorners.HasValue ||
+                        normalized.HomeYellowCards.HasValue || normalized.AwayYellowCards.HasValue ||
+                        normalized.HomeRedCards.HasValue || normalized.AwayRedCards.HasValue ||
+                        !string.IsNullOrWhiteSpace(normalized.Referee);
+                    var events = MatchStatisticsParser.ParseEvents(json, fixture);
+                    if (hasStats)
+                    {
+                        db.SaveMatchStatistics(normalized);
+                        var legacy = FootballDataService.ExtractFixtureStatistics(json, fixture);
+                        legacy.HomeCorners = normalized.HomeCorners; legacy.AwayCorners = normalized.AwayCorners;
+                        legacy.HomeShotsOnTarget = normalized.HomeShotsOnTarget; legacy.AwayShotsOnTarget = normalized.AwayShotsOnTarget;
+                        legacy.HomeYellowCards = normalized.HomeYellowCards; legacy.AwayYellowCards = normalized.AwayYellowCards;
+                        legacy.Referee = normalized.Referee;
+                        db.SaveNormalizedFixtureStatistics(legacy);
+                    }
+                    if (MatchStatisticsParser.HasEventPayload(json, fixture))
+                        db.ReplaceMatchEvents(fixture.Provider, fixture.ExternalId, events);
+                    if (hasStats || events.Count > 0) imported++;
+                }
+                catch { /* One unavailable match must not cancel the rest of the import. */ }
+            }
+            return imported;
         }
     }
 }

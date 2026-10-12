@@ -311,6 +311,7 @@ namespace KoaZa
                     var priorProbabilities = PoissonModel.Analyze(homeRate, awayRate);
                     SetMarketRows(priorProbabilities, false, dataWarning);
                     ModelStatusText.Text = dataWarning;
+                    UpdateMultiMarketPredictions(fixture);
                     return;
                 }
 
@@ -408,6 +409,7 @@ namespace KoaZa
                       "Poisson baseline refined by head-to-head and shots-on-target when available; statistical markets use historical frequencies. Estimates, not guarantees.";
                 if (!string.IsNullOrEmpty(dataWarning))
                     ModelStatusText.Text += " " + dataWarning;
+                UpdateMultiMarketPredictions(fixture);
             }
             catch (Exception ex)
             {
@@ -449,7 +451,8 @@ namespace KoaZa
             string fixtureId = fixture.ExternalId;
             StatsText.Text = LocalizationService.T("Loading match statistics...", "در حال دریافت آمار مسابقه...");
             bool apiSports = fixture.Provider == "API-Football" || fixture.Provider == "ApiFootball" || fixture.Provider == "ApiSports";
-            if (!apiSports)
+            bool fiveDollar = fixture.Provider == "FiveDollarFootballAPI";
+            if (!apiSports && !fiveDollar)
             {
                 StatsText.Text = SummarizeStoredFixtureStatistics(fixture);
                 return;
@@ -468,10 +471,25 @@ namespace KoaZa
                     json = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchFixtureDetails(fixture));
                     _database.SaveFixtureDetails(fixture.Provider, fixture.ExternalId, json);
                 }
-                // Normalize available detailed fields so later match predictions can use this history.
-                _database.SaveNormalizedFixtureStatistics(FootballDataService.ExtractFixtureStatistics(json, fixture));
+                // Normalize provider-specific details into legacy columns and the complete historical table.
+                var legacyStats = FootballDataService.ExtractFixtureStatistics(json, fixture);
+                MatchStatisticsRecord normalized = fiveDollar
+                    ? MatchStatisticsParser.ParseFiveDollarOrGeneric(json, fixture)
+                    : MatchStatisticsParser.ParseApiFootball(json, fixture);
+                if (normalized != null)
+                {
+                    legacyStats.HomeCorners = normalized.HomeCorners; legacyStats.AwayCorners = normalized.AwayCorners;
+                    legacyStats.HomeShotsOnTarget = normalized.HomeShotsOnTarget; legacyStats.AwayShotsOnTarget = normalized.AwayShotsOnTarget;
+                    legacyStats.HomeYellowCards = normalized.HomeYellowCards; legacyStats.AwayYellowCards = normalized.AwayYellowCards;
+                    legacyStats.Referee = normalized.Referee;
+                    _database.SaveMatchStatistics(normalized);
+                    if (MatchStatisticsParser.HasEventPayload(json, fixture))
+                        _database.ReplaceMatchEvents(fixture.Provider, fixture.ExternalId, MatchStatisticsParser.ParseEvents(json, fixture));
+                }
+                _database.SaveNormalizedFixtureStatistics(legacyStats);
                 if (!IsCurrentFixture(fixtureId)) return;
-                StatsText.Text = FootballDataService.SummarizeFixtureDetails(json);
+                StatsText.Text = FootballDataService.SummarizeFixtureDetails(json, fixture);
+                UpdateMultiMarketPredictions(fixture);
             }
             catch (Exception ex)
             {
@@ -514,6 +532,42 @@ namespace KoaZa
             catch (Exception ex) { MessageBox.Show(this, LocalizationService.IsPersian ? "باز کردن پیوند خبر ناموفق بود. اتصال اینترنت و مرورگر پیش‌فرض را بررسی کن." : ex.Message, LocalizationService.T("Could not open news link", "باز کردن خبر ناموفق بود"), MessageBoxButton.OK, MessageBoxImage.Information); }
         }
 
+
+        private void UpdateMultiMarketPredictions(FixtureRecord fixture)
+        {
+            try
+            {
+                var stats = _database.GetRecentMatchStatistics(fixture.League, 500);
+                if (stats.Count < 10) stats = _database.GetRecentMatchStatistics(null, 1000);
+                var eventPrediction = MultiMarketPredictionService.AnalyzeEventMarkets(fixture, stats);
+                try { _database.SaveMarketPredictions(fixture, eventPrediction); }
+                catch (Exception saveError) { ModelStatusText.Text += LocalizationService.T(" Event prediction save warning: ", " هشدار ذخیره بازارهای آماری: ") + saveError.Message; }
+
+                var rows = (MarketsList.ItemsSource as IEnumerable<MarketRow> ?? Enumerable.Empty<MarketRow>()).ToList();
+                foreach (var m in eventPrediction.Markets)
+                {
+                    string label = LocalizationService.Market(m.Market, m.Outcome);
+                    var row = new MarketRow
+                    {
+                        Label = label,
+                        Percent = m.HasSufficientData ? Math.Round(m.Probability * 100, 1) : 0,
+                        PercentLabel = m.HasSufficientData
+                            ? (m.Probability * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% • n=" + m.SampleSize
+                            : LocalizationService.T("Stats unavailable", "آمار کافی نیست") + " • n=" + m.SampleSize,
+                        HasData = m.HasSufficientData,
+                        BarBrush = m.HasSufficientData ? System.Windows.Media.Brushes.SeaGreen : System.Windows.Media.Brushes.Gray,
+                        Reason = m.Explanation
+                    };
+                    int index = rows.FindIndex(existing => string.Equals(existing.Label, label, StringComparison.OrdinalIgnoreCase));
+                    if (index >= 0) rows[index] = row; else rows.Add(row);
+                }
+                MarketsList.ItemsSource = rows;
+            }
+            catch (Exception ex)
+            {
+                ModelStatusText.Text += LocalizationService.T(" Event-market layer unavailable: ", " لایه بازارهای آماری در دسترس نیست: ") + ex.Message;
+            }
+        }
 
         private void SetMarketRows(MatchProbabilities probabilities, bool hasSufficientData, string reason)
         {
