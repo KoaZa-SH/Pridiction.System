@@ -169,7 +169,7 @@ namespace KoaZa.Services
                 if (File.Exists(ThemePath))
                 {
                     string value = File.ReadAllText(ThemePath).Trim();
-                    if (new[] { "Light", "Dark", "System", "Midnight", "Ocean", "Amethyst", "Emerald", "Sunset" }.Contains(value)) Mode = value;
+                    if (new[] { "LightSage", "LightPearl", "LightOcean", "LightRose", "DarkMidnight", "DarkOcean", "DarkAmethyst", "DarkEmerald" }.Contains(value)) Mode = value;
                 }
             }
             catch { Mode = "System"; }
@@ -177,7 +177,7 @@ namespace KoaZa.Services
 
         public static void SetMode(string mode)
         {
-            Mode = new[] { "Light", "Dark", "System", "Midnight", "Ocean", "Amethyst", "Emerald", "Sunset" }.Contains(mode) ? mode : "System";
+            Mode = new[] { "LightSage", "LightPearl", "LightOcean", "LightRose", "DarkMidnight", "DarkOcean", "DarkAmethyst", "DarkEmerald" }.Contains(mode) ? mode : "System";
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(ThemePath));
@@ -188,8 +188,8 @@ namespace KoaZa.Services
 
         private static bool IsDark()
         {
-            if (new[] { "Dark", "Midnight", "Ocean", "Amethyst", "Emerald", "Sunset" }.Contains(Mode)) return true;
-            if (Mode == "Light") return false;
+            if (Mode.StartsWith("Dark", StringComparison.Ordinal)) return true;
+            if (Mode.StartsWith("Light", StringComparison.Ordinal)) return false;
             try
             {
                 using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
@@ -206,15 +206,21 @@ namespace KoaZa.Services
         {
             if (window == null) return;
             bool dark = IsDark();
-            Color background = dark ? Color.FromRgb(24, 30, 28) : Color.FromRgb(244, 247, 245);
-            Color accentStart = Color.FromRgb(22, 134, 91), accentEnd = Color.FromRgb(22, 59, 43);
-            if (Mode == "Midnight") { accentStart = Color.FromRgb(25, 31, 68); accentEnd = Color.FromRgb(74, 45, 112); }
-            else if (Mode == "Ocean") { accentStart = Color.FromRgb(0, 119, 182); accentEnd = Color.FromRgb(3, 37, 76); }
-            else if (Mode == "Amethyst") { accentStart = Color.FromRgb(131, 56, 236); accentEnd = Color.FromRgb(58, 12, 163); }
-            else if (Mode == "Emerald") { accentStart = Color.FromRgb(0, 145, 110); accentEnd = Color.FromRgb(0, 65, 75); }
-            else if (Mode == "Sunset") { accentStart = Color.FromRgb(244, 96, 54); accentEnd = Color.FromRgb(122, 44, 92); }
-            if (new[] { "Midnight", "Ocean", "Amethyst", "Emerald", "Sunset" }.Contains(Mode)) window.Background = new LinearGradientBrush(accentStart, accentEnd, 35);
-            else window.Background = new SolidColorBrush(background);
+            Color background = dark ? Color.FromRgb(18, 22, 36) : Color.FromRgb(250, 249, 247);
+            Color accentStart, accentEnd;
+            switch (Mode)
+            {
+                case "LightSage": accentStart = Color.FromRgb(250, 252, 248); accentEnd = Color.FromRgb(215, 236, 222); break;
+                case "LightPearl": accentStart = Color.FromRgb(255, 250, 242); accentEnd = Color.FromRgb(239, 224, 207); break;
+                case "LightOcean": accentStart = Color.FromRgb(244, 251, 255); accentEnd = Color.FromRgb(204, 229, 242); break;
+                case "LightRose": accentStart = Color.FromRgb(255, 247, 249); accentEnd = Color.FromRgb(244, 216, 226); break;
+                case "DarkMidnight": accentStart = Color.FromRgb(17, 24, 50); accentEnd = Color.FromRgb(57, 38, 91); break;
+                case "DarkOcean": accentStart = Color.FromRgb(7, 45, 73); accentEnd = Color.FromRgb(10, 86, 108); break;
+                case "DarkAmethyst": accentStart = Color.FromRgb(39, 25, 66); accentEnd = Color.FromRgb(91, 47, 115); break;
+                case "DarkEmerald": accentStart = Color.FromRgb(12, 48, 43); accentEnd = Color.FromRgb(17, 93, 76); break;
+                default: accentStart = Color.FromRgb(245, 248, 246); accentEnd = Color.FromRgb(224, 234, 228); break;
+            }
+            window.Background = new LinearGradientBrush(accentStart, accentEnd, 35);
             ApplyTo(window, dark);
             var chart = window.FindName("MarketChartFrame") as Border;
             var reason = window.FindName("MarketChartReasonText") as TextBlock;
@@ -231,11 +237,16 @@ namespace KoaZa.Services
                 {
                     var border = element as Border;
                     if (border != null && IsLightSurface(border.Background))
-                        border.Background = new SolidColorBrush(dark ? Color.FromRgb(34, 42, 39) : Color.FromRgb(255, 255, 255));
+                        border.Background = border.CornerRadius.TopLeft >= 20 ? Brushes.Transparent :
+                            new SolidColorBrush(dark ? Color.FromRgb(30, 35, 52) : Color.FromRgb(255, 255, 255));
 
                     var text = element as TextBlock;
-                    if (text != null && IsDefaultTextColor(text.Foreground))
-                        text.Foreground = new SolidColorBrush(dark ? Color.FromRgb(226, 233, 229) : Color.FromRgb(36, 52, 44));
+                    if (text != null)
+                    {
+                        var solidText = text.Foreground as SolidColorBrush;
+                        bool explicitlyWhite = solidText != null && solidText.Color == Colors.White;
+                        text.Foreground = new SolidColorBrush(dark ? Colors.White : Color.FromRgb(35, 45, 58));
+                    }
 
                     var grid = element as DataGrid;
                     if (grid != null)
