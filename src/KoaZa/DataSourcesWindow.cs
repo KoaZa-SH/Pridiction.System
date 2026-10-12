@@ -30,7 +30,7 @@ namespace KoaZa
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0,0,0,12) };
             var csv = new Button { Content = "Import historical CSV…", Margin = new Thickness(0,0,8,0), Padding = new Thickness(12,8,12,8) };
             csv.Click += ImportCsv_Click;
-            var rss = new Button { Content = "Refresh Persian RSS", Padding = new Thickness(12,8) };
+            var rss = new Button { Content = "Refresh Persian RSS", Padding = new Thickness(12,8,12,8) };
             rss.Click += RefreshRss_Click;
             buttons.Children.Add(csv); buttons.Children.Add(rss);
             header.Children.Add(buttons);
