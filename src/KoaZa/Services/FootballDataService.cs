@@ -806,7 +806,7 @@ namespace KoaZa.Services
             if (configs.Count == 0) throw new InvalidOperationException("No enabled API providers are configured.");
             var all = new List<FixtureRecord>();
             var errors = new List<string>();
-            foreach (string provider in configs.Select(p => p.Provider).Distinct(StringComparer.OrdinalIgnoreCase))
+            foreach (string provider in configs.Select(p => p.Provider == "ApiFootball" || p.Provider == "ApiSports" ? "ApiSports" : p.Provider).Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 try
                 {
