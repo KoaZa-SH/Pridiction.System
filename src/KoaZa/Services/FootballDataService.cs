@@ -614,7 +614,7 @@ namespace KoaZa.Services
             return summary;
         }
 
-        public static List<NewsItem> FetchMatchNews(string competition, string homeTeam, string awayTeam)
+        public static List<NewsItem> FetchMatchNewsForCompetition(string competition, string homeTeam, string awayTeam)
         {
             var result = FetchLatestNews(competition);
             string home = (homeTeam ?? "").Trim();
