@@ -169,7 +169,7 @@ namespace KoaZa.Services
                 if (File.Exists(ThemePath))
                 {
                     string value = File.ReadAllText(ThemePath).Trim();
-                    if (value == "Light" || value == "Dark" || value == "System") Mode = value;
+                    if (new[] { "Light", "Dark", "System", "Midnight", "Ocean", "Amethyst", "Emerald", "Sunset" }.Contains(value)) Mode = value;
                 }
             }
             catch { Mode = "System"; }
@@ -177,7 +177,7 @@ namespace KoaZa.Services
 
         public static void SetMode(string mode)
         {
-            Mode = mode == "Light" || mode == "Dark" ? mode : "System";
+            Mode = new[] { "Light", "Dark", "System", "Midnight", "Ocean", "Amethyst", "Emerald", "Sunset" }.Contains(mode) ? mode : "System";
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(ThemePath));
@@ -188,7 +188,7 @@ namespace KoaZa.Services
 
         private static bool IsDark()
         {
-            if (Mode == "Dark") return true;
+            if (new[] { "Dark", "Midnight", "Ocean", "Amethyst", "Emerald", "Sunset" }.Contains(Mode)) return true;
             if (Mode == "Light") return false;
             try
             {
@@ -207,7 +207,14 @@ namespace KoaZa.Services
             if (window == null) return;
             bool dark = IsDark();
             Color background = dark ? Color.FromRgb(24, 30, 28) : Color.FromRgb(244, 247, 245);
-            window.Background = new SolidColorBrush(background);
+            Color accentStart = Color.FromRgb(22, 134, 91), accentEnd = Color.FromRgb(22, 59, 43);
+            if (Mode == "Midnight") { accentStart = Color.FromRgb(25, 31, 68); accentEnd = Color.FromRgb(74, 45, 112); }
+            else if (Mode == "Ocean") { accentStart = Color.FromRgb(0, 119, 182); accentEnd = Color.FromRgb(3, 37, 76); }
+            else if (Mode == "Amethyst") { accentStart = Color.FromRgb(131, 56, 236); accentEnd = Color.FromRgb(58, 12, 163); }
+            else if (Mode == "Emerald") { accentStart = Color.FromRgb(0, 145, 110); accentEnd = Color.FromRgb(0, 65, 75); }
+            else if (Mode == "Sunset") { accentStart = Color.FromRgb(244, 96, 54); accentEnd = Color.FromRgb(122, 44, 92); }
+            if (new[] { "Midnight", "Ocean", "Amethyst", "Emerald", "Sunset" }.Contains(Mode)) window.Background = new LinearGradientBrush(accentStart, accentEnd, 35);
+            else window.Background = new SolidColorBrush(background);
             ApplyTo(window, dark);
             var chart = window.FindName("MarketChartFrame") as Border;
             var reason = window.FindName("MarketChartReasonText") as TextBlock;
