@@ -157,6 +157,8 @@ namespace KoaZa.Services
     }
 
     public static class FootballDataService
+        public static string LastProviderSummary { get; private set; } = "";
+
     {
 
         // Bulk refresh: API-SPORTS date queries return fixtures across all competitions covered by the account.
@@ -866,6 +868,9 @@ namespace KoaZa.Services
             var unique = all.Where(x => x != null).GroupBy(FixtureDeduplicationKey)
                 .Select(g => g.OrderByDescending(x => !string.IsNullOrWhiteSpace(x.ExternalId))
                     .ThenByDescending(x => !string.IsNullOrWhiteSpace(x.League)).First()).ToList();
+            LastProviderSummary = errors.Count == 0
+                ? "All configured providers responded without reported errors."
+                : "Provider warnings: " + string.Join(" | ", errors.Take(8));
             if (unique.Count == 0)
                 throw new InvalidOperationException("No fixtures were returned by any enabled provider. " + string.Join(" | ", errors.Take(12)));
             return unique;
@@ -2029,6 +2034,7 @@ namespace KoaZa.Services
                 var records = await System.Threading.Tasks.Task.Run(() => FootballDataService.FetchAllProvidersForSeason(season));
                 await System.Threading.Tasks.Task.Run(() => DatabaseServiceProxy.SaveFixtures(records));
                 _status.Text = LocalizationService.T("Saved API records: ", "رکوردهای API ذخیره‌شده: ") + records.Count +
+                    Environment.NewLine + FootballDataService.LastProviderSummary +
                     Environment.NewLine + LocalizationService.T("Importing structured statistics…", "در حال واردکردن آمار ساختاریافته...");
                 int stats = await System.Threading.Tasks.Task.Run(() => DatabaseServiceProxy.ImportHistoricalStatistics(records));
                 var csvSettings = CsvAutoSyncService.LoadSettings();
